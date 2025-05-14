@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,189 +15,167 @@
  * limitations under the License.
  */
 
-#include <exception>
-#include <libyang/Tree_Data.hpp>
-
-#include <utils/log.h>
-
+#include <tuple>
 #include "encode.h"
+#include "utils/log.h"
+#include "utils/sysrepo.h"
 
+using namespace gnmi;
 using namespace std;
-using namespace libyang;
-using sysrepo::Val;
+using namespace grpc;
+using Status = grpc::Status;
 
-/*
- * Wrapper to test wether the current Data Node is a key.
- * We know that by looking in the Schema Tree.
- * @param leaf Leaf Data Node
- */
-static bool isKey(S_Data_Node_Leaf_List leaf)
+std::tuple<grpc::Status, std::optional<libyang::DataNode>> Encode::decode(
+  string xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose)
 {
-  S_Schema_Node_Leaf tmp = make_shared<Schema_Node_Leaf>(leaf->schema());
-
-  if (tmp->is_key())
-    return true;
-  else
-    return false;
+  switch (reqval.value_case()) {
+    case gnmi::TypedValue::ValueCase::kStringVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf string type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kIntVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf int type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kUintVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf uint type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kBoolVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf bool type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kBytesVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf bytes type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kFloatVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf float type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kDecimalVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf Decimal64 type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kLeaflistVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported protobuf leaflist type"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kAnyVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported PROTOBUF Encoding"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kJsonVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported JSON Encoding"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kJsonIetfVal:
+      try {
+        return std::make_tuple(Status::OK, json_decode(xpath, reqval.json_ietf_val(), purpose));
+      } catch (runtime_error &err) {
+        // wrong input field must reply an error to gnmi client
+        BOOST_LOG_TRIVIAL(error) << "Run-time error:" << err.what();
+        return std::make_tuple(Status(StatusCode::INVALID_ARGUMENT, err.what()), std::nullopt);
+      } catch (invalid_argument &err) {
+        BOOST_LOG_TRIVIAL(error) << "Invalid argument:" << err.what();
+        return std::make_tuple(Status(StatusCode::INVALID_ARGUMENT, err.what()), std::nullopt);
+      }
+      break;
+    case gnmi::TypedValue::ValueCase::kAsciiVal:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported ASCII Encoding"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::kProtoBytes:
+      return std::make_tuple(Status(StatusCode::UNIMPLEMENTED, "Unsupported PROTOBUF BYTE Encoding"), std::nullopt);
+    case gnmi::TypedValue::ValueCase::VALUE_NOT_SET:
+      return std::make_tuple(Status(StatusCode::INVALID_ARGUMENT, "Value not set"), std::nullopt);
+    default:
+      return std::make_tuple(Status(StatusCode::INVALID_ARGUMENT, "Unknown value type"), std::nullopt);
+  }
 }
 
-/*
- * Store YANG leaf in sysrepo datastore
- * @param node Describe a libyang Data Tree leaf or leaf list
- */
-void Encode::storeLeaf(libyang::S_Data_Node_Leaf_List node)
+std::tuple<Status, std::optional<libyang::DataNode>> Encode::update(string xpath, const TypedValue &reqval, string op)
 {
-  shared_ptr<Val> sval;
+  UpdateTransaction xact;
 
-  if (isKey(node)) {
-    /* If node is a key create it first by setting parent path */
-    BOOST_LOG_TRIVIAL(debug) << "leaf key: " << node->path();
-    return;
-  } else {
-    BOOST_LOG_TRIVIAL(debug) << "leaf: " << node->path();
+  if (xpath.compare("/*") != 0 && op.compare("replace") == 0) {
+    // Check if the xpath we are replacing is a leaf-list or a list
+    auto node_type = sr_sess.getContext().findPath(xpath).nodeType();
+    if (node_type == libyang::NodeType::Leaflist || node_type == libyang::NodeType::List) {
+      // Replacing list or leaflist means we should delete all previous entries
+      auto created_nodes = sr_sess.getContext().newPath2(xpath, std::nullopt, libyang::CreationOptions::Opaque);
+      auto del_parent = created_nodes.createdParent.value();
+      auto del_node = created_nodes.createdNode.value();
+      if (del_node.isOpaque()) {
+        del_node.newAttrOpaqueJSON("sysrepo", "operation", "purge");
+      } else {
+        auto sr_mod = sr_sess.getContext().getModuleImplemented("sysrepo").value();
+        // libyang treats NULL as a valid value for some data types
+        del_node.newMeta(sr_mod, "sysrepo:operation", "purge");
+      }
+      xact.push(del_parent);
+    }
   }
 
-  switch(node->value_type()) {
-    case LY_TYPE_BINARY:        /* Any binary data */
-      sval = make_shared<Val>(node->value()->binary(), SR_STRING_T);
-      break;
-    case LY_TYPE_STRING:        /* Human-readable string */
-      sval = make_shared<Val>(node->value()->string(), SR_STRING_T);
-      break;
-    case LY_TYPE_BOOL:          /* "true" or "false" */
-      sval = make_shared<Val>(static_cast<bool>(node->value()->bln()));
-      break;
-    case LY_TYPE_DEC64:         /* 64-bit signed decimal number */
-      sval = make_shared<Val>(static_cast<double>(node->value()->dec64()));
-      break;
-    case LY_TYPE_INT8:          /* 8-bit signed integer */
-      sval = make_shared<Val>(node->value()->int8(), SR_INT8_T);
-      //sval = make_shared<Val>(node->value()->int8());
-      break;
-    case LY_TYPE_UINT8:         /* 8-bit unsigned integer */
-      sval = make_shared<Val>(node->value()->uint8(), SR_UINT8_T);
-      //sval = make_shared<Val>(node->value()->uint8());
-      break;
-    case LY_TYPE_INT16:         /* 16-bit signed integer */
-      sval = make_shared<Val>(node->value()->int16(), SR_INT16_T);
-      //sval = make_shared<Val>(node->value()->int16());
-      break;
-    case LY_TYPE_UINT16:        /* 16-bit unsigned integer */
-      sval = make_shared<Val>(node->value()->uint16(), SR_UINT16_T);
-      //sval = make_shared<Val>(node->value()->uint16());
-      break;
-    case LY_TYPE_INT32:         /* 32-bit signed integer */
-      sval = make_shared<Val>(node->value()->int32(), SR_INT32_T);
-      //sval = make_shared<Val>(node->value()->int32());
-      break;
-    case LY_TYPE_UINT32:        /* 32-bit unsigned integer */
-      sval = make_shared<Val>(node->value()->uintu32(), SR_UINT32_T);
-      //sval = make_shared<Val>(node->value()->uintu32());
-      break;
-    case LY_TYPE_INT64:         /* 64-bit signed integer */
-      sval = make_shared<Val>(node->value()->int64(), SR_INT64_T);
-      break;
-    case LY_TYPE_UINT64:        /* 64-bit unsigned integer */
-      sval = make_shared<Val>(node->value()->uint64(), SR_UINT64_T);
-      //sval = make_shared<Val>(node->value()->uint64());
-      break;
-    case LY_TYPE_IDENT:         /* A reference to an abstract identity */
-    {
-      string str(node->value()->ident()->module()->name());
-      str.append(":");
-      str.append(node->value()->ident()->name());
-      sval = make_shared<Val>(str.c_str(), SR_IDENTITYREF_T);
-      break;
-    }
-    case LY_TYPE_ENUM:          /* Enumerated strings */
-      sval = make_shared<Val>(node->value()->enm()->name(), SR_ENUM_T);
-      break;
-    case LY_TYPE_EMPTY:         /* A leaf that does not have any value */
-      sval = make_shared<Val>(nullptr, SR_LEAF_EMPTY_T);
-      break;
-    case LY_TYPE_LEAFREF:       /* A reference to a leaf instance */
-    {
-      //run again this function
-      S_Data_Node_Leaf_List leaf
-        = make_shared<Data_Node_Leaf_List>(node->value()->leafref());
-      storeLeaf(leaf);
-      break;
+  auto [status, node] = decode(xpath, reqval, EncodePurpose::Set);
+  if (!status.ok())
+    return std::make_tuple(status, std::nullopt);
+
+  auto root_node = node;
+  auto edit_node = node;
+
+  auto ietf_nc_mod = sr_sess.getContext().getModuleImplemented("ietf-netconf").value();
+  if (xpath.compare("/*") == 0) {
+    if (op.compare("replace") == 0) {
+      // The gNMI semantics are that a replace at the top-level should cause all data node not provided to be removed.
+      // However, sysrepo semantics are that only the provided nodes are replaced. Therefore, request that everything
+      // not being replaced is deleted.
+
+      auto del_root = sr_sess.getData(xpath.c_str(), 1);
+      // Walk all siblings not in update and add delete node to them
+      for (auto n = std::optional<libyang::DataNode>(del_root); n.has_value(); n = n->nextSibling()) {
+        if (getRawNode(*n)->flags & LYD_DEFAULT) {
+          // Default nodes need not be deleted and can be skipped
+          continue;
+        }
+
+        bool is_replace_node = false;
+        // Is this node a replace node?
+        for (auto repl_n = edit_node; repl_n.has_value(); repl_n = repl_n->nextSibling()) {
+          if (n->schema().path() == repl_n->schema().path()) {
+            is_replace_node = true;
+            break;
+          }
+        }
+
+        // If this is a replace node, then optimise further sysrepo processing by not adding it to the batch
+        if (!is_replace_node) {
+          n->newMeta(ietf_nc_mod, "ietf-netconf:operation", "remove");
+          xact.push_one(*n);
+        }
+      }
     }
 
-/* Unsupported types */
-    case LY_TYPE_BITS:          /* A set of bits or flags */
-      BOOST_LOG_TRIVIAL(warning) << "Unsupported BITS type";
-      throw std::invalid_argument("Unsupported BITS type");
-      break;
-    case LY_TYPE_INST:          /* References a data tree node */
-      BOOST_LOG_TRIVIAL(warning) << "Unsupported INSTANCE-IDENTIFIER type" << endl;
-      throw std::invalid_argument("Unsupported INSTANCE-IDENTIFIER type");
-      break;
-    case LY_TYPE_UNION:         /* Choice of member types */
-      BOOST_LOG_TRIVIAL(warning) << "Unsupported UNION type";
-      throw std::invalid_argument("Unsupported UNION type");
-      break;
-    case LY_TYPE_DER:           /* Derived type */
-      BOOST_LOG_TRIVIAL(warning) << "Unsupported DERIVED type";
-      throw std::invalid_argument("Unsupported DERIVED type");
-      break;
-    case LY_TYPE_UNKNOWN:       /* Unknown type (used in edit-config leaves) */
-      BOOST_LOG_TRIVIAL(warning) << "Unsupported UNKNOWN type";
-      throw std::invalid_argument("Unsupported UNKNOWN type");
+    // Add operation attribute to each node - there can be multiple if the JSON contains multiple top-level nodes.
+    for (auto n = edit_node; n.has_value(); n = n->nextSibling()) {
+      n->newMeta(ietf_nc_mod, "ietf-netconf:operation", op);
+    }
+    if (edit_node.has_value()) {
+        xact.push(edit_node.value());
+    }
+    root_node = xact.first_node;
+
+  } else {
+    // Find the edit point for the data fragment
+    auto set = root_node->findXPath(xpath.c_str());
+    // We should have found a path, and wildcards don't make sense
+    if (set.empty()) {
+        BOOST_LOG_TRIVIAL(error) << "Empty result searching for "
+				 << xpath.c_str();
+        throw invalid_argument("invalid set returned for xpath \"" + xpath + "\"");
+    }
+
+    for (auto edit_node : set) {
+        edit_node.newMeta(ietf_nc_mod, "ietf-netconf:operation", op);
+        BOOST_LOG_TRIVIAL(debug) << op.c_str() << " path: " << edit_node.path();
+    }
+    xact.push(root_node.value());
+    root_node = xact.first_node;
+  }
+
+  return std::make_tuple(Status::OK, root_node);
+}
+
+grpc::Status Encode::encode(Encoding encoding, libyang::DataNode node, TypedValue *val)
+{
+  switch (encoding) {
+    case gnmi::JSON:
+    case gnmi::JSON_IETF:
+      val->set_json_ietf_val(json_encode(node));
       break;
     default:
-      BOOST_LOG_TRIVIAL(warning) << "UNKNOWN type";
-      throw std::invalid_argument("Unknown type");
+      BOOST_LOG_TRIVIAL(warning) << "Unsupported Encoding "
+                                << Encoding_Name(encoding);
+      return Status(StatusCode::UNIMPLEMENTED, Encoding_Name(encoding));
   }
 
-  try {
-    sr_sess->set_item(node->path().c_str(), sval);
-  } catch (exception &exc) {
-    BOOST_LOG_TRIVIAL(warning) << exc.what();
-    throw; //rethrow as caught
-  }
+  return Status::OK;
 }
-
-void Encode::storeTree(libyang::S_Data_Node node)
-{
-  for (auto it : node->tree_dfs()) {
-    /* Run through the entire tree, including siblinigs */
-
-    switch(it->schema()->nodetype()) {
-      case LYS_LEAF: //Only LEAF & LEAF LIST hold values in sysrepo
-        {
-          S_Data_Node_Leaf_List itleaf = make_shared<Data_Node_Leaf_List>(it);
-
-          try {
-            storeLeaf(itleaf);
-          } catch (std::string str) { //triggered by sysepo::Val constructor
-            BOOST_LOG_TRIVIAL(error) << str;
-            throw invalid_argument("Internal error with JSON encoding");
-          }
-          break;
-        }
-
-      case LYS_LEAFLIST: //Only LEAF & LEAF LIST hold values in sysrepo
-        BOOST_LOG_TRIVIAL(warning) << "Unsupported leaf-list: " << it->path();
-        //sysrepo does not seem to support leaf lists
-        break;
-
-      case LYS_LIST: //A list instance must be created before populating leaves
-        {
-          try {
-            shared_ptr<Val> sval = make_shared<Val>(nullptr, SR_LIST_T);
-            sr_sess->set_item(it->path().c_str(), sval);
-          } catch (exception &exc) {
-            BOOST_LOG_TRIVIAL(warning) << exc.what();
-            throw; //rethrow as caught
-          }
-
-          break;
-        }
-
-      default:
-        break;
-    }
-  }
-}
-

@@ -35,7 +35,7 @@ PROTOBUF_GENERATE_GRPC_CPP(gnmi_ext_grpc_srcs gnmi_ext_grpc_hdrs ${gnmi_ext_prot
 #Create a new library named gnmi
 add_library(gnmi ${gnmi_grpc_srcs} ${gnmi_ext_grpc_srcs} ${gnmi_proto_srcs} ${gnmi_ext_proto_srcs})
 
-set(DYNAMIC_LINK_GRPC OFF)
+set(DYNAMIC_LINK_GRPC ON)
 
 if(DYNAMIC_LINK_GRPC)
     message(STATUS "DYNAMICALLY LINK gRPC")

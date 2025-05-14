@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,11 +71,14 @@ SslCredentialsHelper(string ppath, string cpath, string rpath, bool client_cert)
 
   ssl_opts.pem_key_cert_pairs.push_back(pkcp);
 
-  if (!rpath.empty()) {
-    ssl_opts.pem_root_certs = GetFileContent(rpath);
-  } else {
-    ssl_opts.pem_root_certs = "";
+  // Require client root certificates to avoid grpc bug in versions < 1.18.0
+  // (https://github.com/grpc/grpc/pull/17500)
+  if (rpath.empty()) {
+    BOOST_LOG_TRIVIAL(fatal) << "Client root certificates must be specified";
+    exit(1);
   }
+
+  ssl_opts.pem_root_certs = GetFileContent(rpath);
 
   return grpc::SslServerCredentials(ssl_opts);
 }

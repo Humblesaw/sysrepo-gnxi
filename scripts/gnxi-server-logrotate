@@ -1,0 +1,63 @@
+#!/bin/bash -e
+#
+# Copyright 2025 Graphiant Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+LOCKFILE="/tmp/gnmi-logrotate.lock"
+MAX_LOG_BYTES=$((2 * 1024 * 1024))
+MAX_ARCHIVES_BYTES=$((8 * 1024 * 1024))
+
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <gnmi-log-dir>"
+  exit 1
+fi
+
+GNXI_LOGDIR="$1"
+test -d "$GNXI_LOGDIR" || ( echo "GNXI_LOGDIR $GNXI_LOGDIR does not exist" && exit 1 )
+
+dotlockfile -p -r 0 -l "$LOCKFILE"
+
+# inspect raw log size
+cd "$GNXI_LOGDIR/raw"
+
+# skip temporary files in the calculation
+# and can cause unnecessary stderr messages like cannot access file
+size=$(du -sb --exclude='*.tmp' --exclude='*.live' | cut -f1)
+test "$size" -gt "$MAX_LOG_BYTES" || exit 0 # Only archive if taking up more than 2MB collectively
+
+# check and rename any abandoned .live files to .log
+find . -name '*.live' -exec flock -o -n "{}" mv "{}" "{}.log" \;
+
+# archive all log files
+archive_name="$GNXI_LOGDIR/archives/archive.$(date +%F.%Hh%Mm%Ss.%Nns).tar.zst"
+find . -name '*.log' -exec tar --zstd -cf "$archive_name" {} + -exec rm -f {} +
+
+# inspect archive size
+cd "$GNXI_LOGDIR/archives"
+used_bytes=$(du -sb --exclude='*.tmp' | cut -f1)
+
+test "$used_bytes" -gt "$MAX_ARCHIVES_BYTES" || exit 0 # Only purge if taking up excess space
+
+must_delete=$((used_bytes - MAX_ARCHIVES_BYTES))
+deleted_bytes=0
+
+for f in $(find . -name '*.tar.zst' | sort -n); do
+    sz=$(stat -c %s "$f")
+    rm -f "$f"
+    deleted_bytes=$((sz + deleted_bytes))
+    test "$deleted_bytes" -lt "$must_delete" || break
+done
+
+dotlockfile -u "$LOCKFILE"

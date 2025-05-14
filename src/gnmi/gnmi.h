@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +18,17 @@
 #ifndef _GNMI_SERVER_H
 #define _GNMI_SERVER_H
 
-#include <proto/gnmi.grpc.pb.h>
+#include <future>
 
-#include <sysrepo-cpp/Sysrepo.hpp>
-#include <sysrepo-cpp/Connection.hpp>
+#include <proto/gnmi.grpc.pb.h>
+#include <grpcpp/grpcpp.h>
+
 #include <sysrepo-cpp/Session.hpp>
+#include <sysrepo-cpp/utils/exception.hpp>
 
 #include "encode/encode.h"
+#include "confirm.h"
+#include "utils/log.h"
 
 using namespace grpc;
 using namespace gnmi;
@@ -36,17 +41,10 @@ using std::make_shared;
 class GNMIService final : public gNMI::Service
 {
   public:
-    GNMIService(string app) {
-      try {
-        sr_con = make_shared<Connection>(app.c_str(), SR_CONN_DAEMON_REQUIRED);
-        sr_sess = make_shared<Session>(sr_con);
-        encodef = make_shared<Encode>(sr_sess);
-      } catch (sysrepo::sysrepo_exception &exc) {
-        std::cerr << "Connection to sysrepo failed " << exc.what() << std::endl;
-        exit(1);
-      }
+    GNMIService(sysrepo::Connection conn) : sr_con(conn) {
+      conf_state = make_shared<impl::ConfirmState>(conn);
     }
-    ~GNMIService() {std::cout << "Quitting GNMI Server" << std::endl; }
+    ~GNMIService() {BOOST_LOG_TRIVIAL(info) << "Quitting GNMI Server"; }
 
     Status Capabilities(ServerContext* context,
         const CapabilityRequest* request, CapabilityResponse* response);
@@ -60,10 +58,22 @@ class GNMIService final : public gNMI::Service
     Status Subscribe(ServerContext* context,
         ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream);
 
+    Status Confirm(ServerContext *context,
+        const ConfirmRequest *request, ConfirmResponse *response);
+
+    Status Rpc(ServerContext *context,
+        const RpcRequest *request, RpcResponse *response);
+
+    static void TryCancelAll(void);
+
   private:
-    sysrepo::S_Connection sr_con; //sysrepo connection
-    sysrepo::S_Session sr_sess; //sysrepo session
-    shared_ptr<Encode> encodef; //support for json ietf encoding
+    void ServerContextUpdate(ServerContext *ctx, bool add);
+    sysrepo::Connection sr_con; //sysrepo connection
+    shared_ptr<impl::ConfirmState> conf_state;
 };
+
+void RunServer(string bind_addr, shared_ptr<ServerCredentials> cred, sysrepo::Connection sr_conn, std::promise<void> ready = std::promise<void>());
+
+void SetupSignalHandler(bool daemon = true);
 
 #endif //_GNMI_SERVER_H

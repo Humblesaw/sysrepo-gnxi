@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +15,12 @@
  * limitations under the License.
  */
 
-#include <sysrepo-cpp/Struct.hpp>
-#include <sysrepo-cpp/Sysrepo.hpp>
-#include <libyang/Tree_Schema.hpp>
-#include <libyang/Tree_Data.hpp>
+#include <string>
+#include <sysrepo-cpp/Session.hpp>
 
 #include <utils/log.h>
+#include <utils/sysrepo.h>
+#include <libyang/tree_data.h>
 
 #include "encode.h"
 
@@ -31,156 +32,127 @@ using namespace libyang;
  * CRUD - UPDATE *
  *****************/
 
+std::string stripQuotes(const std::string& str) {
+    if (str.front() == '\"' && str.back() == '\"') {
+        return str.substr(1, str.length() - 2);
+    }
+    return str;
+}
+
 /*
  * Parse a message encoded in JSON IETF and set fields in sysrepo.
  * @param data Input data encoded in JSON
  */
-void Encode::json_update(string data)
+std::optional<libyang::DataNode> Encode::json_decode(string xpath, string data, EncodePurpose purpose)
 {
-  S_Data_Node node;
+  // Request to fail if the data doesn't match the schema
+  auto metadata = "XPath: " + xpath + ". InputData";
+  log_to_file(data, metadata, log_id);
 
-  /* Parse input JSON, same options than netopeer2 edit-config */
-  node = ctx->parse_data_mem(data.c_str(), LYD_JSON, LYD_OPT_EDIT |
-                                                     LYD_OPT_STRICT);
+  if (xpath.compare("/*") == 0) {
+    try {
+      auto ctx = sr_sess.getContext();
+      return ctx.parseData(data, DataFormat::JSON, ParseOptions::ParseOnly | ParseOptions::Strict, std::nullopt);
+    } catch (const exception &exc) {
+      BOOST_LOG_TRIVIAL(error) << "Failed to parse data:" << obfs_data(data)
+			       << ". Exception: " << exc.what();
+      // Don't leave the error lying around on the context otherwise sysrepo may pick it up on an unrelated operation
+      auto ctx = sr_sess.getContext();
+      const_cast<libyang::Context *>(&ctx)->cleanAllErrors();
+      throw invalid_argument(exc.what());
+    }
+  }
 
-  /* store Data Tree to sysrepo */
-  storeTree(node);
+  std::optional<libyang::DataNode> root_node;
+
+  // Create a node tree according to the xpath. The data is passed in because libyang makes this mandatory for leaf
+  // nodes - it will be ignored for other node types (we cannot easily know what the node type is ahead of time).
+  try {
+    data = stripQuotes(data);
+    auto schema_node = sr_sess.getContext().findPath(xpath);
+    auto node_type = schema_node.nodeType();
+    auto opts = CreationOptions::Update;
+
+    if (node_type == libyang::NodeType::Leaflist) {
+      opts = opts | CreationOptions::IgnoreInvalidValue;
+    }
+
+    if (node_type == libyang::NodeType::Leaf) {
+      // For empty leaf, libyang expects "" and not "[null]"
+      auto base_type = schema_node.asLeaf().valueType().base();
+      if (base_type == libyang::LeafBaseType::Empty && data == "[null]") {
+          data = "";
+      }
+    } else {
+      // Only non-Leaf nodes can be opaque
+      opts = opts | CreationOptions::Opaque;
+    }
+
+    auto created_nodes = sr_sess.getContext().newPath2(xpath, data, opts);
+    root_node = created_nodes.createdParent;
+    if (created_nodes.createdNode->schema().nodeType() == NodeType::Leaf) {
+        /* If it is a leaf node, we are done here */
+        return root_node;
+    }
+  } catch (const exception &exc) {
+    BOOST_LOG_TRIVIAL(error) << "Failed to create node:" << xpath.c_str()
+                            << "Exception: " << exc.what();
+    // Don't leave the error lying around on the context otherwise sysrepo may pick it up on an unrelated operation
+    auto ctx = sr_sess.getContext();
+    const_cast<libyang::Context *>(&ctx)->cleanAllErrors();
+    throw;
+  }
+
+  // Now find the edit point for the data fragment
+  auto set = root_node->findXPath(xpath);
+  // We should have found a path, and wildcards don't make sense
+  if (set.size() != 1)
+      throw invalid_argument("invalid set returned for xpath \"" + xpath + "\"");
+
+  auto edit_node = set.front();
+
+  try {
+    if (purpose == EncodePurpose::Rpc) {
+      edit_node.parseOp(data.c_str(), DataFormat::JSON, OperationType::RpcYang);
+    } else {
+      // Parse input JSON, expecting a fragment
+      edit_node.parseData(data.c_str(), DataFormat::JSON, ParseOptions::ParseOnly | ParseOptions::Strict | ParseOptions::BareTopLeaf);
+    }
+  } catch (const exception &exc) {
+    // Don't leave the error lying around on the context otherwise sysrepo may pick it up on an unrelated operation
+    auto ctx = sr_sess.getContext();
+    const_cast<libyang::Context *>(&ctx)->cleanAllErrors();
+    BOOST_LOG_TRIVIAL(error) << "Failed to parse data. xpath: " << xpath
+                 << ", data:" << obfs_data(data)
+                 << ". Exception: " << exc.what();
+    throw;
+  }
+
+  return root_node;
 }
 
 /***************
  * CRUD - READ *
  ***************/
 
-static Json::Value json_tree(sysrepo::S_Tree tree)
+/* Encode a libyang data node into JSON form */
+string Encode::json_encode(libyang::DataNode node)
 {
-  sysrepo::S_Tree iter;
-  Json::Value val;
+  string data;
 
-  // run through all siblings
-  for (iter = tree->first_child(); iter != nullptr; iter = iter->next()) {
-    //create sibling with "node" as a parent
-    switch (iter->type()) { //follows RFC 7951
-      /* JSON Number */
-      case SR_UINT8_T:
-        val[iter->name()] = iter->data()->get_uint8();
+  if (node.schema().nodeType() == NodeType::Leaf)
+    data = node.printStr(DataFormat::JSON, PrintFlags::BareTopLeaf).value();
+  else {
+    // In case the node has no children
+    data = "{}";
+    // The xpath will have found the containing node, but we want to dump its children according to gNMI rules
+    if (node.child().has_value()) {
+      for (auto it : node.child()->childrenDfs()) {
+        data = it.printStr(DataFormat::JSON, PrintFlags::WithSiblings | PrintFlags::Shrink | PrintFlags::Fragment).value();
         break;
-      case SR_UINT16_T:
-        val[iter->name()] = iter->data()->get_uint16();
-        break;
-      case SR_UINT32_T:
-        val[iter->name()] = iter->data()->get_uint32();
-        break;
-      case SR_INT8_T:
-        val[iter->name()] = iter->data()->get_int8();
-        break;
-      case SR_INT16_T:
-        val[iter->name()] = iter->data()->get_int16();
-        break;
-      case SR_INT32_T:
-        val[iter->name()] = iter->data()->get_int32();
-        break;
-
-      /* JSON string */
-      case SR_STRING_T:
-        val[iter->name()] = iter->data()->get_string();
-        break;
-      case SR_INT64_T:
-        val[iter->name()] = to_string(iter->data()->get_int64());
-        break;
-      case SR_UINT64_T:
-        val[iter->name()] = to_string(iter->data()->get_uint64());
-        break;
-      case SR_DECIMAL64_T:
-        val[iter->name()] = to_string(iter->data()->get_decimal64());
-        break;
-      case SR_IDENTITYREF_T:
-        val[iter->name()] = iter->data()->get_identityref();
-        break;
-      case SR_INSTANCEID_T:
-        val[iter->name()] = iter->data()->get_identityref();
-        break;
-      case SR_BINARY_T:
-        val[iter->name()] = iter->data()->get_binary();
-        break;
-      case SR_BITS_T:
-        val[iter->name()] = iter->data()->get_bits();
-        break;
-      case SR_ENUM_T:
-        val[iter->name()] = iter->data()->get_enum();
-        break;
-      case SR_BOOL_T:
-        val[iter->name()] = iter->data()->get_bool() ? "true" : "false";
-        break;
-
-      /* JSON arrays */
-      case SR_LIST_T:
-        val[iter->name()].append(json_tree(iter));
-        break;
-      case SR_LEAF_EMPTY_T:
-        val[iter->name()].append("null");
-        break;
-
-      /* nested JSON */
-      case SR_CONTAINER_T:
-      case SR_CONTAINER_PRESENCE_T:
-        val[iter->name()] = json_tree(iter);
-        break;
-
-      /* Unsupported types */
-      case SR_ANYDATA_T:
-      case SR_ANYXML_T:
-        throw invalid_argument("unsupported ANYDATA and ANYXML types");
-        break;
-
-      default:
-        BOOST_LOG_TRIVIAL(error) << "Unknown tree node type";
-        throw invalid_argument("Unknown tree node type");
       }
-  }
-  return val;
-}
-
-/* Get sysrepo subtree data corresponding to XPATH */
-vector<JsonData> Encode::json_read(string xpath)
-{
-  sysrepo::S_Trees sr_trees;
-  sysrepo::S_Tree sr_tree;
-  vector<JsonData> json_vec;
-  Json::StyledWriter styledwriter; //pretty JSON
-  Json::FastWriter fastWriter; //unreadable JSON
-  Json::Value val;
-  JsonData tmp;
-  string key_name, key_value;
-
-  BOOST_LOG_TRIVIAL(debug) << "read and encode in json data for " << xpath;
-
-  /* Get multiple subtree for YANG lists or one for other YANG types */
-  sr_trees = sr_sess->get_subtrees(xpath.c_str());
-    if (sr_trees == nullptr)
-      throw invalid_argument("xpath not found");
-
-  for (size_t i = 0; i < sr_trees->tree_cnt(); i++) {
-    sr_tree = sr_trees->tree(i);
-    val = json_tree(sr_tree);
-
-    /*
-     * Pass a pair containing key name and key value.
-     * keys are always first element of children in sysrepo trees
-     */
-    if (sr_tree->type() == SR_LIST_T) {
-      tmp.key.first = string(sr_tree->first_child()->name());
-      tmp.key.second = val[tmp.key.first].asString();
-      BOOST_LOG_TRIVIAL(debug) << tmp.key.first << ":" << tmp.key.second;
     }
-
-    /* Print Pretty JSON message */
-    BOOST_LOG_TRIVIAL(debug) << styledwriter.write(val);
-
-    /* Fast unreadable JSON message */
-    tmp.data = fastWriter.write(val);
-
-    json_vec.push_back(tmp);
   }
 
-  return json_vec;
+  return data;
 }

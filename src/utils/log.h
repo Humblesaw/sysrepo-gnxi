@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +21,7 @@
 #include <boost/log/core.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/log/expressions.hpp>
+#include <syslog.h>
 
 namespace logging = boost::log;
 
@@ -41,10 +43,24 @@ class Log {
      * lvl 3 : info
      * lvl 4 : debug
      */
-    Log(int lvl = 3); //default to 'info' log
+    Log(int lvl = 4); // default to 'debug' log
     ~Log() {}
 
-    static void setLevel(int lvl);
+    void setLevel(int lvl);
+    void setSyslogBackend();
 };
+
+/*
+ * Used to get log environment variables
+ */
+void get_log_env(void);
+
+/*
+ * Returns the data as a char* if displaying of data in logs is enabled
+ * else it "obfuscates" the data
+ */
+const char* obfs_data(std::string& data);
+
+void log_to_file(const std::string data, std::string metadata, const uint64_t log_id);
 
 #endif // _LOG_H

@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +18,11 @@
 #ifndef _GNMI_SET_H
 #define _GNMI_SET_H
 
+#include <tuple>
 #include <proto/gnmi.grpc.pb.h>
+#include <sysrepo-cpp/Connection.hpp>
 
-#include <sysrepo-cpp/Session.hpp>
+#include "confirm.h"
 #include "encode/encode.h"
 
 using namespace gnmi;
@@ -30,18 +33,23 @@ namespace impl {
 
 class Set {
   public:
-    Set(sysrepo::S_Session sess, std::shared_ptr<Encode> encode)
-      : sr_sess(sess), encodef(encode) {}
+    Set(sysrepo::Session running_sess, sysrepo::Session startup_sess, shared_ptr<ConfirmState> confirm_state)
+      : sr_sess(running_sess), sr_sess_startup(startup_sess), conf_state(confirm_state)
+    {
+      encodef = std::make_shared<Encode>(sr_sess);
+    }
     ~Set() {}
 
     Status run(const SetRequest* request, SetResponse* response);
 
   private:
-    StatusCode handleUpdate(Update in, UpdateResult *out, string prefix);
+    std::tuple<grpc::Status, std::optional<libyang::DataNode>> handleUpdate(Update in, UpdateResult *out, string prefix_str, const Path &prefix, string op);
 
   private:
-    sysrepo::S_Session sr_sess; //sysrepo session
+    sysrepo::Session sr_sess; //sysrepo running datastore session
+    sysrepo::Session sr_sess_startup; //sysrepo startup datastore session
     shared_ptr<Encode> encodef; //support for json ietf encoding
+    shared_ptr<ConfirmState> conf_state; // commit confirm state
 };
 
 }

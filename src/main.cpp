@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,39 +15,14 @@
  * limitations under the License.
  */
 
-#include <iostream>
-#include <memory>
-#include <chrono>
 #include <getopt.h>
 
-#include <grpcpp/grpcpp.h>
-#include <grpcpp/server.h>
-#include <grpcpp/server_builder.h>
-
-#include "gnmi/gnmi.h"
 #include <security/authentication.h>
 #include <utils/log.h>
 
+#include "gnmi/gnmi.h"
+
 using namespace std;
-
-void RunServer(string bind_addr, shared_ptr<ServerCredentials> cred)
-{
-  ServerBuilder builder;
-  GNMIService gnmi("gnmi"); //gNMI Service
-
-  builder.AddListeningPort(bind_addr, cred);
-  builder.RegisterService(&gnmi);
-  unique_ptr<Server> server(builder.BuildAndStart());
-  cout << "Using grpc " << grpc::Version() << endl;
-
-  if (bind_addr.find(":") == string::npos) {
-    cout << "Server listening on " << bind_addr << ":443" << endl;
-  } else {
-    cout << "Server listening on " << bind_addr << endl;
-  }
-
-  server->Wait();
-}
 
 static void show_usage(string name)
 {
@@ -78,8 +54,8 @@ int main (int argc, char* argv[]) {
   int option_index = 0;
   string bind_addr = "localhost:50051";
   string username, password;
-  Log();
   AuthBuilder auth;
+  auto log = Log();
 
   static struct option long_options[] =
   {
@@ -126,7 +102,7 @@ int main (int argc, char* argv[]) {
         auth.setRootCertPath(string(optarg));
         break;
       case 'l': //log level
-        Log::setLevel(atoi(optarg));
+        log.setLevel(atoi(optarg));
         break;
       case 'b': //binding address
         bind_addr = optarg;
@@ -139,7 +115,17 @@ int main (int argc, char* argv[]) {
     }
   }
 
-  RunServer(bind_addr, auth.build());
+  SetupSignalHandler();
+
+  try {
+    sysrepo::Connection sr_con = sysrepo::Connection();
+
+    // start the gnmi server
+    RunServer(bind_addr, auth.build(), sr_con);
+  } catch (sysrepo::ErrorWithCode &exc) {
+    BOOST_LOG_TRIVIAL(error) << "Connection to sysrepo failed " << exc.what();
+    exit(1);
+  }
 
   return 0;
 }

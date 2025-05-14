@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +18,9 @@
 #ifndef _ENCODE_H
 #define _ENCODE_H
 
-#include <libyang/Libyang.hpp>
+#include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Session.hpp>
-
-#include <jsoncpp/json/json.h>
+#include <sysrepo.h>
 
 using std::shared_ptr;
 using std::string;
@@ -32,19 +32,37 @@ using std::vector;
  * It provides YANG validation before storing elements and after fetching them
  * in sysrepo.
  *
- * -update()  CREATE & UPDATE
- * -read()    READ
+ * update()  CREATE & UPDATE
+ * read()    READ
  *
  * DELETE is not supported as it is not dependent of encodings.
- * Use sr_delete_item to suppress subtree from a xpath directly.
+ * Use sr_deleteItem to suppress subtree from a xpath directly.
  */
 
-struct JsonData {
-  JsonData() {}
-  /* Field containing a YANG list key [name=value] */
-  std::pair<string, string> key;
-  /* Field containing the JSON tree under the designed YANG element */
-  string data;
+/* helper class to reset session datastore on going out of scope */
+class SessionDsSwitcher {
+  public:
+    SessionDsSwitcher(sysrepo::Session sess, sysrepo::Datastore ds)
+      : sr_sess(sess)
+    {
+      orig_ds = sr_sess.activeDatastore();
+      sr_sess.switchDatastore(ds);
+    }
+    ~SessionDsSwitcher()
+    {
+      sr_sess.switchDatastore(orig_ds);
+    }
+  private:
+    sysrepo::Session sr_sess;
+    sysrepo::Datastore orig_ds;
+};
+
+/*
+ * Purpose for the encode/decode
+ */
+enum class EncodePurpose {
+  Set,
+  Rpc,
 };
 
 /*
@@ -53,26 +71,32 @@ struct JsonData {
  */
 class Encode {
   public:
-    Encode(std::shared_ptr<sysrepo::Session> sr_sess);
-    ~Encode();
+    Encode(sysrepo::Session sess)
+      : sr_sess(sess)
+    {
+    }
+
+    void set_log_id(uint64_t id) {
+      log_id = id;
+      sr_session_set_nc_id(sysrepo::getRawSession(sr_sess), id);
+    }
 
     /* Supported Encodings */
     enum Supported {
       JSON_IETF = 0,
     };
 
+    std::tuple<grpc::Status, std::optional<libyang::DataNode>> decode(string xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
+    std::tuple<grpc::Status, std::optional<libyang::DataNode>> update(string xpath, const gnmi::TypedValue &reqval, string op);
+    grpc::Status encode(gnmi::Encoding encoding, libyang::DataNode node, gnmi::TypedValue *val);
+
     /* JSON encoding */
-    void json_update(string data);
-    vector<JsonData> json_read(string xpath);
+    std::optional<libyang::DataNode> json_decode(string xpath, string data, EncodePurpose purpose);
+    string json_encode(libyang::DataNode node);
 
   private:
-    void storeTree(libyang::S_Data_Node node);
-    void storeLeaf(libyang::S_Data_Node_Leaf_List node);
-
-  private:
-    std::shared_ptr<libyang::Context> ctx;
-    std::shared_ptr<sysrepo::Session> sr_sess;
-    sysrepo::S_Subscribe sub; //must be out of constructor to recv callback
+    sysrepo::Session sr_sess;
+    uint64_t log_id = 0;
 };
 
 #endif //_ENCODE_H

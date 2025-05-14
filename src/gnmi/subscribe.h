@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +19,11 @@
 #define _GNMI_SUBSCRIBE_H
 
 #include <proto/gnmi.grpc.pb.h>
+#include <boost/asio.hpp>
 
-#include <sysrepo-cpp/Session.hpp>
+#include <sysrepo-cpp/Connection.hpp>
 #include "encode/encode.h"
+#include "utils/sysrepo.h"
 
 using namespace gnmi;
 using google::protobuf::RepeatedPtrField;
@@ -31,31 +34,62 @@ using grpc::StatusCode;
 
 namespace impl {
 
+class SrModuleOnChangeParams;
+
 class Subscribe {
   public:
-    Subscribe(sysrepo::S_Session sess, std::shared_ptr<Encode> encode)
-      : sr_sess(sess), encodef(encode) {}
+    Subscribe(sysrepo::Session sess)
+      : sr_sess(sess)
+    {
+      encodef = std::make_shared<Encode>(sr_sess);
+    }
     ~Subscribe() {}
 
     Status run(ServerContext* context,
                ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream);
 
+    void streamWorker(ServerContext* context, SubscribeRequest request,
+              ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream,
+              boost::asio::io_context &initial_update_io,
+              boost::asio::io_context &incr_update_io);
+    void triggerSampleUpdate(
+        ServerContext* context, Subscription &sub,
+        ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream);
+    Status BuildSubscribeNotification(Notification *notification,
+                                      const SubscriptionList& request,
+				      bool *sample=nullptr);
+    Status BuildSubscribeNotificationForChanges(Notification *notification,
+                                                const SubscriptionList& request,
+                                                string& xpath,
+                                                sysrepo::Session session);
+    // To synchronize write access to the stream
+    void Write(ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream,
+	       SubscribeResponse response);
+    // To synchronize posting a write to the stream
+    void PostWrite(ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream,
+	       std::unique_ptr<SubscribeResponse> response, boost::asio::io_context &io);
   private:
     Status BuildSubsUpdate(RepeatedPtrField<Update>* updateList,
-                           const Path &path, string fullpath,
+                           const Path &prefix, string fullpath,
                            gnmi::Encoding encoding);
-    Status BuildSubscribeNotification(Notification *notification,
-                                      const SubscriptionList& request);
+    Status registerStreamOnChange(
+              SubscribeRequest &request, Subscription sub,
+              ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream,
+              boost::asio::io_context &initial_update_io_context,
+              boost::asio::io_context &incr_update_io_context,
+              shared_ptr<DataSubscribe> sr_sub,
+              vector<SrModuleOnChangeParams> &params_vec);
     Status handleStream(ServerContext* context, SubscribeRequest request,
               ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream);
-    Status handleOnce(ServerContext* context, SubscribeRequest request,
+    Status handleOnce(SubscribeRequest request,
               ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream);
-    Status handlePoll(ServerContext* context, SubscribeRequest request,
+    Status handlePoll(SubscribeRequest request,
               ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream);
 
   private:
-    sysrepo::S_Session sr_sess; //sysrepo session
+    sysrepo::Session sr_sess; //sysrepo session
     std::shared_ptr<Encode> encodef; //support for json ietf encoding
+    std::recursive_mutex stream_mutex;
 };
 
 }

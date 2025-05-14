@@ -10,6 +10,8 @@ Supported RPCs:
 * [X] Set
 * [X] Get
 * [X] Subscribe
+* [X] Rpc
+* [X] Confirm
 
 Supported encoding:
 
@@ -35,26 +37,19 @@ sysrepo-gnxi
 +-- protobuf (>=3.0) #because of gnmi
 +-- jsoncpp #because of get JSON
 +-- grpc (cpp) (>=1.18.0) #because of TLS bug to verify client cert
-+-- libyang-cpp (>=1.0-r3) #because of feature_enable
-+-- sysrepo-cpp (>=0.7.7)
++-- libyang-cpp
++-- sysrepo-cpp
 |   +-- libyang
-|   +-- ...
+|   +-- sysrepo
 ```
 
 You can either install dependencies from sources or from the packages.
-
-Install dependencies from source:
-
-1. If `libyang (>=1.0-r3)` is packaged on your distrib use it, else run `scripts/install-libyang.sh` to install the required version of libyang. _you can use an older version and apply commit bf1aa13ba2dfb7b5938ed2345a67de316fc34917 to it_
-2. You can run `scripts/install-sysrepo.sh` to install sysrepo. Check [here](https://github.com/sysrepo/sysrepo/blob/master/INSTALL.md) for installation instructions of sysrepo.
 
 By default, grpc and protobuf are linked statically. But you can build it to have them linked dynamically.
 
 # Install
 
 ## Install from package:
-
-Install deb and rpm from https://github.com/YohanPipereau/sysrepo-gnxi/releases
 
 ## Install from source:
 

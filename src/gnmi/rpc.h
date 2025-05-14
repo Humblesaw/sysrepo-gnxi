@@ -1,5 +1,4 @@
 /*
- * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,44 +14,36 @@
  * limitations under the License.
  */
 
-#ifndef _GNMI_GET_H
-#define _GNMI_GET_H
+#ifndef _GNMI_RPC_H
+#define _GNMI_RPC_H
 
 #include <proto/gnmi.grpc.pb.h>
-
 #include <sysrepo-cpp/Connection.hpp>
+
 #include "encode/encode.h"
 
 using namespace gnmi;
-using grpc::Status;
-using grpc::StatusCode;
 using google::protobuf::RepeatedPtrField;
+using grpc::Status;
 
 namespace impl {
 
-class Get {
-  public:
-    Get(sysrepo::Session sess)
-      : sr_sess(sess)
-    {
-      encodef = std::make_shared<Encode>(sr_sess);
-    }
-    ~Get() {}
+class Rpc {
+public:
+  Rpc(sysrepo::Session sess)
+    : sr_sess(sess)
+  {
+    encodef = std::make_shared<Encode>(sr_sess);
+  }
+  ~Rpc() {}
 
-    Status run(const GetRequest* req, GetResponse* response);
-
-  private:
-    Status BuildGetNotification(Notification *notification, const Path &prefix,
-                                const Path &path, gnmi::Encoding encoding,
-                                gnmi::GetRequest_DataType dataType);
-    Status BuildGetUpdate(RepeatedPtrField<Update>* updateList,
-                          string fullpath, gnmi::Encoding encoding);
+  grpc::Status run(const RpcRequest *req, RpcResponse *response);
 
   private:
     sysrepo::Session sr_sess; //sysrepo session
     shared_ptr<Encode> encodef; //support for json ietf encoding
 };
 
-}
+} // namespace impl
 
-#endif //_GNMI_GET_H
+#endif //_GNMI_RPC_H

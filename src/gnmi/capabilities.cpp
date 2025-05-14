@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +20,6 @@
 
 using namespace gnmi;
 using namespace std;
-using sysrepo::Yang_Schemas;
 using google::protobuf::FileOptions;
 
 Status GNMIService::Capabilities(ServerContext *context,
@@ -27,7 +27,6 @@ Status GNMIService::Capabilities(ServerContext *context,
                                  CapabilityResponse* response)
 {
   (void)context;
-  shared_ptr<Yang_Schemas> schemas;
   string gnmi_version;
   FileOptions fopts;
 
@@ -37,12 +36,21 @@ Status GNMIService::Capabilities(ServerContext *context,
   }
 
   try {
-    schemas = sr_sess->list_schemas();
-
-    for (unsigned int i = 0; i < schemas->schema_cnt(); i++) {
-      auto model = response->add_supported_models();
-      model->set_name(schemas->schema(i)->module_name());
-      model->set_version(schemas->schema(i)->revision()->revision());
+    auto sess = sr_con.sessionStart();
+    auto node = sess.getModuleInfo();
+    for (auto mod_node : node.child()->siblings()) {
+        auto model = response->add_supported_models();
+        for (auto mod_value_node = mod_node.child(); mod_value_node.has_value();
+             mod_value_node = mod_value_node.value().nextSibling()) {
+          if (!mod_value_node->schema().name().compare("name")) {
+            auto name = std::string(mod_value_node->asTerm().valueStr());
+            model->set_name(name);
+          }
+          if (!mod_value_node->schema().name().compare("revision")) {
+            auto version = std::string(mod_value_node->asTerm().valueStr());
+            model->set_version(version);
+          }
+        }
     }
 
     gnmi_version = response->GetDescriptor()->file()->options()

@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 Yohan Pipereau
+ * Copyright 2025 Graphiant Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,65 +21,41 @@
 #include "encode/encode.h"
 #include <utils/utils.h>
 #include <utils/log.h>
+#include <sysrepo-cpp/utils/exception.hpp>
 
 using namespace std;
 using google::protobuf::RepeatedPtrField;
-using sysrepo::sysrepo_exception;
 
 namespace impl {
 
 Status
 Get::BuildGetUpdate(RepeatedPtrField<Update>* updateList,
-                            const Path &path, string fullpath,
-                            gnmi::Encoding encoding)
+                    string fullpath, gnmi::Encoding encoding)
 {
-  Update *update;
-  TypedValue *gnmival;
-  vector<JsonData> json_vec;
-  string *json_ietf;
-  int idx;
-  google::protobuf::Map<string, string> *key;
+  try {
+    /* Get multiple subtree for YANG lists or one for other YANG types */
+    auto sr_trees = sr_sess.getData(fullpath.c_str());
+    /* The path not (yet) existing isn't an error, so just return an empty set */
+    if (!sr_trees.has_value())
+      return Status::OK;
 
-  /* Refresh configuration data from current session */
-  sr_sess->refresh();
-
-  /* Create appropriate TypedValue message based on encoding */
-  switch (encoding) {
-    case gnmi::JSON:
-    case gnmi::JSON_IETF:
-      /* Get sysrepo subtree data corresponding to XPATH */
-      try {
-        json_vec = encodef->json_read(fullpath);
-      } catch (invalid_argument &exc) {
-        return Status(StatusCode::NOT_FOUND, exc.what());
-      } catch (sysrepo_exception &exc) {
-        BOOST_LOG_TRIVIAL(error) << "Fail getting items from sysrepo: "
-                                 << exc.what();
-        return Status(StatusCode::INVALID_ARGUMENT, exc.what());
+    for (auto n : sr_trees->findXPath(fullpath.c_str())) {
+      auto update = updateList->Add();
+      xpath_to_gnmi(n.path(), *update->mutable_path());
+      auto status = encodef->encode(encoding, n, update->mutable_val());
+      if (!status.ok()) {
+        updateList->Clear();
+        return status;
       }
-
-      /* Create new update message for every tree collected */
-      for (auto it : json_vec) {
-        update = updateList->Add();
-        update->mutable_path()->CopyFrom(path);
-
-        if (!it.key.first.empty()) {
-          BOOST_LOG_TRIVIAL(debug) << "putting list entries key in gNMI path";
-          idx = update->mutable_path()->elem_size() - 1;
-          key = update->mutable_path()->mutable_elem(idx)->mutable_key();
-          (*key)[it.key.first] = it.key.second;
-        }
-
-        gnmival = update->mutable_val();
-
-        json_ietf = gnmival->mutable_json_ietf_val();
-        *json_ietf = it.data;
-      }
-
-      break;
-
-    default:
-      return Status(StatusCode::UNIMPLEMENTED, Encoding_Name(encoding));
+    }
+  } catch (invalid_argument &exc) {
+    updateList->Clear();
+    return Status(StatusCode::NOT_FOUND, exc.what());
+  } catch (sysrepo::ErrorWithCode &exc) {
+    BOOST_LOG_TRIVIAL(error) << "Fail getting items from sysrepo: "
+                              << exc.what();
+    updateList->Clear();
+    return Status(StatusCode::INVALID_ARGUMENT, exc.what());
   }
 
   return Status::OK;
@@ -95,33 +72,51 @@ Get::BuildGetUpdate(RepeatedPtrField<Update>* updateList,
  * gNMI so deleted path in Notification message will always be empty.
  */
 Status
-Get::BuildGetNotification(Notification *notification, const Path *prefix,
-                                 const Path &path, gnmi::Encoding encoding)
+Get::BuildGetNotification(Notification *notification, const Path &prefix,
+                          const Path &path, gnmi::Encoding encoding,
+                          gnmi::GetRequest_DataType dataType)
 {
   /* Data elements that have changed values */
   RepeatedPtrField<Update>* updateList = notification->mutable_update();
   string fullpath = "";
+  auto ds = sysrepo::Datastore::Operational;
 
   /* Get time since epoch in milliseconds */
   notification->set_timestamp(get_time_nanosec());
 
-  /* Put Request prefix as Response prefix */
-  if (prefix != nullptr) {
-    string str = gnmi_to_xpath(*prefix);
+  if (prefix.elem_size() > 0 || prefix.target().compare("")) {
+    string str;
+    try {
+      str = gnmi_to_xpath(prefix);
+    } catch (invalid_argument &exc) {
+      return Status(StatusCode::INVALID_ARGUMENT, exc.what());
+    }
     BOOST_LOG_TRIVIAL(debug) << "prefix is " << str;
-    notification->mutable_prefix()->CopyFrom(*prefix);
-    fullpath += str;
+    // gNMI spec §2.2.2.1:
+    // When set in the prefix in a request, GetRequest, SetRequest or
+    // SubscribeRequest, the field MUST be reflected in the prefix of the
+    // corresponding GetResponse, SetResponse or SubscribeResponse by a
+    // server.
+    notification->mutable_prefix()->set_target(prefix.target());
+    if (prefix.elem_size() > 0) {
+      fullpath += str;
+    }
   }
 
-  fullpath += gnmi_to_xpath(path);
+  try {
+    gnmi_check_origin(prefix, path);
+    fullpath += gnmi_to_xpath(path);
+  } catch (invalid_argument &exc) {
+    return Status(StatusCode::INVALID_ARGUMENT, exc.what());
+  }
   BOOST_LOG_TRIVIAL(debug) << "GetRequest Path " << fullpath;
 
+  if (dataType == gnmi::GetRequest_DataType_CONFIG)
+    ds = sysrepo::Datastore::Running;
 
-  /* TODO Check DATA TYPE in {ALL,CONFIG,STATE,OPERATIONAL}
-   * This is interesting for NMDA architecture
-   * req->type() : GetRequest_DataType_ALL,CONFIG,STATE,OPERATIONAL
-   */
-  return BuildGetUpdate(updateList, path, fullpath, encoding);
+  SessionDsSwitcher ds_switch(sr_sess, ds);
+
+  return BuildGetUpdate(updateList, fullpath, encoding);
 }
 
 /* Verify request fields are correct */
@@ -180,11 +175,8 @@ Status Get::run(const GetRequest* req, GetResponse* response)
   for (auto path : req->path()) {
     notification = notificationList->Add();
 
-    if (req->has_prefix())
-      status = BuildGetNotification(notification, &req->prefix(), path, req->encoding());
-    else
-      status = BuildGetNotification(notification, nullptr, path, req->encoding());
-
+    status = BuildGetNotification(notification, req->prefix(), path,
+                                  req->encoding(), req->type());
     if (!status.ok()) {
       BOOST_LOG_TRIVIAL(error) << "Fail building get notification: "
                                << status.error_message();
