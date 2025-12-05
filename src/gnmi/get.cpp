@@ -17,48 +17,53 @@
 
 #include <grpc/grpc.h>
 
-#include "get.h"
 #include "encode/encode.h"
-#include <utils/utils.h>
-#include <utils/log.h>
+#include "get.h"
+#include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/utils/exception.hpp>
+#include <utils/log.h>
+#include <utils/utils.h>
 
-using namespace std;
-using google::protobuf::RepeatedPtrField;
-
-namespace impl {
-
-Status
-Get::BuildGetUpdate(RepeatedPtrField<Update>* updateList,
-                    string fullpath, gnmi::Encoding encoding)
+namespace impl
 {
-  try {
-    /* Get multiple subtree for YANG lists or one for other YANG types */
-    auto sr_trees = sr_sess.getData(fullpath.c_str());
-    /* The path not (yet) existing isn't an error, so just return an empty set */
-    if (!sr_trees.has_value())
-      return Status::OK;
 
-    for (auto n : sr_trees->findXPath(fullpath.c_str())) {
-      auto update = updateList->Add();
-      xpath_to_gnmi(n.path(), *update->mutable_path());
-      auto status = encodef->encode(encoding, n, update->mutable_val());
-      if (!status.ok()) {
-        updateList->Clear();
-        return status;
-      }
+grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
+                                 const std::string &fullpath, gnmi::Encoding encoding)
+{
+    try
+    {
+        /* Get multiple subtree for YANG lists or one for other YANG types */
+        auto sr_trees = sr_sess.getData(fullpath);
+        /* The path not (yet) existing isn't an error, so just return an empty set */
+        if (!sr_trees.has_value())
+        {
+            return grpc::Status::OK;
+        }
+        for (auto n : sr_trees->findXPath(fullpath))
+        {
+            auto update = updateList->Add();
+            xpath_to_gnmi(n.path(), *update->mutable_path());
+            auto status = encodef->encode(encoding, n, update->mutable_val());
+            if (!status.ok())
+            {
+                updateList->Clear();
+                return status;
+            }
+        }
     }
-  } catch (invalid_argument &exc) {
-    updateList->Clear();
-    return Status(StatusCode::NOT_FOUND, exc.what());
-  } catch (sysrepo::ErrorWithCode &exc) {
-    BOOST_LOG_TRIVIAL(error) << "Fail getting items from sysrepo: "
-                              << exc.what();
-    updateList->Clear();
-    return Status(StatusCode::INVALID_ARGUMENT, exc.what());
-  }
+    catch (std::invalid_argument &exc)
+    {
+        updateList->Clear();
+        return grpc::Status(grpc::StatusCode::NOT_FOUND, exc.what());
+    }
+    catch (sysrepo::ErrorWithCode &exc)
+    {
+        SLOG_ERROR("Fail getting items from sysrepo: ", exc.what());
+        updateList->Clear();
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+    }
 
-  return Status::OK;
+    return grpc::Status::OK;
 }
 
 /*
@@ -68,123 +73,131 @@ Get::BuildGetUpdate(RepeatedPtrField<Update>* updateList,
  * There can still be multiple paths in GetResponse if requested path
  * is a directory path.
  *
- * IMPORTANT : we have choosen to have a stateless implementation of
+ * IMPORTANT : we have chosen to have a stateless implementation of
  * gNMI so deleted path in Notification message will always be empty.
  */
-Status
-Get::BuildGetNotification(Notification *notification, const Path &prefix,
-                          const Path &path, gnmi::Encoding encoding,
-                          gnmi::GetRequest_DataType dataType)
+grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const gnmi::Path &prefix,
+                                       const gnmi::Path &path, gnmi::Encoding encoding,
+                                       gnmi::GetRequest_DataType dataType)
 {
-  /* Data elements that have changed values */
-  RepeatedPtrField<Update>* updateList = notification->mutable_update();
-  string fullpath = "";
-  auto ds = sysrepo::Datastore::Operational;
+    /* Data elements that have changed values */
+    google::protobuf::RepeatedPtrField<gnmi::Update> *updateList = notification->mutable_update();
+    std::string fullpath = "";
+    auto ds = sysrepo::Datastore::Operational;
 
-  /* Get time since epoch in milliseconds */
-  notification->set_timestamp(get_time_nanosec());
+    /* Get time since epoch in milliseconds */
+    notification->set_timestamp(get_time_nanosec());
 
-  if (prefix.elem_size() > 0 || prefix.target().compare("")) {
-    string str;
-    try {
-      str = gnmi_to_xpath(prefix);
-    } catch (invalid_argument &exc) {
-      return Status(StatusCode::INVALID_ARGUMENT, exc.what());
+    if (prefix.elem_size() > 0 || prefix.target().compare(""))
+    {
+        std::string str;
+        try
+        {
+            str = gnmi_to_xpath(prefix);
+        }
+        catch (std::invalid_argument &exc)
+        {
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+        }
+        SLOG_DEBUG("prefix is ", str);
+        // gNMI spec §2.2.2.1:
+        // When set in the prefix in a request, GetRequest, SetRequest or
+        // SubscribeRequest, the field MUST be reflected in the prefix of the
+        // corresponding GetResponse, SetResponse or SubscribeResponse by a
+        // server.
+        notification->mutable_prefix()->set_target(prefix.target());
+        if (prefix.elem_size() > 0)
+        {
+            fullpath += str;
+        }
     }
-    BOOST_LOG_TRIVIAL(debug) << "prefix is " << str;
-    // gNMI spec §2.2.2.1:
-    // When set in the prefix in a request, GetRequest, SetRequest or
-    // SubscribeRequest, the field MUST be reflected in the prefix of the
-    // corresponding GetResponse, SetResponse or SubscribeResponse by a
-    // server.
-    notification->mutable_prefix()->set_target(prefix.target());
-    if (prefix.elem_size() > 0) {
-      fullpath += str;
+
+    try
+    {
+        gnmi_check_origin(prefix, path);
+        fullpath += gnmi_to_xpath(path);
     }
-  }
+    catch (std::invalid_argument &exc)
+    {
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+    }
+    SLOG_DEBUG("GetRequest Path ", fullpath);
 
-  try {
-    gnmi_check_origin(prefix, path);
-    fullpath += gnmi_to_xpath(path);
-  } catch (invalid_argument &exc) {
-    return Status(StatusCode::INVALID_ARGUMENT, exc.what());
-  }
-  BOOST_LOG_TRIVIAL(debug) << "GetRequest Path " << fullpath;
+    if (dataType == gnmi::GetRequest_DataType_CONFIG)
+        ds = sysrepo::Datastore::Running;
 
-  if (dataType == gnmi::GetRequest_DataType_CONFIG)
-    ds = sysrepo::Datastore::Running;
+    SessionDsSwitcher ds_switch(sr_sess, ds);
 
-  SessionDsSwitcher ds_switch(sr_sess, ds);
-
-  return BuildGetUpdate(updateList, fullpath, encoding);
+    return BuildGetUpdate(updateList, fullpath, encoding);
 }
 
 /* Verify request fields are correct */
-static inline Status verifyGetRequest(const GetRequest *request)
+static inline grpc::Status verifyGetRequest(const gnmi::GetRequest *request)
 {
-  switch (request->encoding()) {
+    switch (request->encoding())
+    {
     case gnmi::JSON:
     case gnmi::JSON_IETF:
-      break;
+        break;
 
     default:
-      BOOST_LOG_TRIVIAL(warning) << "Unsupported Encoding "
-                                 << Encoding_Name(request->encoding());
-      return Status(StatusCode::UNIMPLEMENTED,
-                    Encoding_Name(request->encoding()));
-  }
+        SLOG_WARN("Unsupported Encoding ", Encoding_Name(request->encoding()));
+        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, Encoding_Name(request->encoding()));
+    }
 
-  if (!GetRequest_DataType_IsValid(request->type())) {
-    BOOST_LOG_TRIVIAL(warning) << "Invalid Data Type in Get Request "
-                               << GetRequest_DataType_Name(request->type());
-    return Status(StatusCode::UNIMPLEMENTED,
-                  GetRequest_DataType_Name(request->type()));
-  }
+    if (!GetRequest_DataType_IsValid(request->type()))
+    {
+        SLOG_WARN("Invalid Data Type in Get Request ",
+                  gnmi::GetRequest_DataType_Name(request->type()));
+        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED,
+                            gnmi::GetRequest_DataType_Name(request->type()));
+    }
 
-  if (request->use_models_size() > 0) {
-    BOOST_LOG_TRIVIAL(warning) << "use_models unsupported, ALL are used";
-    return Status(StatusCode::UNIMPLEMENTED, "use_model feature unsupported");
-  }
+    if (request->use_models_size() > 0)
+    {
+        SLOG_WARN("use_models unsupported, ALL are used");
+        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "use_model feature unsupported");
+    }
 
-  if (request->extension_size() > 0) {
-    BOOST_LOG_TRIVIAL(warning) << "extension unsupported";
-    return Status(StatusCode::UNIMPLEMENTED, "extension feature unsupported");
-  }
+    if (request->extension_size() > 0)
+    {
+        SLOG_WARN("extension unsupported");
+        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "extension feature unsupported");
+    }
 
-  return Status::OK;
+    return grpc::Status::OK;
 }
 
 /* Implement gNMI Get RPC */
-Status Get::run(const GetRequest* req, GetResponse* response)
+grpc::Status Get::run(const gnmi::GetRequest *req, gnmi::GetResponse *response)
 {
-  RepeatedPtrField<Notification> *notificationList;
-  Notification *notification;
-  Status status;
+    google::protobuf::RepeatedPtrField<gnmi::Notification> *notificationList;
+    gnmi::Notification *notification;
+    grpc::Status status;
 
-  status = verifyGetRequest(req);
-  if (!status.ok())
-    return status;
+    status = verifyGetRequest(req);
+    if (!status.ok())
+        return status;
 
-  BOOST_LOG_TRIVIAL(debug) << "GetRequest DataType "
-                           << GetRequest::DataType_Name(req->type()) << ","
-                           << "GetRequest Encoding "
-                           << Encoding_Name(req->encoding());
+    SLOG_DEBUG("GetRequest DataType ", gnmi::GetRequest::DataType_Name(req->type()),
+               ", GetRequest Encoding ", gnmi::Encoding_Name(req->encoding()));
 
-  /* Run through all paths */
-  notificationList = response->mutable_notification();
-  for (auto path : req->path()) {
-    notification = notificationList->Add();
+    /* Run through all paths */
+    notificationList = response->mutable_notification();
+    for (auto path : req->path())
+    {
+        notification = notificationList->Add();
 
-    status = BuildGetNotification(notification, req->prefix(), path,
-                                  req->encoding(), req->type());
-    if (!status.ok()) {
-      BOOST_LOG_TRIVIAL(error) << "Fail building get notification: "
-                               << status.error_message();
-      return status;
+        status =
+            BuildGetNotification(notification, req->prefix(), path, req->encoding(), req->type());
+        if (!status.ok())
+        {
+            SLOG_ERROR("Fail building get notification: ", status.error_message());
+            return status;
+        }
     }
-  }
 
-  return Status::OK;
+    return grpc::Status::OK;
 }
 
-}
+} // namespace impl

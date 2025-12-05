@@ -2,14 +2,8 @@
 ##############
 
 # Require at least Protobuf 3 for gNMI
-find_package(Protobuf 3.0.0 REQUIRED) #official cmake module
 include_directories(${PROTOBUF_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-# gRPC 1.12.0 will compile but to prevent a security bug, use 1.18.0
-# We leverage grpc pkg-config files in /usr/local/lib/pkgconfig
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(grpc++ REQUIRED grpc++>=1.18.0)
 
 # GENERATION OF SOURCE FILES
 ############################
@@ -34,8 +28,6 @@ PROTOBUF_GENERATE_GRPC_CPP(gnmi_ext_grpc_srcs gnmi_ext_grpc_hdrs ${gnmi_ext_prot
 
 #Create a new library named gnmi
 add_library(gnmi ${gnmi_grpc_srcs} ${gnmi_ext_grpc_srcs} ${gnmi_proto_srcs} ${gnmi_ext_proto_srcs})
-
-set(DYNAMIC_LINK_GRPC ON)
 
 if(DYNAMIC_LINK_GRPC)
     message(STATUS "DYNAMICALLY LINK gRPC")

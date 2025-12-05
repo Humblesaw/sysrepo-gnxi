@@ -15,40 +15,50 @@
  * limitations under the License.
  */
 
-#ifndef _LOG_H
-#define _LOG_H
+#pragma once
 
-#include <boost/log/core.hpp>
-#include <boost/log/trivial.hpp>
-#include <boost/log/expressions.hpp>
-#include <syslog.h>
+#include <iostream>
+#include <string>
+#include <utility>
 
-namespace logging = boost::log;
+#define SLOG_FATAL(...) slog::log(0, "[FATAL] ", __VA_ARGS__)
+#define SLOG_ERROR(...) slog::log(1, "[ERROR] ", __VA_ARGS__)
+#define SLOG_WARN(...) slog::log(2, "[WARN] ", __VA_ARGS__)
+#define SLOG_INFO(...) slog::log(3, "[INFO] ", __VA_ARGS__)
+#define SLOG_DEBUG(...) slog::log(4, "[DEBUG] ", __VA_ARGS__)
 
-/*
- * Pick your severity
- * BOOST_LOG_TRIVIAL(trace) << "A trace severity message";
- * BOOST_LOG_TRIVIAL(debug) << "A debug severity message";
- * BOOST_LOG_TRIVIAL(info) << "An informational severity message";
- * BOOST_LOG_TRIVIAL(warning) << "A warning severity message";
- * BOOST_LOG_TRIVIAL(error) << "An error severity message";
- * BOOST_LOG_TRIVIAL(fatal) << "A fatal severity message";
-*/
-class Log {
-  public:
-    /*
-     * lvl 0 : fatal
-     * lvl 1 : error
-     * lvl 2 : warning
-     * lvl 3 : info
-     * lvl 4 : debug
-     */
-    Log(int lvl = 4); // default to 'debug' log
-    ~Log() {}
+namespace slog
+{
 
-    void setLevel(int lvl);
-    void setSyslogBackend();
-};
+inline int lvl = 4;
+
+/**
+ * @brief Set the server logging level:
+ *          lvl 0 : fatal
+ *          lvl 1 : error
+ *          lvl 2 : warning
+ *          lvl 3 : info
+ *          lvl 4 : debug
+ *
+ * @param[in] lvl Logging level to set.
+ */
+void set_level(int lvl);
+
+/**
+ * @brief Use predefined macros instead! Main logging function.
+ *
+ * @tparam Args
+ * @param lvl Level at which to log the arguments.
+ * @param args Arguments to log.
+ */
+template <class... Args> void log(int lvl, Args &&...args)
+{
+    if (lvl <= slog::lvl)
+    {
+        // avoid expensive copy of c++ structures by forwarding
+        (std::clog << ... << std::forward<Args>(args)) << "\n";
+    }
+}
 
 /*
  * Used to get log environment variables
@@ -59,8 +69,6 @@ void get_log_env(void);
  * Returns the data as a char* if displaying of data in logs is enabled
  * else it "obfuscates" the data
  */
-const char* obfs_data(std::string& data);
+const char *obfs_data(std::string &data);
 
-void log_to_file(const std::string data, std::string metadata, const uint64_t log_id);
-
-#endif // _LOG_H
+} // namespace slog

@@ -15,16 +15,12 @@
  * limitations under the License.
  */
 
-#ifndef _ENCODE_H
-#define _ENCODE_H
+#pragma once
 
+#include <libyang-cpp/DataNode.hpp>
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Session.hpp>
 #include <sysrepo.h>
-
-using std::shared_ptr;
-using std::string;
-using std::vector;
 
 /*
  * Encode directory aims at providing a CREATE-UPDATE-READ wrapper on top of
@@ -40,18 +36,16 @@ using std::vector;
  */
 
 /* helper class to reset session datastore on going out of scope */
-class SessionDsSwitcher {
+class SessionDsSwitcher
+{
   public:
-    SessionDsSwitcher(sysrepo::Session sess, sysrepo::Datastore ds)
-      : sr_sess(sess)
+    SessionDsSwitcher(sysrepo::Session sess, sysrepo::Datastore ds) : sr_sess(sess)
     {
-      orig_ds = sr_sess.activeDatastore();
-      sr_sess.switchDatastore(ds);
+        orig_ds = sr_sess.activeDatastore();
+        sr_sess.switchDatastore(ds);
     }
-    ~SessionDsSwitcher()
-    {
-      sr_sess.switchDatastore(orig_ds);
-    }
+    ~SessionDsSwitcher() { sr_sess.switchDatastore(orig_ds); }
+
   private:
     sysrepo::Session sr_sess;
     sysrepo::Datastore orig_ds;
@@ -60,43 +54,61 @@ class SessionDsSwitcher {
 /*
  * Purpose for the encode/decode
  */
-enum class EncodePurpose {
-  Set,
-  Rpc,
+enum class EncodePurpose
+{
+    Set,
+    Rpc,
 };
 
 /*
  * Factory to instantiate encodings
  * Encoding can be {JSON, Bytes, Proto, ASCII, JSON_IETF}
  */
-class Encode {
+class Encode
+{
   public:
-    Encode(sysrepo::Session sess)
-      : sr_sess(sess)
-    {
-    }
+    Encode(sysrepo::Session sess) : sr_sess(sess) {}
 
-    void set_log_id(uint64_t id) {
-      log_id = id;
-      sr_session_set_nc_id(sysrepo::getRawSession(sr_sess), id);
+    void set_log_id(uint64_t id)
+    {
+        // TODO doesnt work for now
+        // const char *originator = "sysrepo_gnxi";
+        // struct sr_session_ctx_s *session = getRawSession(sr_sess);
+
+        /* store id */
+        log_id = id;
+
+        // if (!session)
+        // {
+        //     return;
+        // }
+
+        // if (!session->orig_name)
+        // {
+        //     sr_session_set_orig_name(session, originator);
+        // }
+
+        // /* Need to remove all previous data */
+        // sr_session_del_orig_data(session);
+        // sr_session_push_orig_data(session, sizeof id, &id);
     }
 
     /* Supported Encodings */
-    enum Supported {
-      JSON_IETF = 0,
+    enum Supported
+    {
+        JSON_IETF = 0,
     };
 
-    std::tuple<grpc::Status, std::optional<libyang::DataNode>> decode(string xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
-    std::tuple<grpc::Status, std::optional<libyang::DataNode>> update(string xpath, const gnmi::TypedValue &reqval, string op);
+    std::tuple<grpc::Status, std::optional<libyang::DataNode>>
+    decode(std::string xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
     grpc::Status encode(gnmi::Encoding encoding, libyang::DataNode node, gnmi::TypedValue *val);
 
     /* JSON encoding */
-    std::optional<libyang::DataNode> json_decode(string xpath, string data, EncodePurpose purpose);
-    string json_encode(libyang::DataNode node);
+    std::optional<libyang::DataNode> json_decode(std::string xpath, std::string data,
+                                                 EncodePurpose purpose);
+    std::string json_encode(libyang::DataNode node);
 
   private:
     sysrepo::Session sr_sess;
     uint64_t log_id = 0;
 };
-
-#endif //_ENCODE_H

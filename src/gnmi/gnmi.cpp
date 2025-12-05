@@ -17,93 +17,98 @@
 
 #include "gnmi.h"
 
+#include "confirm.h"
 #include "get.h"
+#include "rpc.h"
 #include "set.h"
 #include "subscribe.h"
-#include "confirm.h"
-#include "rpc.h"
+#include "utils/log.h"
 
 static std::atomic<bool> shutting_down;
 
 // cache server contexts for TryCancel on shutting down
-static std::set<ServerContext*> server_contexts;
+static std::set<grpc::ServerContext *> server_contexts;
 static std::mutex server_context_mutex;
 
-class ServerContextHolder {
+class ServerContextHolder
+{
   public:
-    ServerContextHolder(ServerContext *ctx) : ctx(ctx) {
-      const std::lock_guard<std::mutex> lock(server_context_mutex);
-      server_contexts.insert(ctx);
+    ServerContextHolder(grpc::ServerContext *ctx) : ctx(ctx)
+    {
+        const std::lock_guard<std::mutex> lock(server_context_mutex);
+        server_contexts.insert(ctx);
     }
-    ~ServerContextHolder() {
-      const std::lock_guard<std::mutex> lock(server_context_mutex);
-      server_contexts.erase(ctx);
+    ~ServerContextHolder()
+    {
+        const std::lock_guard<std::mutex> lock(server_context_mutex);
+        server_contexts.erase(ctx);
     }
+
   private:
-    ServerContext *ctx;
+    grpc::ServerContext *ctx;
 };
 
 void GNMIService::TryCancelAll(void)
 {
-  const std::lock_guard<std::mutex> lock(server_context_mutex);
-  // forbid any new subscriptions by indicating we are shutting down
-  shutting_down.store(true);
-  for (auto ctx : server_contexts) {
-    ctx->TryCancel();
-  }
-  BOOST_LOG_TRIVIAL(debug) << "Sent cancellation to subscriptions";
+    const std::lock_guard<std::mutex> lock(server_context_mutex);
+    // forbid any new subscriptions by indicating we are shutting down
+    shutting_down.store(true);
+    for (auto ctx : server_contexts)
+    {
+        ctx->TryCancel();
+    }
+    SLOG_DEBUG("Sent cancellation to subscriptions");
 }
 
-Status GNMIService::Set(ServerContext *context, const SetRequest *request,
-                        SetResponse *response)
+grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetRequest *request,
+                              gnmi::SetResponse *response)
 {
-  (void)context;
-  impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Running), sr_con.sessionStart(sysrepo::Datastore::Startup), conf_state);
-
-  return rpc.run(request, response);
+    (void)context;
+    impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Startup),
+                  sr_con.sessionStart(sysrepo::Datastore::Running),
+                  sr_con.sessionStart(sysrepo::Datastore::Candidate), conf_state);
+    return rpc.run(request, response);
 }
 
-Status GNMIService::Get(ServerContext *context, const GetRequest *request,
-                        GetResponse *response)
+grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetRequest *request,
+                              gnmi::GetResponse *response)
 {
-  (void)context;
-  impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
-
-  return rpc.run(request, response);
+    (void)context;
+    impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
+    return rpc.run(request, response);
 }
 
-Status GNMIService::Subscribe(ServerContext *context,
-                              ServerReaderWriter<SubscribeResponse, SubscribeRequest> *stream)
+grpc::Status GNMIService::Subscribe(
+    grpc::ServerContext *context,
+    grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream)
 {
-  ServerContextHolder holder(context);
+    ServerContextHolder holder(context);
 
-  // If we are shutting down don't start any new subscriptions
-  // as TryCancelAll will not be called after this.
-  if (shutting_down.load()) {
-    BOOST_LOG_TRIVIAL(debug) << "Subscribe is not possible as server is shutting down";
-    return Status(StatusCode::UNAVAILABLE, string("Server is shutting down"));
-  }
+    // If we are shutting down don't start any new subscriptions
+    // as TryCancelAll will not be called after this.
+    if (shutting_down.load())
+    {
+        SLOG_DEBUG("Subscribe is not possible as server is shutting down");
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE, std::string("Server is shutting down"));
+    }
 
-  SubscribeRequest request;
-  impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
-
-  return rpc.run(context, stream);
+    gnmi::SubscribeRequest request;
+    impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
+    return rpc.run(context, stream);
 }
 
-Status GNMIService::Confirm(ServerContext *context, const ConfirmRequest *request,
-                            ConfirmResponse *response)
+grpc::Status GNMIService::Confirm(grpc::ServerContext *context, const gnmi::ConfirmRequest *request,
+                                  gnmi::ConfirmResponse *response)
 {
-  (void)context;
-  impl::Confirm rpc(sr_con.sessionStart(sysrepo::Datastore::Startup), conf_state);
-
-  return rpc.run(request, response);
+    (void)context;
+    impl::Confirm rpc(sr_con.sessionStart(sysrepo::Datastore::Startup), conf_state);
+    return rpc.run(request, response);
 }
 
-Status GNMIService::Rpc(ServerContext *context, const RpcRequest *request,
-                        RpcResponse *response)
+grpc::Status GNMIService::Rpc(grpc::ServerContext *context, const gnmi::RpcRequest *request,
+                              gnmi::RpcResponse *response)
 {
-  (void)context;
-  impl::Rpc rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
-
-  return rpc.run(request, response);
+    (void)context;
+    impl::Rpc rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
+    return rpc.run(request, response);
 }

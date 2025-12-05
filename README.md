@@ -1,7 +1,5 @@
 # sysrepo-gnxi
 
-# Description
-
 A C++ server based on [gNMI specification](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md) to communicate with [sysrepo](http://www.sysrepo.org/) datastore.
 
 Supported RPCs:
@@ -10,8 +8,8 @@ Supported RPCs:
 * [X] Set
 * [X] Get
 * [X] Subscribe
-* [X] Rpc
-* [X] Confirm
+* [X] Rpc (defined in proto/gnmi.proto)
+* [X] Confirm (defined in proto/gnmi.proto)
 
 Supported encoding:
 
@@ -30,60 +28,56 @@ Supported authentication/encryption methods:
 * [x] TLS/SSL encryption + Username/password authentication: server key pair only
 * [x] TLS/SSL encryption & authentication: server and client key pairs (RECOMMENDED)
 
-# Dependencies
+## Dependencies
+
+- C++20 compiler
+- cmake >= 3.18.1
+- protobuf >= 3.12.4
+- grpc (cpp) >= 1.30.2
+- libyang-cpp (master branch)
+- sysrepo-cpp (master branch)
+  - libyang (devel branch)
+  - sysrepo (devel branch)
+
+## Install
 
 ```
-sysrepo-gnxi
-+-- protobuf (>=3.0) #because of gnmi
-+-- jsoncpp #because of get JSON
-+-- grpc (cpp) (>=1.18.0) #because of TLS bug to verify client cert
-+-- libyang-cpp
-+-- sysrepo-cpp
-|   +-- libyang
-|   +-- sysrepo
-```
-
-You can either install dependencies from sources or from the packages.
-
-By default, grpc and protobuf are linked statically. But you can build it to have them linked dynamically.
-
-# Install
-
-## Install from package:
-
-## Install from source:
-
-```
-mkdir -p build
-cd build
-cmake -D DYNAMIC_LINK_GRPC=OFF .. # GRPC can be linked dynamically if other applications are using it
+mkdir -p build && cd build
+cmake ..
 make
 make install
 ```
 
-# Build packages
+## Docker build
+
+We currently support Ubuntu Jammy, Noble and Resolute, Fedora 43 and 44, OpenSUSE Tumbleweed and Leap 16, ArchLinux. See `docker/` folder.
+
+```
+sudo docker build --no-cache -t ubuntu26 -f ./docker/ubuntu26.Dockerfile .
+sudo docker run -it ubuntu26
+```
+
+## Build packages
 
 Packages are built with Cpack module for cmake:
 
-## Build DEB package:
+### Build DEB package:
 
 ```
-mkdir -p build
-cd build
+mkdir -p build && cd build
 cmake -D CPACK_GENERATOR="DEB" ..
 make package
 ```
 
-## Build RPM package:
+### Build RPM package:
 
 ```
-mkdir -p build
-cd build
+mkdir -p build && cd build
 cmake -D CPACK_GENERATOR="RPM" ..
 make package
 ```
 
-# Generate PKI (Recommanded)
+## Generate PKI (Recommended)
 
 On CA machine:
 
@@ -123,7 +117,7 @@ On CA machine:
 openssl x509 -req -days 360 -in client.certreq.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt -sha256
 ```
 
-Verify the informations:
+Verify the information:
 ```
 #Check information
 openssl x509 -noout -subject -issuer -in server.crt
@@ -134,7 +128,7 @@ openssl verify -CAfile ca.crt -show_chain client.crt
 openssl verify -CAfile ca.crt -show_chain server.crt
 ```
 
-# Get started
+## Get started
 
 * Server/client in INSECURE mode (no username/password) and no TLS connection
 ```
@@ -154,17 +148,17 @@ gnxi_server -k server.key -c server.crt --username cisco --password cisco -l4
 gnmi -addr localhost:50051 -cafile ca.crt -username cisco -password cisco get /ietf-interfaces:interfaces-state
 ```
 
-# Clients
+## Clients
 
 Here is a list of gNMI clients, not all of them work because they don't all respect the specification.
 
-## gnmi clients for Capabilities, Set, Get:
+### gnmi clients for Capabilities, Set, Get:
 
 * Arista [gnmi](https://github.com/aristanetworks/goarista/tree/master/cmd/gnmi)
 * Openconfig [gnmi_cli](https://github.com/openconfig/gnmi)
 * Google [gnmi_capabilities](https://github.com/google/gnxi/tree/master/gnmi_capabilities), [gnmi_get](https://github.com/google/gnxi/tree/master/gnmi_get), [gnmi_set](https://github.com/google/gnxi/tree/master/gnmi_set)
 
-## gnmi clients for Subscribe (telemetry):
+### gnmi clients for Subscribe (telemetry):
 
 * InfluxData [Telegraf](https://github.com/influxdata/telegraf)
 * Cisco [pipeline-gnmi](https://github.com/cisco-ie/pipeline-gnmi)
@@ -183,9 +177,9 @@ gNMI clients which should work:
 * [Telegraf-gnmi](https://github.com/influxdata/telegraf)
 
 
-# FAQ
+## FAQ
 
-## Why does it use libyang rather than a JSON library?
+### Why does it use libyang rather than a JSON library?
 
 A JSON library would not be enough because JSON is not detailed enough and miss information required to build an XPATH (key of sysrepo datastore).
 
@@ -193,7 +187,7 @@ Typically, in a JSON encoded format containing a list, you don't know which fiel
 
 Ex: /ietf-interfaces:interfaces/interface contains multiple leaves. "name" is the key but JSON does not give this information.
 
-## What is the problem with JSON and JSON_IETF encodings?
+### What is the problem with JSON and JSON_IETF encodings?
 
 Your gnmi client for a `get` or `subscribe` rpc must have yang models downloaded if it wants to recognize which is the key from a JSON list.
 
@@ -223,18 +217,18 @@ Ex: Which field is the key for interface list ?
 ```
 
 
-## What is the problem using different encoding to store xpath in a database?
+### What is the problem using different encoding to store xpath in a database?
 
 The problem is that all encodings do not agree on the type which must be used to store a value.
 For example:
 `/ietf-interfaces:interfaces/interface[name="eth0"]/statistics/octets` can be stored as a `uint64_t` with no encoding or as a `string` with JSON IETF encoding.
 
-## Why Protobuf/Binary/ASCII encoding are not supported?
+### Why Protobuf/Binary/ASCII encoding are not supported?
 
 Protobuf, binary and ASCII encodings requires gNMI client and server to have a convention regarding the data exchanged.
 On the contrary, JSON IETF [RFC7951] and JSON are self describing, so both clients and server nows how data is encoded (Key:Value).
 
-## What is no encoding? When should I use it?
+### What is no encoding? When should I use it?
 
 No encoding means your value can be encoded in one of the following type i.e. string, int64, uint64, bool, bytes, float, Decimal64.
 This types are all supported types for a YANG leaf node.
@@ -249,10 +243,10 @@ It should be used if:
 * You are making a Set request with a XPATH qualifying a YANG leaf;
 * You want to exchange lighter messages (typically for telemetry).
 
-## Why do I need grpc 1.18.0 ?
+### Why do I need grpc 1.18.0 ?
 
 This server compiles with grpc 1.12.0 but as reported here https://github.com/grpc/grpc/pull/17500 , if we want to use TLS for authentication and no root certificate is specified on server side, there will be no checking of client certificate . Thus, anyone could access the server without authenticating.
 
-## Why linking statically grpc++ and protobuf by default ?
+### Why linking statically grpc++ and protobuf by default ?
 
 Because grpc++ is not packaged on Centos and Ubuntu/Debian, and it takes a long time to compile it.

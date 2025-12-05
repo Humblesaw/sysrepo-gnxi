@@ -24,28 +24,26 @@
 #include "proto/gnmi.grpc.pb.h"
 #include "utils/log.h"
 
-using namespace grpc;
-using namespace gnmi;
-
-extern std::unique_ptr<gNMI::Stub> client;
+extern std::unique_ptr<gnmi::gNMI::Stub> client;
 extern std::optional<sysrepo::Session> sr_sess;
 
 extern void xpath_to_path(std::string xpath, gnmi::Path *path);
 extern std::string path_to_xpath(const gnmi::Path &path);
 
-class ScaleTestLogLevelReducer {
-  // Use this to reduce log level to warning for scale tests.
-  // Once finished, debug level is automatically set.
+class ScaleTestLogLevelReducer
+{
+    // Use this to reduce log level to warning for scale tests.
+    // Once finished, debug level is automatically set.
   public:
-    ScaleTestLogLevelReducer() {
-      auto log = Log();
-      // set level to warning
-      log.setLevel(2);
+    ScaleTestLogLevelReducer()
+    {
+        // set level to warning
+        slog::set_level(2);
     }
-    ~ScaleTestLogLevelReducer() {
-        auto log = Log();
+    ~ScaleTestLogLevelReducer()
+    {
         // set level back to debug
-        log.setLevel(4);
+        slog::set_level(4);
     }
 };
 

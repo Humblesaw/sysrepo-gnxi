@@ -14,44 +14,37 @@
  * limitations under the License.
  */
 
-#ifndef _UTILS_SYSREPO_H
-#define _UTILS_SYSREPO_H
+#pragma once
 
-#include <iostream>
-#include <libyang/libyang.h>
+#include <optional>
+
 #include <libyang-cpp/DataNode.hpp>
-#include <libyang-cpp/Collection.hpp>
+#include <libyang/libyang.h>
+#include <sysrepo-cpp/Connection.hpp>
+#include <sysrepo-cpp/Session.hpp>
 #include <sysrepo-cpp/Subscription.hpp>
 
-class UpdateTransaction {
+class UpdateTransaction
+{
   public:
-    /** Push a node and all its siblings into the transaction */
-    void push(libyang::DataNode node)
-    {
-      for (auto n : node.siblings())
-        push_one(n);
-    }
+    std::optional<libyang::DataNode> final_tree;
 
-    /** Push a node without its siblings into the transaction */
-    void push_one(libyang::DataNode node)
-    {
-      auto dup = node.duplicate(libyang::DuplicationOptions::Recursive);
-      first_node = first_node.has_value() ? first_node->insertSibling(dup) : dup;
-    }
+    /** Merge a top-level node into a tree */
+    void merge(std::optional<libyang::DataNode> &tree, std::optional<libyang::DataNode> &node);
 
-    std::optional<libyang::DataNode> first_node;
+    /** Push a node and all its siblings into the final transaction tree */
+    void push(std::optional<libyang::DataNode> &tree);
 };
 
 class DataSubscribe
 {
-public:
+  public:
     DataSubscribe(sysrepo::Session sess);
-    void data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath, uint32_t priority = 0, sysrepo::SubscribeOptions opts = sysrepo::SubscribeOptions::Default);
+    void data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath, uint32_t priority = 0,
+                               sysrepo::SubscribeOptions opts = sysrepo::SubscribeOptions::Default);
 
-private:
+  private:
     std::optional<sysrepo::Subscription> sub;
     /* The session is also available in the base class, but it is private so is duplicated here */
     sysrepo::Session data_sess;
 };
-
-#endif /* _UTILS_SYSREPO_H */

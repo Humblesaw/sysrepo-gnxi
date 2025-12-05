@@ -14,36 +14,37 @@
  * limitations under the License.
  */
 
-#include <iostream>
+#include "catch2/catch.hpp"
 #include <memory>
-#include <catch2/catch.hpp>
 
+#include "main.h"
 #include <grpcpp/grpcpp.h>
 #include <sysrepo-cpp/Connection.hpp>
-#include "main.h"
 
-using namespace std;
 using Catch::Matchers::Equals;
 
-TEST_CASE("Capability request", "[caps]") {
-  ClientContext ctx;
-  CapabilityRequest request;
-  CapabilityResponse response;
-  bool found = false;
+TEST_CASE("Capability request", "[caps]")
+{
+    grpc::ClientContext ctx;
+    gnmi::CapabilityRequest request;
+    gnmi::CapabilityResponse response;
+    bool found = false;
 
-  auto status = client->Capabilities(&ctx, request, &response);
-  CHECK(status.ok());
+    auto status = client->Capabilities(&ctx, request, &response);
+    CHECK(status.ok());
 
-  REQUIRE(response.supported_encodings().size() == 1);
-  CHECK(response.supported_encodings().Get(0) == gnmi::Encoding::JSON_IETF);
-  for (auto m : response.supported_models()) {
-    if (!m.name().compare("gnmi-server-test")) {
-      CHECK_THAT(m.version(), Equals("2021-02-10"));
-      CHECK_THAT(m.organization(), Equals(""));
-      found = true;
-      break;
+    REQUIRE(response.supported_encodings().size() == 1);
+    CHECK(response.supported_encodings().Get(0) == gnmi::Encoding::JSON_IETF);
+    for (auto m : response.supported_models())
+    {
+        if (!m.name().compare("gnmi-server-test"))
+        {
+            CHECK_THAT(m.version(), Equals("2021-02-10"));
+            CHECK_THAT(m.organization(), Equals(""));
+            found = true;
+            break;
+        }
     }
-  }
-  CHECK(found);
-  CHECK(!response.gnmi_version().compare("0.7.0"));
+    CHECK(found);
+    CHECK(!response.gnmi_version().compare("0.7.0"));
 }

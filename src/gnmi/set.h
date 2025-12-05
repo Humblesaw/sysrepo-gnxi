@@ -15,43 +15,46 @@
  * limitations under the License.
  */
 
-#ifndef _GNMI_SET_H
-#define _GNMI_SET_H
+#pragma once
 
-#include <tuple>
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
+#include <grpc/status.h>
+
 #include "confirm.h"
 #include "encode/encode.h"
+#include "utils/sysrepo.h"
 
-using namespace gnmi;
-using grpc::Status;
-using grpc::StatusCode;
+namespace impl
+{
 
-namespace impl {
-
-class Set {
+class Set
+{
   public:
-    Set(sysrepo::Session running_sess, sysrepo::Session startup_sess, shared_ptr<ConfirmState> confirm_state)
-      : sr_sess(running_sess), sr_sess_startup(startup_sess), conf_state(confirm_state)
+    Set(sysrepo::Session startup_sess, sysrepo::Session running_sess,
+        sysrepo::Session candidate_sess, std::shared_ptr<ConfirmState> confirm_state)
+        : sr_sess_startup(startup_sess), sr_sess(running_sess), sr_sess_candidate(candidate_sess),
+          conf_state(confirm_state)
     {
-      encodef = std::make_shared<Encode>(sr_sess);
+        encodef = std::make_shared<Encode>(sr_sess);
     }
     ~Set() {}
 
-    Status run(const SetRequest* request, SetResponse* response);
+    grpc::Status run(const gnmi::SetRequest *request, gnmi::SetResponse *response);
 
   private:
-    std::tuple<grpc::Status, std::optional<libyang::DataNode>> handleUpdate(Update in, UpdateResult *out, string prefix_str, const Path &prefix, string op);
+    grpc::Status handleUpdate(gnmi::Update in, gnmi::UpdateResult *out, std::string prefix_str,
+                              const gnmi::Path &prefix, std::string op);
 
   private:
-    sysrepo::Session sr_sess; //sysrepo running datastore session
-    sysrepo::Session sr_sess_startup; //sysrepo startup datastore session
-    shared_ptr<Encode> encodef; //support for json ietf encoding
-    shared_ptr<ConfirmState> conf_state; // commit confirm state
+    sysrepo::Session sr_sess_startup;         // sysrepo startup datastore session
+    sysrepo::Session sr_sess;                 // sysrepo running datastore session
+    sysrepo::Session sr_sess_candidate;       // sysrepo candidate datastore session
+    std::shared_ptr<Encode> encodef;          // support for json ietf encoding
+    std::shared_ptr<ConfirmState> conf_state; // commit confirm state
+    std::optional<libyang::DataNode> deleteTree, purgeTree, replaceTree, updateTree;
+    UpdateTransaction xact;
 };
 
-}
-
-#endif //_GNMI_SET_H
+} // namespace impl

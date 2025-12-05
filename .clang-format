@@ -1,0 +1,20 @@
+# .clang-format
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+BreakBeforeBraces: Allman     # Open braces on a new line
+AllowShortIfStatementsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+
+ColumnLimit: 100               # Max line length (can be 80, 100, or more)
+PointerAlignment: Right        # `int* ptr` vs `int *ptr`
+
+IncludeBlocks: Preserve
+SortIncludes: true
+
+SpacesBeforeTrailingComments: 1
+SpaceBeforeParens: ControlStatements
+
+Cpp11BracedListStyle: true

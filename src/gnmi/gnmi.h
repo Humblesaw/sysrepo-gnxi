@@ -15,65 +15,58 @@
  * limitations under the License.
  */
 
-#ifndef _GNMI_SERVER_H
-#define _GNMI_SERVER_H
+#pragma once
 
 #include <future>
 
-#include <proto/gnmi.grpc.pb.h>
 #include <grpcpp/grpcpp.h>
 
-#include <sysrepo-cpp/Session.hpp>
-#include <sysrepo-cpp/utils/exception.hpp>
+#include <proto/gnmi.grpc.pb.h>
+#include <sysrepo-cpp/Connection.hpp>
 
-#include "encode/encode.h"
 #include "confirm.h"
 #include "utils/log.h"
 
-using namespace grpc;
-using namespace gnmi;
+// UNUSED
+// using google::protobuf::RepeatedPtrField;
 
-using sysrepo::Session;
-using sysrepo::Connection;
-using google::protobuf::RepeatedPtrField;
-using std::make_shared;
-
-class GNMIService final : public gNMI::Service
+class GNMIService final : public gnmi::gNMI::Service
 {
   public:
-    GNMIService(sysrepo::Connection conn) : sr_con(conn) {
-      conf_state = make_shared<impl::ConfirmState>(conn);
+    GNMIService(sysrepo::Connection conn) : sr_con(conn)
+    {
+        conf_state = std::make_shared<impl::ConfirmState>(conn);
     }
-    ~GNMIService() {BOOST_LOG_TRIVIAL(info) << "Quitting GNMI Server"; }
+    ~GNMIService() { SLOG_INFO("Quitting GNMI Server"); }
 
-    Status Capabilities(ServerContext* context,
-        const CapabilityRequest* request, CapabilityResponse* response);
+    grpc::Status Capabilities(grpc::ServerContext *context, const gnmi::CapabilityRequest *request,
+                              gnmi::CapabilityResponse *response);
 
-    Status Get(ServerContext* context,
-        const GetRequest* request, GetResponse* response);
+    grpc::Status Get(grpc::ServerContext *context, const gnmi::GetRequest *request,
+                     gnmi::GetResponse *response);
 
-    Status Set(ServerContext* context,
-        const SetRequest* request, SetResponse* response);
+    grpc::Status Set(grpc::ServerContext *context, const gnmi::SetRequest *request,
+                     gnmi::SetResponse *response);
 
-    Status Subscribe(ServerContext* context,
-        ServerReaderWriter<SubscribeResponse, SubscribeRequest>* stream);
+    grpc::Status
+    Subscribe(grpc::ServerContext *context,
+              grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
 
-    Status Confirm(ServerContext *context,
-        const ConfirmRequest *request, ConfirmResponse *response);
+    grpc::Status Confirm(grpc::ServerContext *context, const gnmi::ConfirmRequest *request,
+                         gnmi::ConfirmResponse *response);
 
-    Status Rpc(ServerContext *context,
-        const RpcRequest *request, RpcResponse *response);
+    grpc::Status Rpc(grpc::ServerContext *context, const gnmi::RpcRequest *request,
+                     gnmi::RpcResponse *response);
 
     static void TryCancelAll(void);
 
   private:
-    void ServerContextUpdate(ServerContext *ctx, bool add);
-    sysrepo::Connection sr_con; //sysrepo connection
-    shared_ptr<impl::ConfirmState> conf_state;
+    // void ServerContextUpdate(grpc::ServerContext *ctx, bool add); UNUSED
+    sysrepo::Connection sr_con; // sysrepo connection
+    std::shared_ptr<impl::ConfirmState> conf_state;
 };
 
-void RunServer(string bind_addr, shared_ptr<ServerCredentials> cred, sysrepo::Connection sr_conn, std::promise<void> ready = std::promise<void>());
+void RunServer(std::string bind_addr, std::shared_ptr<grpc::ServerCredentials> cred,
+               sysrepo::Connection sr_conn, std::promise<void> ready = std::promise<void>());
 
 void SetupSignalHandler(bool daemon = true);
-
-#endif //_GNMI_SERVER_H

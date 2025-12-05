@@ -15,59 +15,56 @@
  * limitations under the License.
  */
 
+#include <proto/gnmi.grpc.pb.h>
+
 #include "gnmi.h"
-#include <utils/log.h>
+#include "utils/log.h"
 
-using namespace gnmi;
-using namespace std;
-using google::protobuf::FileOptions;
-
-Status GNMIService::Capabilities(ServerContext *context,
-                                 const CapabilityRequest* request,
-                                 CapabilityResponse* response)
+grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
+                                       const gnmi::CapabilityRequest *request,
+                                       gnmi::CapabilityResponse *response)
 {
-  (void)context;
-  string gnmi_version;
-  FileOptions fopts;
+    (void)context;
+    std::string gnmi_version;
+    google::protobuf::FileOptions fopts;
 
-  if (request->extension_size() > 0) {
-    BOOST_LOG_TRIVIAL(error) << "Extensions not implemented";
-    return Status(StatusCode::UNIMPLEMENTED, "Extensions not implemented");
-  }
-
-  try {
-    auto sess = sr_con.sessionStart();
-    auto node = sess.getModuleInfo();
-    for (auto mod_node : node.child()->siblings()) {
-        auto model = response->add_supported_models();
-        for (auto mod_value_node = mod_node.child(); mod_value_node.has_value();
-             mod_value_node = mod_value_node.value().nextSibling()) {
-          if (!mod_value_node->schema().name().compare("name")) {
-            auto name = std::string(mod_value_node->asTerm().valueStr());
-            model->set_name(name);
-          }
-          if (!mod_value_node->schema().name().compare("revision")) {
-            auto version = std::string(mod_value_node->asTerm().valueStr());
-            model->set_version(version);
-          }
-        }
+    if (request->extension_size() > 0)
+    {
+        SLOG_ERROR("Extensions not implemented");
+        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Extensions not implemented");
     }
 
-    gnmi_version = response->GetDescriptor()->file()->options()
-                            .GetExtension(gnmi::gnmi_service);
-    response->set_gnmi_version(gnmi_version);
+    try
+    {
+        auto sess = sr_con.sessionStart();
 
-    //Encoding used in TypedValue for responses
-    //response->add_supported_encodings(gnmi::Encoding::JSON);
-    //response->add_supported_encodings(gnmi::Encoding::BYTES);
-    //response->add_supported_encodings(gnmi::Encoding::PROTO);
-    //response->add_supported_encodings(gnmi::Encoding::ASCII);
-    response->add_supported_encodings(gnmi::Encoding::JSON_IETF);
+        for (auto module : sess.getContext().modules())
+        {
+            if (module.implemented())
+            {
+                auto model = response->add_supported_models();
+                model->set_name(module.name());
+                model->set_organization(module.org().value_or(""));
+                model->set_version(module.revision().value_or(""));
+            }
+        }
 
-  } catch (const exception &exc) {
-    BOOST_LOG_TRIVIAL(error) << exc.what();
-    return Status(StatusCode::INTERNAL, "Fail getting schemas");
-  }
+        gnmi_version =
+            response->GetDescriptor()->file()->options().GetExtension(gnmi::gnmi_service);
+        response->set_gnmi_version(gnmi_version);
 
-  return Status::OK;
+        // Encoding used in TypedValue for responses
+        // response->add_supported_encodings(gnmi::Encoding::JSON);
+        // response->add_supported_encodings(gnmi::Encoding::BYTES);
+        // response->add_supported_encodings(gnmi::Encoding::PROTO);
+        // response->add_supported_encodings(gnmi::Encoding::ASCII);
+        response->add_supported_encodings(gnmi::Encoding::JSON_IETF);
+    }
+    catch (const std::exception &exc)
+    {
+        SLOG_ERROR(exc.what());
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Fail getting schemas");
+    }
+
+    return grpc::Status::OK;
 }

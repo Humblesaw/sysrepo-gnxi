@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [new_gnmi, devel, master]
+  pull_request:
+    branches: [new_gnmi, devel, master]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - arch.Dockerfile
+          - fedora43.Dockerfile
+          - fedora44.Dockerfile
+          - opensuseLeap16_0.Dockerfile
+          - opensuseTumbleweed.Dockerfile
+          - ubuntu22.Dockerfile
+          - ubuntu24.Dockerfile
+          - ubuntu26.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test Docker image
+        run: docker build --no-cache -t sysrepo-gnxi-test -f docker/${{ matrix.dockerfile }} .

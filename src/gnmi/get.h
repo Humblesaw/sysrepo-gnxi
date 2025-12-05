@@ -15,44 +15,33 @@
  * limitations under the License.
  */
 
-#ifndef _GNMI_GET_H
-#define _GNMI_GET_H
+#pragma once
 
-#include <proto/gnmi.grpc.pb.h>
-
-#include <sysrepo-cpp/Connection.hpp>
 #include "encode/encode.h"
+#include <proto/gnmi.grpc.pb.h>
+#include <sysrepo-cpp/Connection.hpp>
 
-using namespace gnmi;
-using grpc::Status;
-using grpc::StatusCode;
-using google::protobuf::RepeatedPtrField;
+namespace impl
+{
 
-namespace impl {
-
-class Get {
+class Get
+{
   public:
-    Get(sysrepo::Session sess)
-      : sr_sess(sess)
-    {
-      encodef = std::make_shared<Encode>(sr_sess);
-    }
+    Get(sysrepo::Session sess) : sr_sess(sess) { encodef = std::make_shared<Encode>(sr_sess); }
     ~Get() {}
 
-    Status run(const GetRequest* req, GetResponse* response);
+    grpc::Status run(const gnmi::GetRequest *req, gnmi::GetResponse *response);
 
   private:
-    Status BuildGetNotification(Notification *notification, const Path &prefix,
-                                const Path &path, gnmi::Encoding encoding,
-                                gnmi::GetRequest_DataType dataType);
-    Status BuildGetUpdate(RepeatedPtrField<Update>* updateList,
-                          string fullpath, gnmi::Encoding encoding);
+    grpc::Status BuildGetNotification(gnmi::Notification *notification, const gnmi::Path &prefix,
+                                      const gnmi::Path &path, gnmi::Encoding encoding,
+                                      gnmi::GetRequest_DataType dataType);
+    grpc::Status BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
+                                const std::string &fullpath, gnmi::Encoding encoding);
 
   private:
-    sysrepo::Session sr_sess; //sysrepo session
-    shared_ptr<Encode> encodef; //support for json ietf encoding
+    sysrepo::Session sr_sess;        // sysrepo session
+    std::shared_ptr<Encode> encodef; // support for json ietf encoding
 };
 
-}
-
-#endif //_GNMI_GET_H
+} // namespace impl
