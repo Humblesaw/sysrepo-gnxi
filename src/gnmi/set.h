@@ -22,7 +22,7 @@
 
 #include <grpc/status.h>
 
-#include "confirm.h"
+#include "commit.h"
 #include "encode/encode.h"
 #include "utils/sysrepo.h"
 
@@ -33,9 +33,9 @@ class Set
 {
   public:
     Set(sysrepo::Session startup_sess, sysrepo::Session running_sess,
-        sysrepo::Session candidate_sess, std::shared_ptr<ConfirmState> confirm_state)
+        sysrepo::Session candidate_sess, std::shared_ptr<Commit> commit_state)
         : sr_sess_startup(startup_sess), sr_sess(running_sess), sr_sess_candidate(candidate_sess),
-          conf_state(confirm_state)
+          commit_state(commit_state)
     {
         encodef = std::make_shared<Encode>(sr_sess);
     }
@@ -48,11 +48,11 @@ class Set
                               const gnmi::Path &prefix, std::string op);
 
   private:
-    sysrepo::Session sr_sess_startup;         // sysrepo startup datastore session
-    sysrepo::Session sr_sess;                 // sysrepo running datastore session
-    sysrepo::Session sr_sess_candidate;       // sysrepo candidate datastore session
-    std::shared_ptr<Encode> encodef;          // support for json ietf encoding
-    std::shared_ptr<ConfirmState> conf_state; // commit confirm state
+    sysrepo::Session sr_sess_startup;     // sysrepo startup datastore session
+    sysrepo::Session sr_sess;             // sysrepo running datastore session
+    sysrepo::Session sr_sess_candidate;   // sysrepo candidate datastore session
+    std::shared_ptr<Encode> encodef;      // support for json ietf encoding
+    std::shared_ptr<Commit> commit_state; // commit confirm state
     std::optional<libyang::DataNode> deleteTree, purgeTree, replaceTree, updateTree;
     UpdateTransaction xact;
 };

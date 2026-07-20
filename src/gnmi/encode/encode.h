@@ -69,30 +69,6 @@ class Encode
   public:
     Encode(sysrepo::Session sess) : sr_sess(sess) {}
 
-    void set_log_id(uint64_t id)
-    {
-        // TODO doesnt work for now
-        // const char *originator = "sysrepo_gnxi";
-        // struct sr_session_ctx_s *session = getRawSession(sr_sess);
-
-        /* store id */
-        log_id = id;
-
-        // if (!session)
-        // {
-        //     return;
-        // }
-
-        // if (!session->orig_name)
-        // {
-        //     sr_session_set_orig_name(session, originator);
-        // }
-
-        // /* Need to remove all previous data */
-        // sr_session_del_orig_data(session);
-        // sr_session_push_orig_data(session, sizeof id, &id);
-    }
-
     /* Supported Encodings */
     enum Supported
     {
@@ -110,5 +86,4 @@ class Encode
 
   private:
     sysrepo::Session sr_sess;
-    uint64_t log_id = 0;
 };

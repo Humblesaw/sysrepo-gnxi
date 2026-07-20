@@ -18,6 +18,7 @@
 #include "set.h"
 #include "encode/encode.h"
 #include <proto/gnmi.grpc.pb.h>
+#include <proto/gnmi_ext.pb.h>
 #include <sysrepo-cpp/utils/exception.hpp>
 #include <sysrepo.h>
 #include <utils/log.h>
@@ -188,47 +189,72 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
     std::vector<gnmi::UpdateResult> results;
     auto ietf_nc_mod = sr_sess.getContext().getModuleImplemented("ietf-netconf").value();
 
-    // For observability, set transaction_id as log_id for subscribers and gnmi logging.
-    encodef->set_log_id(request->transaction_id());
-
-    // Check if we're waiting for a Confirm RPC
-    if (conf_state->get_wait_confirm())
+    // scan for Commit extension, allow only the Commit extension; reject all others
+    const gnmi_ext::Commit *commit_ext = nullptr;
+    for (const auto &ext : request->extension())
     {
-        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Previous Set has to be confirmed");
+        if (ext.has_commit())
+            commit_ext = &ext.commit();
+        else
+            return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "extension not supported");
     }
 
-    // Check if Set requires Confirm
-    if (request->has_confirm())
+    // dispatch on Commit extension action
+    // kConfirm/kCancel/kSetRollbackDuration return early (no mutations applied)
+    // kCommit arms the timer and falls through to apply mutations as a normal Set
+    if (commit_ext)
     {
-        const gnmi::ConfirmParmsRequest &conf_parms = request->confirm();
-        SLOG_DEBUG("Confirm msg has timeout=", conf_parms.timeout_secs());
-        SLOG_DEBUG("Confirm msg has ignore-system-state: ", conf_parms.ignore_system_state());
-
-        if (not conf_parms.ignore_system_state())
+        switch (commit_ext->action_case())
         {
-            // We have to check system state
-        }
-
-        // This (re)starts the timer, so as long as work here lasts less than
-        // timeout...
-        std::string err_msg = "";
-        if (not conf_state->set_wait_confirm(conf_parms.timeout_secs(), err_msg))
+        case gnmi_ext::Commit::kCommit:
         {
-            // Because of check above, should happen only in race condition
-            return grpc::Status(grpc::StatusCode::UNAVAILABLE, err_msg);
+            int64_t rollback_secs = Commit::default_rollback_secs;
+            if (commit_ext->commit().has_rollback_duration())
+                rollback_secs = commit_ext->commit().rollback_duration().seconds();
+            auto st = commit_state->request_setup(commit_ext->id(), rollback_secs);
+            if (!st.ok())
+                return st;
+            break; // proceed to apply mutations as a normal Set
         }
-
-        // Add ConfirmParmsResponse in SetResponse
-        gnmi::ConfirmParmsResponse confirm;
-        confirm.set_min_wait_secs(conf_state->get_min_wait_conf_secs());
-        confirm.set_timeout_secs(conf_state->get_timeout_secs());
-        response->mutable_confirm()->CopyFrom(confirm);
+        case gnmi_ext::Commit::kConfirm:
+        {
+            auto st = commit_state->confirm(commit_ext->id());
+            if (!st.ok())
+                return st;
+            response->set_timestamp(get_time_nanosec());
+            return grpc::Status::OK;
+        }
+        case gnmi_ext::Commit::kCancel:
+        {
+            auto st = commit_state->cancel(commit_ext->id());
+            if (!st.ok())
+                return st;
+            response->set_timestamp(get_time_nanosec());
+            return grpc::Status::OK;
+        }
+        case gnmi_ext::Commit::kSetRollbackDuration:
+        {
+            int64_t rollback_secs = 0;
+            if (commit_ext->set_rollback_duration().has_rollback_duration())
+                rollback_secs = commit_ext->set_rollback_duration().rollback_duration().seconds();
+            auto st = commit_state->set_rollback_duration(commit_ext->id(), rollback_secs);
+            if (!st.ok())
+                return st;
+            response->set_timestamp(get_time_nanosec());
+            return grpc::Status::OK;
+        }
+        case gnmi_ext::Commit::ACTION_NOT_SET:
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                                "commit extension has no action");
+        }
     }
 
-    if (request->extension_size() > 0)
+    // a plain Set while a rollback counter is running
+    // must fail with FAILED_PRECONDITION
+    if (!commit_ext && commit_state->get_wait_confirm())
     {
-        conf_state->clr_wait_confirm();
-        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "not supported");
+        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                            "previous Set has to be confirmed");
     }
 
     response->set_timestamp(get_time_nanosec());
@@ -242,8 +268,8 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
         }
         catch (std::invalid_argument &exc)
         {
-            SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-            conf_state->clr_wait_confirm();
+            SLOG_ERROR(exc.what());
+            commit_state->clear();
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
         SLOG_DEBUG("prefix is ", prefix);
@@ -268,12 +294,12 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
             }
             catch (std::invalid_argument &exc)
             {
-                SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-                conf_state->clr_wait_confirm();
+                SLOG_ERROR(exc.what());
+                commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
 
-            // Fill in Reponse
+            // Fill in Response
             gnmi::UpdateResult res;
             *(res.mutable_path()) = delpath;
             res.set_op(gnmi::UpdateResult::DELETE);
@@ -338,8 +364,8 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
             }
             catch (const std::exception &exc)
             {
-                SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-                conf_state->clr_wait_confirm();
+                SLOG_ERROR(exc.what());
+                commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
         }
@@ -356,9 +382,8 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
                 auto status = handleUpdate(upd, &res, prefix, request->prefix(), "replace");
                 if (!status.ok())
                 {
-                    SLOG_ERROR("Fail building set notification: ", status.error_message(),
-                               ". Transaction-id: ", request->transaction_id());
-                    conf_state->clr_wait_confirm();
+                    SLOG_ERROR("Fail building set notification: ", status.error_message());
+                    commit_state->clear();
                     return status;
                 }
 
@@ -367,20 +392,20 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
             }
             catch (const std::invalid_argument &exc)
             {
-                SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-                conf_state->clr_wait_confirm();
+                SLOG_ERROR(exc.what());
+                commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
             catch (sysrepo::Error &exc)
             {
-                SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-                conf_state->clr_wait_confirm();
+                SLOG_ERROR(exc.what());
+                commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
             }
             catch (const std::exception &exc)
             { // Any other exception
-                SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-                conf_state->clr_wait_confirm();
+                SLOG_ERROR(exc.what());
+                commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
             }
         }
@@ -397,9 +422,8 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
                 auto status = handleUpdate(upd, &res, prefix, request->prefix(), "merge");
                 if (!status.ok())
                 {
-                    SLOG_ERROR("Fail building set notification: ", status.error_message(),
-                               ". Transaction-id: ", request->transaction_id());
-                    conf_state->clr_wait_confirm();
+                    SLOG_ERROR("Fail building set notification: ", status.error_message());
+                    commit_state->clear();
                     return status;
                 }
                 res.set_op(gnmi::UpdateResult::UPDATE);
@@ -407,14 +431,14 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
             }
             catch (const std::invalid_argument &exc)
             {
-                SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-                conf_state->clr_wait_confirm();
+                SLOG_ERROR(exc.what());
+                commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
             catch (const sysrepo::Error &exc)
             {
-                SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
-                conf_state->clr_wait_confirm();
+                SLOG_ERROR(exc.what());
+                commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
             }
         }
@@ -434,7 +458,7 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
         /* if this fails, we can still revert the changes */
         sr_sess.applyChanges();
 
-        if (!request->has_confirm())
+        if (!commit_ext)
         {
             /* copy the prepared configuration to Startup (has to succeed) */
             sr_sess_startup.copyConfig(sysrepo::Datastore::Running);
@@ -442,7 +466,7 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
     }
     catch (const sysrepo::Error &exc)
     {
-        conf_state->clr_wait_confirm();
+        commit_state->clear();
         std::string err_str;
         auto errors = sr_sess.getErrors();
         if (errors.size())
@@ -453,24 +477,26 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
         {
             err_str = exc.what();
         }
-        SLOG_ERROR("commit error: ", err_str, ". Transaction-id:", request->transaction_id());
+        SLOG_ERROR("commit error: ", err_str);
         sr_sess.discardChanges();
         return grpc::Status(grpc::StatusCode::ABORTED, err_str);
     }
     catch (const std::exception &exc)
     {
-        conf_state->clr_wait_confirm();
-        SLOG_ERROR(exc.what(), ". Transaction-id:", request->transaction_id());
+        commit_state->clear();
+        SLOG_ERROR(exc.what());
         sr_sess.discardChanges();
         return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
     }
 
-    conf_state->write_set_transaction_id(request->transaction_id());
-
     for (auto r : results)
         *(response->add_response()) = r;
 
-    conf_state->reset_timers();
+    // start the confirm timer (timeout callback)
+    if (commit_ext)
+    {
+        commit_state->request_finish();
+    }
     return grpc::Status::OK;
 }
 

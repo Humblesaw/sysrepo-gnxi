@@ -24,14 +24,12 @@
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
 
-static uint64_t id = 1;
 
 TEST_CASE("Top-level Set request (replace) empty", "[set]")
 {
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test4/params[.=\"abc\"]", "");
@@ -63,7 +61,6 @@ TEST_CASE("Empty leaf Set request (update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/ready", update->mutable_path());
@@ -94,7 +91,6 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test4/params[.=\"abc\"]", "");
@@ -138,7 +134,6 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
 //     ClientContext ctx;
 //     SetRequest request;
 //     SetResponse response;
-//     request.set_transaction_id(id++);
 //     using namespace libyang;
 //     sr_sess->switchDatastore(sysrepo::Datastore::Running);
 //     sr_sess->setItem("/gnmi-server-test:test/things[name=\"B\"]/enabled", "false");
@@ -176,7 +171,6 @@ TEST_CASE("Top-level Set request leaflist (update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test4/params[.=\"abc\"]", "");
@@ -218,7 +212,6 @@ TEST_CASE("Top-level Set request (update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/", update->mutable_path());
@@ -260,7 +253,6 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto replace = request.add_replace();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
@@ -305,7 +297,6 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto replace = request.add_replace();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
@@ -351,7 +342,6 @@ TEST_CASE("Top-level Set request (multi replace + update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto replace = request.add_replace();
     auto update = request.add_update();
 
@@ -411,7 +401,6 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
@@ -439,7 +428,6 @@ TEST_CASE("Path-based Set request (delete)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
@@ -468,7 +456,6 @@ TEST_CASE("Path-based Set request (update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']", update->mutable_path());
@@ -499,7 +486,6 @@ TEST_CASE("Leaf Set request (update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/name", update->mutable_path());
@@ -530,7 +516,6 @@ TEST_CASE("Set request (with prefix)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']", request.mutable_prefix());
@@ -563,7 +548,6 @@ TEST_CASE("Set request (with empty prefix)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     // Add empty prefix
@@ -596,7 +580,6 @@ TEST_CASE("Set request transaction (update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/", update->mutable_path());
@@ -640,7 +623,6 @@ TEST_CASE("Set request transaction (delete+update)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
@@ -685,7 +667,6 @@ TEST_CASE("Set request (delete with wildcards)", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test/things[name='A']/enabled", "true");
@@ -719,7 +700,6 @@ TEST_CASE("Set request (delete) with non-existent path", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
 
     xpath_to_path("/gnmi-server-test:test-state/things[name='not-found']", request.add_delete_());
 
@@ -740,7 +720,6 @@ TEST_CASE("Set request (delete) the same path", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test/things[name='foo']/enabled", "true");
@@ -775,7 +754,6 @@ TEST_CASE("Set request (delete) child then parent", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test/things[name='foo']/enabled", "true");
@@ -812,7 +790,6 @@ TEST_CASE("Set request (delete) parent then child", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->setItem("/gnmi-server-test:test/things[name='foo']/enabled", "true");
@@ -848,7 +825,6 @@ TEST_CASE("Set request for list with composite key", "[set]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
@@ -909,7 +885,6 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
         grpc::ClientContext ctx;
         gnmi::SetRequest request;
         gnmi::SetResponse response;
-        request.set_transaction_id(id++);
         xpath_to_path("/", request.add_delete_());
 
         for (int j = 0; j < 100; j++)
@@ -941,7 +916,6 @@ TEST_CASE("Set request (no val type)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -961,7 +935,6 @@ TEST_CASE("Set request (ascii val type)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -981,7 +954,6 @@ TEST_CASE("Set request (JSON val type)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -1001,7 +973,6 @@ TEST_CASE("Set request (bytes val type)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -1021,7 +992,6 @@ TEST_CASE("Set request (proto-bytes val type)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -1041,7 +1011,6 @@ TEST_CASE("Set request (any-val val type)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -1061,7 +1030,6 @@ TEST_CASE("Set request (leaf-list val type)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -1081,7 +1049,6 @@ TEST_CASE("Set request (bool val)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -1101,7 +1068,6 @@ TEST_CASE("Set request (string val)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/description", update->mutable_path());
@@ -1121,7 +1087,6 @@ TEST_CASE("Set request (uint val)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/amount", update->mutable_path());
@@ -1141,7 +1106,6 @@ TEST_CASE("Set request (int val)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/signed-amount", update->mutable_path());
@@ -1161,7 +1125,6 @@ TEST_CASE("Set request (float val)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/decimal-amount", update->mutable_path());
@@ -1181,7 +1144,6 @@ TEST_CASE("Set request (no path)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     update->mutable_val();
@@ -1200,7 +1162,6 @@ TEST_CASE("Set request (decimal64 val)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/decimal-amount", update->mutable_path());
@@ -1217,7 +1178,6 @@ TEST_CASE("Set request (incorrect prefix)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']", update->mutable_path());
@@ -1240,7 +1200,6 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
     grpc::ClientContext ctx2;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/", update->mutable_path());
@@ -1306,7 +1265,6 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     grpc::ClientContext ctx2;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
@@ -1375,7 +1333,6 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     grpc::ClientContext ctx2;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
@@ -1437,7 +1394,6 @@ TEST_CASE("Top-level Set request (update, no namespace)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/", update->mutable_path());
@@ -1457,7 +1413,6 @@ TEST_CASE("Set request (update with wildcards)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/*/enabled", update->mutable_path());
@@ -1472,7 +1427,6 @@ TEST_CASE("Set request (application error string)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test2/custom-error", update->mutable_path());
@@ -1488,7 +1442,6 @@ TEST_CASE("Set request (data model error)", "[set-neg]")
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
-    request.set_transaction_id(id++);
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test2/must-error", update->mutable_path());

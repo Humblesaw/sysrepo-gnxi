@@ -73,7 +73,7 @@ set(CMAKE_CXX_FLAGS_DEBUG   "-O0")
 set(GNXI_SRC src/gnmi/encode/encode.cpp
              src/gnmi/encode/json_ietf.cpp 
              src/gnmi/capabilities.cpp
-             src/gnmi/confirm.cpp
+             src/gnmi/commit.cpp
              src/gnmi/get.cpp
              src/gnmi/gnmi_server.cpp
              src/gnmi/gnmi.cpp
@@ -86,7 +86,7 @@ set(GNXI_SRC src/gnmi/encode/encode.cpp
 )
 
 set(GNXI_HEADERS src/gnmi/encode/encode.h
-                 src/gnmi/confirm.h
+                 src/gnmi/commit.h
                  src/gnmi/get.h
                  src/gnmi/gnmi.h
                  src/gnmi/rpc.h
@@ -135,6 +135,7 @@ target_link_libraries(gnxi_server gnmi
 if (ENABLE_TESTS)
     enable_testing()
     set(GNXI_TEST_SRC tests/capabilities.cpp
+                    tests/commit.cpp
                     tests/get.cpp
                     tests/main.cpp
                     tests/rpc.cpp

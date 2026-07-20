@@ -17,7 +17,6 @@
 
 #include "gnmi.h"
 
-#include "confirm.h"
 #include "get.h"
 #include "rpc.h"
 #include "set.h"
@@ -66,7 +65,7 @@ grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetReque
     (void)context;
     impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Startup),
                   sr_con.sessionStart(sysrepo::Datastore::Running),
-                  sr_con.sessionStart(sysrepo::Datastore::Candidate), conf_state);
+                  sr_con.sessionStart(sysrepo::Datastore::Candidate), commit_state);
     return rpc.run(request, response);
 }
 
@@ -95,14 +94,6 @@ grpc::Status GNMIService::Subscribe(
     gnmi::SubscribeRequest request;
     impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
     return rpc.run(context, stream);
-}
-
-grpc::Status GNMIService::Confirm(grpc::ServerContext *context, const gnmi::ConfirmRequest *request,
-                                  gnmi::ConfirmResponse *response)
-{
-    (void)context;
-    impl::Confirm rpc(sr_con.sessionStart(sysrepo::Datastore::Startup), conf_state);
-    return rpc.run(request, response);
 }
 
 grpc::Status GNMIService::Rpc(grpc::ServerContext *context, const gnmi::RpcRequest *request,

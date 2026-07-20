@@ -24,7 +24,7 @@
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
-#include "confirm.h"
+#include "commit.h"
 #include "utils/log.h"
 
 // UNUSED
@@ -35,7 +35,7 @@ class GNMIService final : public gnmi::gNMI::Service
   public:
     GNMIService(sysrepo::Connection conn) : sr_con(conn)
     {
-        conf_state = std::make_shared<impl::ConfirmState>(conn);
+        commit_state = std::make_shared<impl::Commit>(conn.sessionStart());
     }
     ~GNMIService() { SLOG_INFO("Quitting GNMI Server"); }
 
@@ -52,9 +52,6 @@ class GNMIService final : public gnmi::gNMI::Service
     Subscribe(grpc::ServerContext *context,
               grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
 
-    grpc::Status Confirm(grpc::ServerContext *context, const gnmi::ConfirmRequest *request,
-                         gnmi::ConfirmResponse *response);
-
     grpc::Status Rpc(grpc::ServerContext *context, const gnmi::RpcRequest *request,
                      gnmi::RpcResponse *response);
 
@@ -63,7 +60,7 @@ class GNMIService final : public gnmi::gNMI::Service
   private:
     // void ServerContextUpdate(grpc::ServerContext *ctx, bool add); UNUSED
     sysrepo::Connection sr_con; // sysrepo connection
-    std::shared_ptr<impl::ConfirmState> conf_state;
+    std::shared_ptr<impl::Commit> commit_state;
 };
 
 void RunServer(std::string bind_addr, std::shared_ptr<grpc::ServerCredentials> cred,

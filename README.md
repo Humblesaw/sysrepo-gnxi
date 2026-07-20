@@ -9,7 +9,14 @@ Supported RPCs:
 * [X] Get
 * [X] Subscribe
 * [X] Rpc (defined in proto/gnmi.proto)
-* [X] Confirm (defined in proto/gnmi.proto)
+
+Supported Extensions:
+
+* [ ] Master Arbitration Extension
+* [ ] History Extension
+* [X] Commit Confirmed Extension
+* [ ] Depth Extension
+* [ ] Config Subscription Extension
 
 Supported encoding:
 

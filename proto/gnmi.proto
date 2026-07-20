@@ -68,14 +68,10 @@ service gNMI {
 
   // Extensions to gNMI specification:
 
-  // Confirm allows a client to Confirm with the target a previous Set
-  // operation. If not confirmed, the previous configuration is reapplied.
-  // This is a extension to gNMI specification.
-  rpc Confirm(ConfirmRequest) returns (ConfirmResponse);
   // Rpc allows a client to invoke an RPC in the tree as specified by the
   // path included in the message and serialises the response to be returned
   // to the client using the specified encoding.
-  // This is a extension to gNMI specification.
+  // This is an extension to gNMI specification.
   rpc Rpc(RpcRequest) returns (RpcResponse);
 }
 
@@ -340,12 +336,6 @@ message AliasList {
   repeated Alias alias = 1;    // The set of aliases to be created.
 }
 
-// Presence of this message indicates that the Set RPC needs to be confirmed
-// If Confirm RPC is not sent in time, rollback occurs on timeout
-message ConfirmParmsRequest {
-  uint32 timeout_secs = 1;	// Requested timeout. See ConfirmParmsResponse for target's response
-  bool ignore_system_state = 2;	// If true, do not reject Set based on SystemState
-}
 // SetRequest is sent from a client to the target to update values in the data
 // tree. Paths are either deleted by the client, or modified by means of being
 // updated, or replaced. Where a replace is used, unspecified values are
@@ -361,20 +351,8 @@ message SetRequest {
   // Extension messages associated with the SetRequest. See the
   // gNMI extension specification for further definition.
   repeated gnmi_ext.Extension extension = 5;
-
-  // Start of proprietary messages
-
-  // Requested Confirm parameters
-  ConfirmParmsRequest confirm = 666;
-  // Transaction-id (non-zero)
-  uint64 transaction_id = 667;
 }
 
-// Target's response to client's request
-message ConfirmParmsResponse {
-  uint32 min_wait_secs = 1;   // Client has to wait at least this long before sending Confirm RPC
-  uint32 timeout_secs = 2;    // Client has this amount of time to send Confirm after Set
-}
 // SetResponse is the response to a SetRequest, sent from the target to the
 // client. It reports the result of the modifications to the data tree that were
 // specified by the client. Errors for this RPC should be reported using the
@@ -392,11 +370,6 @@ message SetResponse {
   // Extension messages associated with the SetResponse. See the
   // gNMI extension specification for further definition.
   repeated gnmi_ext.Extension extension = 5;
-
-  // Start of proprietary messages
-
-  // This must be present if ConfirmParmsRequest is present in the corresponding request
-  ConfirmParmsResponse confirm = 666;
 }
 
 // UpdateResult is used within the SetResponse message to communicate the
@@ -489,16 +462,6 @@ message ModelData {
   string name = 1;            // Name of the model.
   string organization = 2;    // Organization publishing the model.
   string version = 3;         // Semantic version of the model.
-}
-
-// ConfirmRequest is sent by the client in the Confirm RPC to request
-// that the target confirm the last Set RPC.
-message ConfirmRequest {
-  bool ignore_system_state = 1;	// If true, do not reject Confirm based on SystemState
-}
-// ConfirmResponse is used by the target to respond to a Confirm RPC
-// sent by the Client.
-message ConfirmResponse {
 }
 
 // RpcRequest is sent by the client in the Rpc RPC to request
