@@ -106,13 +106,6 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
     google::protobuf::RepeatedPtrField<gnmi::Update> *updateList = notification->mutable_update();
     grpc::Status status;
 
-    // Defined refer to a long Path by a shorter one: alias
-    if (request.use_aliases())
-    {
-        SLOG_WARN("Unsupported usage of aliases");
-        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "alias not supported");
-    }
-
     /* Check if only updates should be sent */
     if (request.updates_only())
     {
@@ -197,13 +190,6 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
     auto updateList = notification->mutable_update();
     auto deleteList = notification->mutable_delete_();
     grpc::Status status;
-
-    // Defined refer to a long Path by a shorter one: alias
-    if (request.use_aliases())
-    {
-        SLOG_WARN("Unsupported usage of aliases");
-        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "alias not supported");
-    }
 
     /* Check if only updates should be sent */
     if (request.updates_only())
@@ -836,8 +822,6 @@ grpc::Status Subscribe::handlePoll(
             Write(stream, response);
             break;
         }
-        case request.kAliases:
-            return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Aliases not implemented yet");
         case request.kSubscribe:
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                                 "A SubscriptionList has already been received for this RPC");

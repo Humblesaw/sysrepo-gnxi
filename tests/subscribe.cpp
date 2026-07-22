@@ -51,7 +51,6 @@ TEST_CASE("Subscribe (once)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -107,7 +106,6 @@ TEST_CASE("Subscribe (poll)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -137,7 +135,6 @@ TEST_CASE("Subscribe (poll)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -189,7 +186,6 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -215,7 +211,6 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -261,7 +256,6 @@ TEST_CASE("Subscribe (once) with prefix", "[subs]")
     CHECK(response.update().timestamp() > 0);
     auto prefix = path_to_xpath(response.update().prefix());
     CHECK_THAT(prefix, Equals("/"));
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -313,7 +307,6 @@ TEST_CASE("Subscribe (once) with target", "[subs]")
     CHECK(response.update().timestamp() > 0);
     CHECK(response.update().has_prefix());
     CHECK_THAT(response.update().prefix().target(), Equals("foo"));
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -364,7 +357,6 @@ TEST_CASE("Subscribe (once) with wildcards", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 2);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -432,7 +424,6 @@ TEST_CASE("Subscribe (on-change, no updates)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -496,7 +487,6 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -529,7 +519,6 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -554,7 +543,6 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter2"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 2);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -618,7 +606,6 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -649,7 +636,6 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
     CHECK(response.update().update_size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().delete__size() == 1);
     path = path_to_xpath(response.update().delete_().Get(0));
     CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']"));
@@ -697,7 +683,6 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -727,7 +712,6 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -784,7 +768,6 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -822,7 +805,6 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -868,7 +850,6 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -900,7 +881,6 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -955,7 +935,6 @@ TEST_CASE("Subscribe with non-existent path (once)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1004,7 +983,6 @@ TEST_CASE("Subscribe with non-existent path (poll)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1028,7 +1006,6 @@ TEST_CASE("Subscribe with non-existent path (poll)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1073,7 +1050,6 @@ TEST_CASE("Subscribe with non-existent path (stream-sample)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1092,7 +1068,6 @@ TEST_CASE("Subscribe with non-existent path (stream-sample)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1132,7 +1107,6 @@ TEST_CASE("Subscribe with non-existent path (on-change)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1188,7 +1162,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -1211,7 +1184,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
 
     // Sync response
@@ -1239,7 +1211,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1254,7 +1225,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -1315,7 +1285,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -1338,7 +1307,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -1376,7 +1344,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
@@ -1394,7 +1361,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(response.update().update_size() == 1);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -1457,7 +1423,6 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
 
     CHECK(response.update().update().Get(0).val().value_case() ==
@@ -1480,7 +1445,6 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
 
     CHECK(response.update().update().Get(0).val().value_case() ==
@@ -1513,7 +1477,6 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK(response.update().delete__size() == 0);
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
-    CHECK_THAT(response.update().alias(), Equals(""));
     REQUIRE(response.update().update_size() == 1);
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -1587,7 +1550,6 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
         CHECK(response.update().delete__size() == 0);
         CHECK(response.update().timestamp() > 0);
         CHECK(!response.update().has_prefix());
-        CHECK_THAT(response.update().alias(), Equals(""));
         REQUIRE(response.update().update_size() == 1);
         CHECK(response.update().update().Get(0).val().value_case() ==
               gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -1760,36 +1722,6 @@ TEST_CASE("Subscribe (once) with another unsupported encoding type", "[subs-neg]
     CHECK_THAT(status.error_message(), Equals("PROTO"));
 }
 
-TEST_CASE("Subscribe (poll) with use_aliases", "[subs-neg]")
-{
-    grpc::ClientContext ctx;
-    gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
-    gnmi::SubscribeResponse response;
-    auto list = request.mutable_subscribe();
-    auto sub = list->add_subscription();
-
-    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
-    list->set_encoding(gnmi::Encoding::JSON_IETF);
-    list->set_use_aliases(true);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
-
-    auto rw = client->Subscribe(&ctx);
-    auto success = rw->Write(request);
-    CHECK(success == true);
-
-    poll_request.mutable_poll();
-    success = rw->Write(poll_request);
-    CHECK(success == true);
-
-    success = rw->Read(&response);
-    CHECK(success == false);
-
-    auto status = rw->Finish();
-    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
-    CHECK_THAT(status.error_message(), Equals("alias not supported"));
-}
-
 TEST_CASE("Subscribe (poll) with updates_only", "[subs-neg]")
 {
     grpc::ClientContext ctx;
@@ -1818,35 +1750,6 @@ TEST_CASE("Subscribe (poll) with updates_only", "[subs-neg]")
     auto status = rw->Finish();
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("updates-only not supported"));
-}
-
-TEST_CASE("Subscribe (poll) with alias request", "[subs-neg]")
-{
-    grpc::ClientContext ctx;
-    gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
-    gnmi::SubscribeResponse response;
-    auto list = request.mutable_subscribe();
-    auto sub = list->add_subscription();
-
-    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
-    list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
-
-    auto rw = client->Subscribe(&ctx);
-    auto success = rw->Write(request);
-    CHECK(success == true);
-
-    poll_request.mutable_aliases();
-    success = rw->Write(poll_request);
-    CHECK(success == true);
-
-    success = rw->Read(&response);
-    CHECK(success == false);
-
-    auto status = rw->Finish();
-    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
-    CHECK_THAT(status.error_message(), Equals("Aliases not implemented yet"));
 }
 
 TEST_CASE("Subscribe (poll) with dup sub request", "[subs-neg]")
@@ -1905,37 +1808,6 @@ TEST_CASE("Subscribe (stream-sample) with huge sample interval", "[subs-neg]")
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
                Equals("sample_interval must be less than 9223372036854775807 nanoseconds"));
-}
-
-TEST_CASE("Subscribe (stream) with use_aliases", "[subs-neg]")
-{
-    grpc::ClientContext ctx;
-    gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
-    gnmi::SubscribeResponse response;
-    auto list = request.mutable_subscribe();
-    auto sub = list->add_subscription();
-
-    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
-    list->set_encoding(gnmi::Encoding::JSON_IETF);
-    list->set_use_aliases(true);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
-    sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
-
-    auto rw = client->Subscribe(&ctx);
-    auto success = rw->Write(request);
-    CHECK(success == true);
-
-    poll_request.mutable_poll();
-    success = rw->Write(poll_request);
-    CHECK(success == true);
-
-    success = rw->Read(&response);
-    CHECK(success == false);
-
-    auto status = rw->Finish();
-    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
-    CHECK_THAT(status.error_message(), Equals("alias not supported"));
 }
 
 TEST_CASE("Subscribe (stream) with updates_only", "[subs-neg]")

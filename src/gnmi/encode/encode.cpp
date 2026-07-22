@@ -49,6 +49,10 @@ Encode::decode(std::string xpath, const gnmi::TypedValue &reqval, EncodePurpose 
         return std::make_tuple(
             grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unsupported protobuf float type"),
             std::nullopt);
+    case gnmi::TypedValue::ValueCase::kDoubleVal:
+        return std::make_tuple(
+            grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unsupported protobuf double type"),
+            std::nullopt);
     case gnmi::TypedValue::ValueCase::kDecimalVal:
         return std::make_tuple(
             grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unsupported protobuf Decimal64 type"),

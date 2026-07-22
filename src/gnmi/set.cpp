@@ -411,6 +411,14 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
         }
     }
 
+    /* gNMI paths with union_replace -- not yet supported */
+    if (request->union_replace_size() > 0)
+    {
+        SLOG_WARN("Unsupported union_replace in SetRequest");
+        commit_state->clear();
+        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "union_replace not supported");
+    }
+
     /* gNMI paths with value to update */
     if (request->update_size() > 0)
     {

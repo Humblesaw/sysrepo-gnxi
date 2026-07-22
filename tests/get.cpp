@@ -51,7 +51,6 @@ TEST_CASE("Top-level Get request", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     for (auto it : response.notification().Get(0).update())
     {
         auto path = path_to_xpath(it.path());
@@ -84,7 +83,6 @@ static void single_get()
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     for (auto it : response.notification().Get(0).update())
     {
         auto path = path_to_xpath(it.path());
@@ -129,7 +127,6 @@ TEST_CASE("Get request of all module oper state", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -159,7 +156,6 @@ TEST_CASE("Get request of one list item oper state", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -191,7 +187,6 @@ TEST_CASE("Get request of one leaf of oper state", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -222,7 +217,6 @@ TEST_CASE("Get request with prefix", "[get]")
     CHECK(response.notification().Get(0).timestamp() > 0);
     auto prefix = path_to_xpath(response.notification().Get(0).prefix());
     CHECK_THAT(prefix, Equals("/"));
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -253,7 +247,6 @@ TEST_CASE("Get request with target", "[get]")
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(response.notification().Get(0).has_prefix());
     CHECK_THAT(response.notification().Get(0).prefix().target(), Equals("foo"));
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -280,7 +273,6 @@ TEST_CASE("Get request for config datastore", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     CHECK(!response.notification().Get(0).atomic());
     REQUIRE(response.notification().Get(0).update_size() == 0);
 
@@ -297,7 +289,6 @@ TEST_CASE("Get request for config datastore", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -328,7 +319,6 @@ TEST_CASE("Get request with wildcard", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 2);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -365,7 +355,6 @@ TEST_CASE("Get request with multiple paths", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -379,7 +368,6 @@ TEST_CASE("Get request with multiple paths", "[get]")
     CHECK(response.notification().Get(1).delete__size() == 0);
     CHECK(response.notification().Get(1).timestamp() > 0);
     CHECK(!response.notification().Get(1).has_prefix());
-    CHECK_THAT(response.notification().Get(1).alias(), Equals(""));
     REQUIRE(response.notification().Get(1).update_size() == 1);
     CHECK(response.notification().Get(1).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -407,7 +395,6 @@ TEST_CASE("Get request of empty container", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -435,7 +422,6 @@ TEST_CASE("Get request of list container", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     CHECK(!response.notification().Get(0).atomic());
     REQUIRE(response.notification().Get(0).update_size() == 2);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
@@ -468,7 +454,6 @@ TEST_CASE("Get request with non-existent path", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     CHECK(!response.notification().Get(0).atomic());
     REQUIRE(response.notification().Get(0).update_size() == 0);
 }
@@ -495,7 +480,6 @@ TEST_CASE("Get request of one list item where name contains /", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -540,7 +524,6 @@ TEST_CASE("Get request of one leaf where parent name contains /", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -582,7 +565,6 @@ TEST_CASE("Get request of one list item where name contains [", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -619,7 +601,6 @@ TEST_CASE("Get request of one list item where name contains '", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -659,7 +640,6 @@ TEST_CASE("Get request of one list item where name contains \\", "[get]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -709,7 +689,6 @@ TEST_CASE("Get request from list with composite key ", "[get-composite-key]")
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -764,7 +743,6 @@ TEST_CASE("Get request from list with composite key having slashes ",
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -820,7 +798,6 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
     CHECK(response.notification().Get(0).delete__size() == 0);
     CHECK(response.notification().Get(0).timestamp() > 0);
     CHECK(!response.notification().Get(0).has_prefix());
-    CHECK_THAT(response.notification().Get(0).alias(), Equals(""));
     REQUIRE(response.notification().Get(0).update_size() == 1);
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);

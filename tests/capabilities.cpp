@@ -46,5 +46,5 @@ TEST_CASE("Capability request", "[caps]")
         }
     }
     CHECK(found);
-    CHECK(!response.gnmi_version().compare("0.7.0"));
+    CHECK(!response.gnmi_version().compare("0.10.0"));
 }
