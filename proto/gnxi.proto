@@ -1,0 +1,56 @@
+//
+// Copyright 2025 Graphiant Inc.
+// Copyright (c) 2026 CESNET, z.s.p.o.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+syntax = "proto3";
+
+import "gnmi.proto";
+
+// Package gNXI defines the gRPC Network Operations Interface extensions
+// implemented by this server. These are vendor extensions that do not fall
+// under the standard gNMI or gNOI specifications.
+package gnxi;
+
+// gNXI service provides operational RPCs that are not covered by the gNMI
+// specification (which is solely designed for configuration and state data
+// manipulation). The Rpc method allows a client to invoke a YANG RPC/action
+// as defined in the schema, by path.
+service gNXI {
+  // Rpc allows a client to invoke a YANG RPC/action in the tree as specified
+  // by the path included in the message and serialises the response to be
+  // returned to the client using the specified encoding.
+  rpc Rpc(RpcRequest) returns (RpcResponse);
+}
+
+// RpcRequest is sent by the client in the Rpc RPC to request that the target
+// invoke a YANG RPC/action as defined in the schema.
+message RpcRequest {
+  // The path to the YANG RPC/action to invoke.
+  gnmi.Path path = 1;
+  // The explicitly typed input value.
+  gnmi.TypedValue val = 2;
+  // The encoding the target should use to serialise the response value. This
+  // governs the output direction only.
+  gnmi.Encoding encoding = 3;
+}
+
+// RpcResponse is used by the target to respond to an Rpc RPC sent by the
+// client.
+message RpcResponse {
+  // Timestamp in nanoseconds since the Epoch.
+  int64 timestamp = 1;
+  // The explicitly typed output value.
+  gnmi.TypedValue val = 2;
+}

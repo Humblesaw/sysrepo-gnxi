@@ -150,4 +150,31 @@ module gnmi-server-test {
       }
     }
   }
+
+  rpc no-subscriber {
+    description
+      "An RPC that has no subscriber registered.";
+    input {
+      leaf foo {
+        type string;
+      }
+    }
+  }
+
+  container action-test {
+    action action-test {
+      description
+        "An action with input and output.";
+      input {
+        leaf foo {
+          type string;
+        }
+      }
+      output {
+        leaf bar {
+          type string;
+        }
+      }
+    }
+  }
 }

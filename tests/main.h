@@ -22,9 +22,11 @@
 #include <sysrepo-cpp/Session.hpp>
 
 #include "proto/gnmi.grpc.pb.h"
+#include "proto/gnxi.grpc.pb.h"
 #include "utils/log.h"
 
 extern std::unique_ptr<gnmi::gNMI::Stub> client;
+extern std::unique_ptr<gnxi::gNXI::Stub> gnxi_client;
 extern std::optional<sysrepo::Session> sr_sess;
 
 extern void xpath_to_path(std::string xpath, gnmi::Path *path);

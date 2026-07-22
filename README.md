@@ -2,15 +2,18 @@
 
 A C++ server based on [gNMI specification](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md) to communicate with [sysrepo](http://www.sysrepo.org/) datastore.
 
-Supported RPCs:
+Supported gNMI RPCs:
 
 * [x] Capabilities
 * [X] Set
 * [X] Get
 * [X] Subscribe
-* [X] Rpc (defined in proto/gnmi.proto)
 
-Supported Extensions:
+Supported gNXI RPCs (defined in proto/gnxi.proto):
+
+* [X] Rpc
+
+Supported gNMI extensions:
 
 * [ ] Master Arbitration Extension
 * [ ] History Extension

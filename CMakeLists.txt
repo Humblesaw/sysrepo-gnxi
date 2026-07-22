@@ -77,7 +77,8 @@ set(GNXI_SRC src/gnmi/encode/encode.cpp
              src/gnmi/get.cpp
              src/gnmi/gnmi_server.cpp
              src/gnmi/gnmi.cpp
-             src/gnmi/rpc.cpp
+             src/gnxi/gnxi.cpp
+             src/gnxi/rpc.cpp
              src/gnmi/set.cpp
              src/gnmi/subscribe.cpp
              src/security/authentication.cpp
@@ -89,7 +90,8 @@ set(GNXI_HEADERS src/gnmi/encode/encode.h
                  src/gnmi/commit.h
                  src/gnmi/get.h
                  src/gnmi/gnmi.h
-                 src/gnmi/rpc.h
+                 src/gnxi/gnxi.h
+                 src/gnxi/rpc.h
                  src/gnmi/set.h
                  src/gnmi/subscribe.h
                  src/security/authentication.h

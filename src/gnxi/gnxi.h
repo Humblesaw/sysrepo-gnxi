@@ -1,5 +1,10 @@
-/*
- * Copyright 2025 Graphiant Inc.
+/**
+ * @file gnxi.h
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief gNXI service header
+ *
+ * @copyright
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +21,22 @@
 
 #pragma once
 
-#include <proto/gnmi.grpc.pb.h>
+#include <grpcpp/grpcpp.h>
+
+#include <proto/gnxi.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
-#include "encode/encode.h"
+#include "utils/log.h"
 
-namespace impl
-{
-
-class Rpc
+class GNXIService final : public gnxi::gNXI::Service
 {
   public:
-    Rpc(sysrepo::Session sess) : sr_sess(sess) { encodef = std::make_shared<Encode>(sr_sess); }
-    ~Rpc() {}
+    GNXIService(sysrepo::Connection conn) : sr_con(conn) {}
+    ~GNXIService() { SLOG_INFO("Quitting GNXI Server"); }
 
-    grpc::Status run(const gnmi::RpcRequest *req, gnmi::RpcResponse *response);
+    grpc::Status Rpc(grpc::ServerContext *context, const gnxi::RpcRequest *request,
+                     gnxi::RpcResponse *response);
 
   private:
-    sysrepo::Session sr_sess;        // sysrepo session
-    std::shared_ptr<Encode> encodef; // support for json ietf encoding
+    sysrepo::Connection sr_con; // sysrepo connection
 };
-
-} // namespace impl

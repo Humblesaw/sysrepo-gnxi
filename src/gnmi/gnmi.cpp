@@ -18,7 +18,6 @@
 #include "gnmi.h"
 
 #include "get.h"
-#include "rpc.h"
 #include "set.h"
 #include "subscribe.h"
 #include "utils/log.h"
@@ -94,12 +93,4 @@ grpc::Status GNMIService::Subscribe(
     gnmi::SubscribeRequest request;
     impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
     return rpc.run(context, stream);
-}
-
-grpc::Status GNMIService::Rpc(grpc::ServerContext *context, const gnmi::RpcRequest *request,
-                              gnmi::RpcResponse *response)
-{
-    (void)context;
-    impl::Rpc rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
-    return rpc.run(request, response);
 }

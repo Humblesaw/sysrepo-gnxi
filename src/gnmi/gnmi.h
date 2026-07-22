@@ -27,9 +27,6 @@
 #include "commit.h"
 #include "utils/log.h"
 
-// UNUSED
-// using google::protobuf::RepeatedPtrField;
-
 class GNMIService final : public gnmi::gNMI::Service
 {
   public:
@@ -51,9 +48,6 @@ class GNMIService final : public gnmi::gNMI::Service
     grpc::Status
     Subscribe(grpc::ServerContext *context,
               grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
-
-    grpc::Status Rpc(grpc::ServerContext *context, const gnmi::RpcRequest *request,
-                     gnmi::RpcResponse *response);
 
     static void TryCancelAll(void);
 

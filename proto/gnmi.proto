@@ -1,6 +1,5 @@
 //
 // Copyright 2016 Google Inc. All Rights Reserved.
-// Copyright 2025 Graphiant Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,13 +71,6 @@ service gNMI {
   // (POLL), or sent as a one-off retrieval (ONCE).
   // Reference: gNMI Specification Section 3.5
   rpc Subscribe(stream SubscribeRequest) returns (stream SubscribeResponse);
-
-  // Extensions to gNMI specification:
-  // Rpc allows a client to invoke an RPC in the tree as specified by the
-  // path included in the message and serialises the response to be returned
-  // to the client using the specified encoding.
-  // This is an extension to gNMI specification.
-  rpc Rpc(RpcRequest) returns (RpcResponse);
 }
 
 // Notification is a re-usable message that is used to encode data from the
@@ -473,23 +465,4 @@ message ModelData {
   string name = 1;          // Name of the model.
   string organization = 2;  // Organization publishing the model.
   string version = 3;       // Semantic version of the model.
-}
-
-// RpcRequest is sent by the client in the Rpc RPC to request
-// that the target invoke a YANG RPC/action as defined in the schema.
-message RpcRequest {
-  Path path = 1;                      // The path to the RPC to invoke.
-  // The explicitly typed input value. Only JSON_IETF is supported currently.
-  TypedValue val = 2;
-  // The encoding that the target should use for the response.
-  Encoding encoding = 3;
-  // Timeout to use on the server side call in seconds
-  uint32 timeout = 4;
-}
-// RpcResponse is used by the target to respond to an Rpc RPC sent by the
-// Client.
-message RpcResponse {
-  int64 timestamp = 1;          // Timestamp in nanoseconds since Epoch.
-  // The explicitly typed output value. Only JSON_IETF is supported currently.
-  TypedValue val = 2;
 }

@@ -29,6 +29,7 @@
 #include "utils/log.h"
 
 std::unique_ptr<gnmi::gNMI::Stub> client;
+std::unique_ptr<gnxi::gNXI::Stub> gnxi_client;
 std::optional<sysrepo::Session> sr_sess;
 
 // Parse XPath-like string in gnmi::Path
@@ -153,6 +154,23 @@ static sysrepo::ErrorCode clear_stats_rpc_cb(sysrepo::Session session, uint32_t 
     return sysrepo::ErrorCode::Ok;
 }
 
+static sysrepo::ErrorCode action_test_cb(sysrepo::Session session, uint32_t sub_id,
+                                       std::string_view xpath, const libyang::DataNode input,
+                                       sysrepo::Event event, uint32_t request_id,
+                                       libyang::DataNode output)
+{
+    (void)session;
+    (void)sub_id;
+    (void)xpath;
+    (void)input;
+    (void)event;
+    (void)request_id;
+
+    output.newPath("bar", "action-result", libyang::CreationOptions::Output);
+
+    return sysrepo::ErrorCode::Ok;
+}
+
 class SetupSysrepo
 {
   public:
@@ -182,6 +200,8 @@ class SetupSysrepo
         sr_sess->applyChanges();
 
         sub->onRPCAction("/gnmi-server-test:clear-stats", clear_stats_rpc_cb, 0,
+                         sysrepo::SubscribeOptions::Default);
+        sub->onRPCAction("/gnmi-server-test:action-test/action-test", action_test_cb, 0,
                          sysrepo::SubscribeOptions::Default);
     };
 
@@ -291,6 +311,8 @@ int main(int argc, char *argv[])
 
     client =
         gnmi::gNMI::NewStub(grpc::CreateChannel(bind_addr, grpc::InsecureChannelCredentials()));
+    gnxi_client =
+        gnxi::gNXI::NewStub(grpc::CreateChannel(bind_addr, grpc::InsecureChannelCredentials()));
 
     result = Catch::Session().run(argc, argv);
 

@@ -21,9 +21,11 @@
 #include <grpcpp/server_builder.h>
 
 #include <proto/gnmi.grpc.pb.h>
+#include <proto/gnxi.grpc.pb.h>
 #include <sysrepo-cpp/utils/exception.hpp>
 
 #include "gnmi/gnmi.h"
+#include "gnxi/gnxi.h"
 #include "security/authentication.h"
 #include "utils/log.h"
 
@@ -99,10 +101,12 @@ void RunServer(std::string bind_addr, std::shared_ptr<grpc::ServerCredentials> c
     try
     {
         GNMIService gnmi(sr_conn); // gNMI Service
+        GNXIService gnxi(sr_conn); // gNXI Service
 
         grpc::ServerBuilder builder;
         builder.AddListeningPort(bind_addr, cred);
         builder.RegisterService(&gnmi);
+        builder.RegisterService(&gnxi);
         g_state.server = builder.BuildAndStart();
         ready.set_value();
 

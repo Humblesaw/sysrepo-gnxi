@@ -14,20 +14,24 @@ find_package(GRPC)
 
 get_filename_component(gnmi_proto "gnmi.proto" ABSOLUTE)
 get_filename_component(gnmi_ext_proto "gnmi_ext.proto" ABSOLUTE)
+get_filename_component(gnxi_proto "gnxi.proto" ABSOLUTE)
 
 # Official generator
 protobuf_generate_cpp(gnmi_proto_srcs gnmi_proto_hdrs ${gnmi_proto})
 protobuf_generate_cpp(gnmi_ext_proto_srcs gnmi_ext_proto_hdrs ${gnmi_ext_proto})
+protobuf_generate_cpp(gnxi_proto_srcs gnxi_proto_hdrs ${gnxi_proto})
 
 # Custom generator: Official `protobuf_generate_cpp` can't use grpc plugins
 PROTOBUF_GENERATE_GRPC_CPP(gnmi_grpc_srcs gnmi_grpc_hdrs ${gnmi_proto})
 PROTOBUF_GENERATE_GRPC_CPP(gnmi_ext_grpc_srcs gnmi_ext_grpc_hdrs ${gnmi_ext_proto})
+PROTOBUF_GENERATE_GRPC_CPP(gnxi_grpc_srcs gnxi_grpc_hdrs ${gnxi_proto})
 
 # LINK OPTIONS FOR GNMI-SERVER
 ##############################
 
 #Create a new library named gnmi
-add_library(gnmi ${gnmi_grpc_srcs} ${gnmi_ext_grpc_srcs} ${gnmi_proto_srcs} ${gnmi_ext_proto_srcs})
+add_library(gnmi ${gnmi_grpc_srcs} ${gnmi_ext_grpc_srcs} ${gnxi_grpc_srcs}
+                ${gnmi_proto_srcs} ${gnmi_ext_proto_srcs} ${gnxi_proto_srcs})
 
 if(DYNAMIC_LINK_GRPC)
     message(STATUS "DYNAMICALLY LINK gRPC")
