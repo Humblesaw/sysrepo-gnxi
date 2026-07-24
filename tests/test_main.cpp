@@ -16,6 +16,7 @@
 
 #include <csignal>
 #include <filesystem>
+#include <sysrepo-cpp/Enum.hpp>
 #include <thread>
 
 #define CATCH_CONFIG_RUNNER
@@ -210,7 +211,8 @@ class SetupSysrepo
     {
         SLOG_DEBUG("Removing sysrepo data\n");
         sub.reset();
-        sr_sess->getConnection().removeModules({"gnmi-server-test", "gnmi-server-test-wine"}, true);
+        sr_sess->getConnection().removeModules({"gnmi-server-test", "gnmi-server-test-wine"},
+                                               sysrepo::ModuleRemoval::WithDependencies);
         // don't hold onto sr_sess forever.
         sr_sess.reset();
     }

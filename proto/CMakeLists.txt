@@ -1,27 +1,45 @@
 # DEPENDENCIES
 ##############
 
-# Require at least Protobuf 3 for gNMI
-include_directories(${PROTOBUF_INCLUDE_DIRS})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
+# minimum required versions
+set(GRPC_MIN_VERSION 1.30.2)
+set(PROTOBUF_MIN_VERSION 3.12.4)
 
-# GENERATION OF SOURCE FILES
-############################
+# newer protobuf rejects the 3.12.4 request via its same-major-version policy
+# which leaves protobuf targets undefined
+find_package(Protobuf CONFIG QUIET)
 
-# Official gRPCConfig.cmake is installed by gRPC only if compiled with cmake
-# We just use FindGRPC.cmake to have PROTOBUF_GENERATE_GRPC_CPP function
+# MODULE still enforces the minimum version even if the targets are already
+# defined
+find_package(Protobuf MODULE ${PROTOBUF_MIN_VERSION} REQUIRED)
+find_package(gRPC CONFIG ${GRPC_MIN_VERSION} QUIET)
+
+if(NOT TARGET gRPC::grpc++)
+    # on Ubuntu 22.04, there is no cmake module for grpc
+    pkg_check_modules(GRPC REQUIRED grpc++>=${GRPC_MIN_VERSION})
+    add_library(gRPC::grpc++ INTERFACE IMPORTED GLOBAL)
+    set_target_properties(gRPC::grpc++ PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${GRPC_INCLUDE_DIRS}"
+        INTERFACE_LINK_LIBRARIES "${GRPC_LIBRARIES}"
+    )
+endif()
+
+# GENERATED SOURCE FILES
+########################
+
+# we just use FindGRPC.cmake to have PROTOBUF_GENERATE_GRPC_CPP function
 find_package(GRPC)
 
 get_filename_component(gnmi_proto "gnmi.proto" ABSOLUTE)
 get_filename_component(gnmi_ext_proto "gnmi_ext.proto" ABSOLUTE)
 get_filename_component(gnxi_proto "gnxi.proto" ABSOLUTE)
 
-# Official generator
+# official generator
 protobuf_generate_cpp(gnmi_proto_srcs gnmi_proto_hdrs ${gnmi_proto})
 protobuf_generate_cpp(gnmi_ext_proto_srcs gnmi_ext_proto_hdrs ${gnmi_ext_proto})
 protobuf_generate_cpp(gnxi_proto_srcs gnxi_proto_hdrs ${gnxi_proto})
 
-# Custom generator: Official `protobuf_generate_cpp` can't use grpc plugins
+# custom generator: official `protobuf_generate_cpp` can't use grpc plugins
 PROTOBUF_GENERATE_GRPC_CPP(gnmi_grpc_srcs gnmi_grpc_hdrs ${gnmi_proto})
 PROTOBUF_GENERATE_GRPC_CPP(gnmi_ext_grpc_srcs gnmi_ext_grpc_hdrs ${gnmi_ext_proto})
 PROTOBUF_GENERATE_GRPC_CPP(gnxi_grpc_srcs gnxi_grpc_hdrs ${gnxi_proto})
@@ -29,35 +47,17 @@ PROTOBUF_GENERATE_GRPC_CPP(gnxi_grpc_srcs gnxi_grpc_hdrs ${gnxi_proto})
 # LINK OPTIONS FOR GNMI-SERVER
 ##############################
 
-#Create a new library named gnmi
+# create a new library named gnmi
 add_library(gnmi ${gnmi_grpc_srcs} ${gnmi_ext_grpc_srcs} ${gnxi_grpc_srcs}
                 ${gnmi_proto_srcs} ${gnmi_ext_proto_srcs} ${gnxi_proto_srcs})
 
-if(DYNAMIC_LINK_GRPC)
-    message(STATUS "DYNAMICALLY LINK gRPC")
-    #Link our new gnmi library with grpc and protobuf libraries
-    target_link_libraries(gnmi ${grpc++_LIBRARIES} ${PROTOBUF_LIBRARIES})
-else()
-    message(STATUS "STATICALLY LINK gRPC")
-    find_library(GRPCPP_STATIC_LIB NAMES libgrpc++.a PATHS ${grpc++_LIBRARY_DIRS})
-    if(NOT GRPCPP_STATIC_LIB)
-        message(FATAL_ERROR "static libraries for grpc++ not found")
-    endif()
-    find_library(GRPC_STATIC_LIB NAMES libgrpc.a PATHS ${grpc++_LIBRARY_DIRS})
-    if(NOT GRPC_STATIC_LIB)
-        message(FATAL_ERROR "static libraries for grpc++ not found")
-    endif()
-    find_library(PROTOBUF_STATIC_LIB NAMES libprotobuf.a PATHS ${grpc++_LIBRARY_DIRS})
-    if(NOT PROTOBUF_STATIC_LIB)
-        message(FATAL_ERROR "static libraries for protobuf not found")
-    endif()
-    pkg_check_modules(zlib REQUIRED zlib)
-    pkg_check_modules(openssl REQUIRED openssl)
+# link our new gnmi library with grpc and protobuf libraries, PUBLIC so the
+# imported targets (and their include directories) propagate transitively to
+# every executable that links gnmi
+target_link_libraries(gnmi PUBLIC gRPC::grpc++ protobuf::libprotobuf)
 
-    #Link our new gnmi library with grpc, protobuf libraries and their dependencies
-    target_link_libraries(gnmi
-        ${GRPCPP_STATIC_LIB} ${GRPC_STATIC_LIB}
-        ${PROTOBUF_STATIC_LIB}
-        ${openssl_LIBRARIES} ${zlib_LIBRARIES}
-    )
-endif(DYNAMIC_LINK_GRPC)
+# propagate the location of the generated proto headers to consumers, the
+# generated files live in ${CMAKE_CURRENT_BINARY_DIR} (build/proto/), but
+# sources include them as <proto/gnmi.pb.h>, so consumers need the top-level
+# build directory on their include path
+target_include_directories(gnmi PUBLIC ${CMAKE_BINARY_DIR})

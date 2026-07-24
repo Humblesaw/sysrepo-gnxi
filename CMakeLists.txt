@@ -19,7 +19,6 @@ set(CMAKE_BUILD_TYPE Debug)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMakeModules")
 
 # options
-option(DYNAMIC_LINK_GRPC "Link GRPC and Protobuf dynamically" ON)
 option(ENABLE_TESTS "Build tests" OFF)
 option(ENABLE_COVERAGE "Build code coverage report from tests" OFF)
 
@@ -29,30 +28,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # DEPENDENCIES
 ##############
 
-# minimum required versions
-set(GRPC_MIN_VERSION 1.30.2)
-set(PROTOBUF_MIN_VERSION 3.12.4)
-
 find_package(PkgConfig) # official cmake module
-
-# newer protobuf rejects the 3.12.4 request via its same-major-version policy
-# which leaves protobuf targets undefined
-find_package(Protobuf CONFIG QUIET)
-
-# MODULE still enforces the minimum version even if the targets are already
-# defined
-find_package(Protobuf MODULE ${PROTOBUF_MIN_VERSION} REQUIRED)
-find_package(gRPC CONFIG ${GRPC_MIN_VERSION} QUIET)
-
-# on Ubuntu 22.04, there is no cmake module for grpc 
-if(NOT gRPC_FOUND)
-    pkg_check_modules(GRPC REQUIRED grpc++>=${GRPC_MIN_VERSION})
-    add_library(gRPC::grpc++ INTERFACE IMPORTED)
-    set_target_properties(gRPC::grpc++ PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${GRPC_INCLUDE_DIRS}"
-        INTERFACE_LINK_LIBRARIES "${GRPC_LIBRARIES}"
-    )
-endif()
 
 pkg_check_modules(SYSREPOC REQUIRED sysrepo)
 pkg_check_modules(LIBYANGC REQUIRED libyang)
@@ -107,9 +83,7 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC # list of include dirs required to use target binary or library
         ${LIBYANG_INCLUDE_DIRS}
         ${SYSREPO_INCLUDE_DIRS}
-        ${PROTOBUF_INCLUDE_DIR}
     PRIVATE
-        ${CMAKE_CURRENT_BINARY_DIR}     # include "build" directory tree for "build/proto"
         ${CMAKE_CURRENT_SOURCE_DIR}/src # include "src" tree for <utils/> <security/>
 )
 
@@ -121,14 +95,13 @@ link_directories(
     ${LIBYANGC_LIBRARY_DIRS}
 )
 
-# link main executable with grpc, sysrepo libraries
+# link main executable with sysrepo libraries (gRPC/protobuf come transitively
+# via the gnmi library)
 target_link_libraries(${PROJECT_NAME} gnmi
                       ${SYSREPO_LIBRARIES}
                       ${SYSREPOC_LIBRARIES}
                       ${LIBYANG_LIBRARIES}
                       ${LIBYANGC_LIBRARIES}
-                      gRPC::grpc++
-                      ${Protobuf_LIBRARIES}
 )
 
 # TESTS
@@ -172,9 +145,7 @@ if (ENABLE_TESTS)
             PUBLIC
                 ${LIBYANG_INCLUDE_DIRS}
                 ${SYSREPO_INCLUDE_DIRS}
-                ${PROTOBUF_INCLUDE_DIR}
             PRIVATE
-                ${CMAKE_CURRENT_BINARY_DIR}
                 ${CMAKE_CURRENT_SOURCE_DIR}/src
         )
 
@@ -183,8 +154,6 @@ if (ENABLE_TESTS)
             ${SYSREPOC_LIBRARIES}
             ${LIBYANG_LIBRARIES}
             ${LIBYANGC_LIBRARIES}
-            gRPC::grpc++
-            ${Protobuf_LIBRARIES}
         )
     endforeach()
 endif()
