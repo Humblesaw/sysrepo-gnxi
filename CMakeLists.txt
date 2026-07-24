@@ -100,10 +100,10 @@ set(GNXI_HEADERS src/gnmi/encode/encode.h
                  src/utils/utils.h
 )
 
-add_executable(gnxi_server ${GNXI_SRC} src/main.cpp)
+add_executable(${PROJECT_NAME} ${GNXI_SRC} src/main.cpp)
 
 # header file location required to build target
-target_include_directories(gnxi_server
+target_include_directories(${PROJECT_NAME}
     PUBLIC # list of include dirs required to use target binary or library
         ${LIBYANG_INCLUDE_DIRS}
         ${SYSREPO_INCLUDE_DIRS}
@@ -121,8 +121,8 @@ link_directories(
     ${LIBYANGC_LIBRARY_DIRS}
 )
 
-# link gnxi_server executable with grpc, sysrepo libraries
-target_link_libraries(gnxi_server gnmi
+# link main executable with grpc, sysrepo libraries
+target_link_libraries(${PROJECT_NAME} gnmi
                       ${SYSREPO_LIBRARIES}
                       ${SYSREPOC_LIBRARIES}
                       ${LIBYANG_LIBRARIES}
@@ -134,53 +134,59 @@ target_link_libraries(gnxi_server gnmi
 # TESTS
 #######
 
+set(GNXI_TESTS tests/test_capabilities.cpp
+               tests/test_commit.cpp
+               tests/test_get.cpp
+               tests/test_rpc.cpp
+               tests/test_set.cpp
+               tests/test_subscribe.cpp
+)
+
 if (ENABLE_TESTS)
     enable_testing()
-    set(GNXI_TEST_SRC tests/capabilities.cpp
-                    tests/commit.cpp
-                    tests/get.cpp
-                    tests/main.cpp
-                    tests/rpc.cpp
-                    tests/set.cpp
-                    tests/subscribe.cpp
-    )
-
-    add_executable(gnxi_server_test ${GNXI_TEST_SRC} ${GNXI_SRC})
-
-    set_target_properties(gnxi_server_test PROPERTIES COMPILE_FLAGS "-DTEST -O0")
 
     get_filename_component(TESTS_SRC_DIR "${CMAKE_SOURCE_DIR}/tests" REALPATH)
     get_filename_component(TESTS_WORKING_DIR "${CMAKE_BINARY_DIR}" REALPATH)
-    target_compile_definitions(gnxi_server_test PRIVATE
-        TESTS_SRC_DIR="${TESTS_SRC_DIR}";
-        TESTS_WORKING_DIR="${TESTS_WORKING_DIR}"
-    )
 
-    add_test(NAME gnxi_server_test COMMAND ${CMAKE_BINARY_DIR}/gnxi_server_test)
+    foreach(GNXI_TEST ${GNXI_TESTS})
+        get_filename_component(GNXI_TEST_NAME "${GNXI_TEST}" NAME_WE)
 
-    # add a timeout for tests, to prevent them from running forever
-    set_tests_properties(gnxi_server_test PROPERTIES TIMEOUT 300)
+        add_executable(${GNXI_TEST_NAME}
+            ${GNXI_TEST}
+            tests/test_main.cpp
+            ${GNXI_SRC}
+        )
 
-    # header file location required to build target
-    target_include_directories(gnxi_server_test
-        PUBLIC # list of include dirs required to use target binary or library
-            ${LIBYANG_INCLUDE_DIRS}
-            ${SYSREPO_INCLUDE_DIRS}
-            ${PROTOBUF_INCLUDE_DIR}
-        PRIVATE
-            ${CMAKE_CURRENT_BINARY_DIR}     # include "build" directory tree for "build/proto"
-            ${CMAKE_CURRENT_SOURCE_DIR}/src # include "src" tree for <utils/> <security/>
-    )
+        set_target_properties(${GNXI_TEST_NAME} PROPERTIES COMPILE_FLAGS "-DTEST -O0")
 
-    # link gnxi_server executable with grpc, sysrepo libraries
-    target_link_libraries(gnxi_server_test gnmi
-                        ${SYSREPO_LIBRARIES}
-                        ${SYSREPOC_LIBRARIES}
-                        ${LIBYANG_LIBRARIES}
-                        ${LIBYANGC_LIBRARIES}
-                        gRPC::grpc++
-                        ${Protobuf_LIBRARIES}
-    )
+        target_compile_definitions(${GNXI_TEST_NAME} PRIVATE
+            TESTS_SRC_DIR="${TESTS_SRC_DIR}";
+            TESTS_WORKING_DIR="${TESTS_WORKING_DIR}"
+        )
+
+        add_test(NAME ${GNXI_TEST_NAME} COMMAND ${CMAKE_BINARY_DIR}/${GNXI_TEST_NAME})
+        set_tests_properties(${GNXI_TEST_NAME} PROPERTIES TIMEOUT 300)
+
+        # header file location required to build target
+        target_include_directories(${GNXI_TEST_NAME}
+            PUBLIC
+                ${LIBYANG_INCLUDE_DIRS}
+                ${SYSREPO_INCLUDE_DIRS}
+                ${PROTOBUF_INCLUDE_DIR}
+            PRIVATE
+                ${CMAKE_CURRENT_BINARY_DIR}
+                ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+
+        target_link_libraries(${GNXI_TEST_NAME} gnmi
+            ${SYSREPO_LIBRARIES}
+            ${SYSREPOC_LIBRARIES}
+            ${LIBYANG_LIBRARIES}
+            ${LIBYANGC_LIBRARIES}
+            gRPC::grpc++
+            ${Protobuf_LIBRARIES}
+        )
+    endforeach()
 endif()
 
 # COVERAGE TESTS
@@ -190,10 +196,16 @@ if(ENABLE_COVERAGE)
     include(CodeCoverage)
     append_coverage_compiler_flags()
 
+    set(GNXI_TEST_TARGETS)
+    foreach(GNXI_TEST ${GNXI_TESTS})
+        get_filename_component(GNXI_TEST_NAME "${GNXI_TEST}" NAME_WE)
+        list(APPEND GNXI_TEST_TARGETS ${GNXI_TEST_NAME})
+    endforeach()
+
     setup_target_for_coverage_gcovr_html(
         NAME coverage
-        EXECUTABLE ${CMAKE_BINARY_DIR}/gnxi_server_test
-        DEPENDENCIES gnxi_server_test
+        EXECUTABLE ctest
+        DEPENDENCIES ${GNXI_TEST_TARGETS}
         EXCLUDE "tests/*" "${CMAKE_CURRENT_BINARY_DIR}/*"
     )
 endif()
@@ -201,7 +213,7 @@ endif()
 # INSTALLATION
 ##############
 
-install(TARGETS gnxi_server
+install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION sbin
         DESTINATION ${CMAKE_INSTALL_SBINDIR}
 )
@@ -210,7 +222,8 @@ install(TARGETS gnxi_server
 ########
 
 add_custom_target(format
-    COMMAND clang-format -i ${GNXI_HEADERS} ${GNXI_SRC} src/main.cpp ${GNXI_TEST_SRC}
+    COMMAND clang-format -i ${GNXI_HEADERS} ${GNXI_SRC} src/main.cpp
+            ${GNXI_TESTS} tests/test_main.cpp tests/test_main.h
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Formatting header and source files."
     USES_TERMINAL)

@@ -24,8 +24,8 @@
 #include <sysrepo-cpp/Subscription.hpp>
 
 #include "gnmi/gnmi.h"
-#include "main.h"
 #include "security/authentication.h"
+#include "test_main.h"
 #include "utils/log.h"
 
 std::unique_ptr<gnmi::gNMI::Stub> client;
@@ -155,9 +155,9 @@ static sysrepo::ErrorCode clear_stats_rpc_cb(sysrepo::Session session, uint32_t 
 }
 
 static sysrepo::ErrorCode action_test_cb(sysrepo::Session session, uint32_t sub_id,
-                                       std::string_view xpath, const libyang::DataNode input,
-                                       sysrepo::Event event, uint32_t request_id,
-                                       libyang::DataNode output)
+                                         std::string_view xpath, const libyang::DataNode input,
+                                         sysrepo::Event event, uint32_t request_id,
+                                         libyang::DataNode output)
 {
     (void)session;
     (void)sub_id;
@@ -178,13 +178,14 @@ class SetupSysrepo
     {
         auto sr_conn = sysrepo::Connection();
         std::filesystem::path dir{TESTS_SRC_DIR};
-        std::filesystem::path path1 = dir / "gnmi-server-test.yang";
-        std::filesystem::path path2 = dir / "gnmi-server-test-wine.yang";
+        std::filesystem::path files_dir = dir / "files";
+        std::filesystem::path path1 = files_dir / "gnmi-server-test.yang";
+        std::filesystem::path path2 = files_dir / "gnmi-server-test-wine.yang";
         std::vector<struct sysrepo::ModuleInstallation> modules = {{.schema = path1},
                                                                    {.schema = path2}};
 
         // install yang modules
-        sr_conn.installModules(modules, {dir});
+        sr_conn.installModules(modules, {files_dir});
 
         sr_sess = sr_conn.sessionStart();
 

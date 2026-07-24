@@ -22,7 +22,7 @@
 
 #include <grpcpp/grpcpp.h>
 
-#include "main.h"
+#include "test_main.h"
 
 using namespace std;
 using Catch::Matchers::Equals;

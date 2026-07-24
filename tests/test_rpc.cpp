@@ -27,7 +27,7 @@
 
 #include <sysrepo-cpp/Connection.hpp>
 
-#include "main.h"
+#include "test_main.h"
 
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;

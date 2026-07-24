@@ -17,7 +17,7 @@
 #include "catch2/catch.hpp"
 #include <memory>
 
-#include "main.h"
+#include "test_main.h"
 #include <grpcpp/grpcpp.h>
 #include <sysrepo-cpp/Connection.hpp>
 

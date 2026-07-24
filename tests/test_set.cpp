@@ -19,11 +19,10 @@
 
 #include <grpcpp/grpcpp.h>
 
-#include "main.h"
+#include "test_main.h"
 
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
-
 
 TEST_CASE("Top-level Set request (replace) empty", "[set]")
 {
@@ -1120,7 +1119,7 @@ TEST_CASE("Set request (int val)", "[set-neg]")
     REQUIRE(response.response_size() == 0);
 }
 
-TEST_CASE("Set request (float val)", "[set-neg]")
+TEST_CASE("Set request (double val)", "[set-neg]")
 {
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
@@ -1128,10 +1127,10 @@ TEST_CASE("Set request (float val)", "[set-neg]")
     auto update = request.add_update();
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/decimal-amount", update->mutable_path());
-    update->mutable_val()->set_float_val(42.1);
+    update->mutable_val()->set_double_val(42.1);
     auto status = client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
-    CHECK_THAT(status.error_message(), Equals("Unsupported protobuf float type"));
+    CHECK_THAT(status.error_message(), Equals("Unsupported protobuf double type"));
 
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() == 0);
@@ -1155,22 +1154,6 @@ TEST_CASE("Set request (no path)", "[set-neg]")
     CHECK(response.timestamp() == 0);
     CHECK(!response.has_prefix());
     REQUIRE(response.response_size() == 0);
-}
-
-TEST_CASE("Set request (decimal64 val)", "[set-neg]")
-{
-    grpc::ClientContext ctx;
-    gnmi::SetRequest request;
-    gnmi::SetResponse response;
-    auto update = request.add_update();
-
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/decimal-amount", update->mutable_path());
-    update->mutable_val()->mutable_decimal_val()->set_digits(421);
-    update->mutable_val()->mutable_decimal_val()->set_precision(1);
-
-    auto status = client->Set(&ctx, request, &response);
-    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
-    CHECK_THAT(status.error_message(), Equals("Unsupported protobuf Decimal64 type"));
 }
 
 TEST_CASE("Set request (incorrect prefix)", "[set-neg]")

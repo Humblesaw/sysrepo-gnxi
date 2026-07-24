@@ -29,7 +29,7 @@
 #include <proto/gnmi_ext.pb.h>
 
 #include "gnmi/commit.h"
-#include "main.h"
+#include "test_main.h"
 
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;

@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef TESTS_MAIN_H
-#define TESTS_MAIN_H
+#pragma once
 
 #include <memory>
 #include <optional>
@@ -48,5 +47,3 @@ class ScaleTestLogLevelReducer
         slog::set_level(4);
     }
 };
-
-#endif /* TESTS_MAIN_H */

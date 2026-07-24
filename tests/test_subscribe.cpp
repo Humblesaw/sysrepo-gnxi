@@ -19,7 +19,7 @@
 #include <memory>
 #include <thread>
 
-#include "main.h"
+#include "test_main.h"
 #include <grpcpp/grpcpp.h>
 #include <sysrepo-cpp/Connection.hpp>
 
@@ -1261,8 +1261,8 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
     sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
-    sr_sess->setItem(
-        "/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "98");
+    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
+                     "98");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
@@ -1348,8 +1348,8 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(!response.update().atomic());
 
     // Update for the other subscription
-    sr_sess->setItem(
-        "/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "99");
+    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
+                     "99");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
