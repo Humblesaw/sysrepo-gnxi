@@ -1,6 +1,12 @@
-/*
+/**
+ * @file set.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Set RPC implementation
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +30,8 @@
 #include <utils/log.h>
 #include <utils/sysrepo.h>
 #include <utils/utils.h>
+
+#include "security/auth.h"
 
 namespace impl
 {
@@ -183,7 +191,8 @@ grpc::Status Set::handleUpdate(gnmi::Update in, gnmi::UpdateResult *out, std::st
     return status;
 }
 
-grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *response)
+grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *request,
+                      gnmi::SetResponse *response)
 {
     std::string prefix = "";
     std::vector<gnmi::UpdateResult> results;
@@ -211,14 +220,15 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
             int64_t rollback_secs = Commit::default_rollback_secs;
             if (commit_ext->commit().has_rollback_duration())
                 rollback_secs = commit_ext->commit().rollback_duration().seconds();
-            auto st = commit_state->request_setup(commit_ext->id(), rollback_secs);
+            auto st = commit_state->request_setup(commit_ext->id(), rollback_secs,
+                                                  auth_.username(context));
             if (!st.ok())
                 return st;
             break; // proceed to apply mutations as a normal Set
         }
         case gnmi_ext::Commit::kConfirm:
         {
-            auto st = commit_state->confirm(commit_ext->id());
+            auto st = commit_state->confirm(commit_ext->id(), auth_.username(context));
             if (!st.ok())
                 return st;
             response->set_timestamp(get_time_nanosec());
@@ -226,7 +236,7 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
         }
         case gnmi_ext::Commit::kCancel:
         {
-            auto st = commit_state->cancel(commit_ext->id());
+            auto st = commit_state->cancel(commit_ext->id(), auth_.username(context));
             if (!st.ok())
                 return st;
             response->set_timestamp(get_time_nanosec());
@@ -237,7 +247,8 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
             int64_t rollback_secs = 0;
             if (commit_ext->set_rollback_duration().has_rollback_duration())
                 rollback_secs = commit_ext->set_rollback_duration().rollback_duration().seconds();
-            auto st = commit_state->set_rollback_duration(commit_ext->id(), rollback_secs);
+            auto st = commit_state->set_rollback_duration(commit_ext->id(), rollback_secs,
+                                                          auth_.username(context));
             if (!st.ok())
                 return st;
             response->set_timestamp(get_time_nanosec());
@@ -255,6 +266,35 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
     {
         return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                             "previous Set has to be confirmed");
+    }
+
+    // authorize
+    try
+    {
+        std::vector<gnmi::Path> paths;
+        for (auto &p : request->delete_())
+        {
+            paths.push_back(p);
+        }
+        for (auto &r : request->replace())
+        {
+            // non-existent paths cannot be authorized,
+            // but they also cannot skip authorization
+            paths.push_back(r.path());
+        }
+        for (auto &r : request->update())
+        {
+            paths.push_back(r.path());
+        }
+        // TODO add union_replace authorization
+        auth_.authorize(context, sr_sess.getContext(),
+                        request->has_prefix() ? std::optional(request->prefix()) : std::nullopt,
+                        paths, Auth::Access::ReadWrite);
+    }
+    catch (const grpc::Status &auth_status)
+    {
+        commit_state->clear();
+        return auth_status;
     }
 
     response->set_timestamp(get_time_nanosec());
@@ -469,7 +509,8 @@ grpc::Status Set::run(const gnmi::SetRequest *request, gnmi::SetResponse *respon
         if (!commit_ext)
         {
             /* copy the prepared configuration to Startup (has to succeed) */
-            sr_sess_startup.copyConfig(sysrepo::Datastore::Running);
+            SessionDsSwitcher ds_switch(sr_sess, sysrepo::Datastore::Startup);
+            sr_sess.copyConfig(sysrepo::Datastore::Running);
         }
     }
     catch (const sysrepo::Error &exc)

@@ -23,19 +23,19 @@
 
 #include <grpcpp/grpcpp.h>
 
-#include <proto/gnxi.grpc.pb.h>
+#include <proto/yang_rpc.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
 #include "utils/log.h"
 
-class GNXIService final : public gnxi::gNXI::Service
+class YANG_RPCService final : public yang_rpc::YANG_RPC::Service
 {
   public:
-    GNXIService(sysrepo::Connection conn) : sr_con(conn) {}
-    ~GNXIService() { SLOG_INFO("Quitting GNXI Server"); }
+    YANG_RPCService(sysrepo::Connection conn) : sr_con(conn) {}
+    ~YANG_RPCService() { SLOG_INFO("Quitting GNXI Server"); }
 
-    grpc::Status Rpc(grpc::ServerContext *context, const gnxi::RpcRequest *request,
-                     gnxi::RpcResponse *response);
+    grpc::Status Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
+                     yang_rpc::RpcResponse *response);
 
   private:
     sysrepo::Connection sr_con; // sysrepo connection

@@ -1,6 +1,12 @@
-/*
+/**
+ * @file capabilities.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Capabilities RPC implementation
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +32,6 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
 {
     (void)context;
     std::string gnmi_version;
-    google::protobuf::FileOptions fopts;
 
     if (request->extension_size() > 0)
     {

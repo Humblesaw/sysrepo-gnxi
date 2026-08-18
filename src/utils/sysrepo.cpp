@@ -1,5 +1,11 @@
-/*
+/**
+ * @file sysrepo.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Sysrepo helpers implementation
+ *
+ * @copyright
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,10 +55,9 @@ void UpdateTransaction::push(std::optional<libyang::DataNode> &tree)
     }
 }
 
-static std::vector<libyang::Module> collect_xpath_mods(libyang::Context ly_ctx, const char *xpath)
+std::unordered_set<std::string> collect_xpath_mods(libyang::Context ly_ctx, const char *xpath)
 {
-    bool skip = 0;
-    std::vector<libyang::Module> ly_mod_set;
+    std::unordered_set<std::string> ly_mod_set;
     std::optional<libyang::SchemaNode> parent = std::nullopt;
     libyang::Set<libyang::SchemaNode> set = ly_ctx.findXPath(std::string(xpath));
 
@@ -66,27 +71,12 @@ static std::vector<libyang::Module> collect_xpath_mods(libyang::Context ly_ctx, 
         }
         auto ly_mod = parent->module();
 
-        /* skip already added modules */
-        skip = 0;
-        for (libyang::Module m : ly_mod_set)
-        {
-            if (ly_mod == m)
-            {
-                skip = 1;
-                break;
-            }
-        }
-        if (skip)
-        {
-            continue;
-        }
-
         /* skip import-only modules, and the internal SR_YANG_MOD */
         if (!ly_mod.implemented() || ly_mod.name() == SR_YANG_MOD)
             continue;
 
         /* add a module to the set */
-        ly_mod_set.push_back(ly_mod);
+        ly_mod_set.insert(ly_mod.name());
     }
 
     return ly_mod_set;
@@ -108,11 +98,11 @@ void DataSubscribe::data_change_subscribe(sysrepo::ModuleChangeCb cb, const char
     {
         if (sub)
         {
-            sub->onModuleChange(std::string(mod.name()), cb, xpath, priority, opts);
+            sub->onModuleChange(mod, cb, xpath, priority, opts);
         }
         else
         {
-            sub = data_sess.onModuleChange(std::string(mod.name()), cb, xpath, priority, opts);
+            sub = data_sess.onModuleChange(mod, cb, xpath, priority, opts);
         }
     }
 }

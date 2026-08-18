@@ -1,6 +1,12 @@
-/*
+/**
+ * @file subscribe.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Subscribe RPC implementation
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +40,8 @@
 #include <sysrepo-cpp/utils/exception.hpp>
 #include <utils/log.h>
 #include <utils/utils.h>
+
+#include "security/auth.h"
 
 namespace impl
 {
@@ -857,6 +865,29 @@ Subscribe::run(grpc::ServerContext *context,
     {
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                             "SubscribeRequest needs non-empty SubscriptionList");
+    }
+
+    // authorize
+    try
+    {
+        std::vector<gnmi::Path> paths;
+
+        for (auto &s : request.subscribe().subscription())
+        {
+            // non-existent paths cannot be authorized,
+            // but they also cannot skip authorization
+            paths.push_back(s.path());
+        }
+
+        auth_.authorize(context, sr_sess.getContext(),
+                        request.subscribe().has_prefix()
+                            ? std::optional(request.subscribe().prefix())
+                            : std::nullopt,
+                        paths, Auth::Access::ReadOnly);
+    }
+    catch (const grpc::Status &auth_status)
+    {
+        return auth_status;
     }
 
     switch (request.subscribe().mode())

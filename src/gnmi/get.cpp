@@ -1,6 +1,12 @@
-/*
+/**
+ * @file get.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Get RPC implementation
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +27,7 @@
 #include "get.h"
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/utils/exception.hpp>
+
 #include <utils/log.h>
 #include <utils/utils.h>
 
@@ -72,9 +79,6 @@ grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update
  * created for every path of the GetRequest.
  * There can still be multiple paths in GetResponse if requested path
  * is a directory path.
- *
- * IMPORTANT : we have chosen to have a stateless implementation of
- * gNMI so deleted path in Notification message will always be empty.
  */
 grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const gnmi::Path &prefix,
                                        const gnmi::Path &path, gnmi::Encoding encoding,
@@ -169,7 +173,8 @@ static inline grpc::Status verifyGetRequest(const gnmi::GetRequest *request)
 }
 
 /* Implement gNMI Get RPC */
-grpc::Status Get::run(const gnmi::GetRequest *req, gnmi::GetResponse *response)
+grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
+                      gnmi::GetResponse *response)
 {
     google::protobuf::RepeatedPtrField<gnmi::Notification> *notificationList;
     gnmi::Notification *notification;
@@ -181,6 +186,23 @@ grpc::Status Get::run(const gnmi::GetRequest *req, gnmi::GetResponse *response)
 
     SLOG_DEBUG("GetRequest DataType ", gnmi::GetRequest::DataType_Name(req->type()),
                ", GetRequest Encoding ", gnmi::Encoding_Name(req->encoding()));
+
+    // authorize
+    try
+    {
+        std::vector<gnmi::Path> paths;
+        for (auto &p : req->path())
+        {
+            paths.push_back(p);
+        }
+        auth_.authorize(context, sr_sess.getContext(),
+                        req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
+                        Auth::Access::ReadOnly);
+    }
+    catch (const grpc::Status &auth_status)
+    {
+        return auth_status;
+    }
 
     /* Run through all paths */
     notificationList = response->mutable_notification();

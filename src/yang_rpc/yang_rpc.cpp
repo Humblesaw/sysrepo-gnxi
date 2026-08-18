@@ -19,12 +19,12 @@
  * limitations under the License.
  */
 
-#include "gnxi.h"
+#include "yang_rpc.h"
 
 #include "rpc.h"
 
-grpc::Status GNXIService::Rpc(grpc::ServerContext *context, const gnxi::RpcRequest *request,
-                              gnxi::RpcResponse *response)
+grpc::Status YANG_RPCService::Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
+                                  yang_rpc::RpcResponse *response)
 {
     (void)context;
     impl::Rpc rpc(sr_con.sessionStart(sysrepo::Datastore::Running));

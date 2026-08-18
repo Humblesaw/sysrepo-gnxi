@@ -1,5 +1,11 @@
-/*
+/**
+ * @file test_capabilities.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Capabilities RPC tests
+ *
+ * @copyright
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +36,7 @@ TEST_CASE("Capability request", "[caps]")
     gnmi::CapabilityResponse response;
     bool found = false;
 
-    auto status = client->Capabilities(&ctx, request, &response);
+    auto status = gnmi_client->Capabilities(&ctx, request, &response);
     CHECK(status.ok());
 
     REQUIRE(response.supported_encodings().size() == 1);

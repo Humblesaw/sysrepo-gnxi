@@ -1,5 +1,11 @@
-/*
+/**
+ * @file test_main.h
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Main test header
+ *
+ * @copyright
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,32 +24,22 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <sysrepo-cpp/Session.hpp>
 
 #include "proto/gnmi.grpc.pb.h"
-#include "proto/gnxi.grpc.pb.h"
-#include "utils/log.h"
+#include "proto/yang_rpc.grpc.pb.h"
 
-extern std::unique_ptr<gnmi::gNMI::Stub> client;
-extern std::unique_ptr<gnxi::gNXI::Stub> gnxi_client;
+// insecure server: unix socket under the build dir
+extern std::string insecure_addr;
+// mTLS server: 127.0.0.1:50052 (test_auth only, no parallel conflict)
+extern std::string mtls_addr;
+// gNMI service handle
+extern std::unique_ptr<gnmi::gNMI::Stub> gnmi_client;
+// gNXI service handle
+extern std::unique_ptr<yang_rpc::YANG_RPC::Stub> gnxi_client;
+// sysrepo session to inspect data
 extern std::optional<sysrepo::Session> sr_sess;
 
 extern void xpath_to_path(std::string xpath, gnmi::Path *path);
 extern std::string path_to_xpath(const gnmi::Path &path);
-
-class ScaleTestLogLevelReducer
-{
-    // Use this to reduce log level to warning for scale tests.
-    // Once finished, debug level is automatically set.
-  public:
-    ScaleTestLogLevelReducer()
-    {
-        // set level to warning
-        slog::set_level(2);
-    }
-    ~ScaleTestLogLevelReducer()
-    {
-        // set level back to debug
-        slog::set_level(4);
-    }
-};

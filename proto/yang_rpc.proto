@@ -18,16 +18,16 @@ syntax = "proto3";
 
 import "gnmi.proto";
 
-// Package gNXI defines the gRPC Network Operations Interface extensions
+// Package yang_rpc defines the gRPC Network Operations Interface extensions
 // implemented by this server. These are vendor extensions that do not fall
 // under the standard gNMI or gNOI specifications.
-package gnxi;
+package yang_rpc;
 
 // gNXI service provides operational RPCs that are not covered by the gNMI
 // specification (which is solely designed for configuration and state data
 // manipulation). The Rpc method allows a client to invoke a YANG RPC/action
 // as defined in the schema, by path.
-service gNXI {
+service YANG_RPC {
   // Rpc allows a client to invoke a YANG RPC/action in the tree as specified
   // by the path included in the message and serialises the response to be
   // returned to the client using the specified encoding.
@@ -39,8 +39,8 @@ service gNXI {
 message RpcRequest {
   // The path to the YANG RPC/action to invoke.
   gnmi.Path path = 1;
-  // The explicitly typed input value.
-  gnmi.TypedValue val = 2;
+  // The input parameters of an RPC/action statement in the form of a YANG subtree.
+  gnmi.TypedValue input = 2;
   // The encoding the target should use to serialise the response value. This
   // governs the output direction only.
   gnmi.Encoding encoding = 3;
@@ -51,6 +51,6 @@ message RpcRequest {
 message RpcResponse {
   // Timestamp in nanoseconds since the Epoch.
   int64 timestamp = 1;
-  // The explicitly typed output value.
-  gnmi.TypedValue val = 2;
+  // The output parameters of an RPC/action statement in the form of a YANG subtree.
+  gnmi.TypedValue output = 2;
 }

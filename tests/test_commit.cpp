@@ -1,5 +1,5 @@
 /**
- * @file commit.cpp
+ * @file test_commit.cpp
  * @author Ondrej Kusnirik <kusnirik@cesnet.cz>
  * @brief Commit confirmed extension tests
  *
@@ -28,7 +28,6 @@
 
 #include <proto/gnmi_ext.pb.h>
 
-#include "gnmi/commit.h"
 #include "test_main.h"
 
 using Catch::Matchers::Contains;
@@ -37,9 +36,8 @@ using Catch::Matchers::Equals;
 static const std::string test_xpath = "/gnmi-server-test:test/things[name='A']/enabled";
 
 /**
- * @brief Fixture: cleans confirm state and sysrepo before and after
- * every test case, and provides helpers that build and send
- * the common Set/Commit requests.
+ * @brief Fixture: cleans sysrepo before and after every test case, and provides helpers that build
+ * and send the common Set/Commit requests.
  *
  */
 class CommitFixture
@@ -55,17 +53,9 @@ class CommitFixture
         gnmi::SetResponse response;
     };
 
-    CommitFixture()
-    {
-        clean_confirm_state();
-        clean_sysrepo();
-    }
+    CommitFixture() { clean_sysrepo(); }
 
-    ~CommitFixture()
-    {
-        clean_confirm_state();
-        clean_sysrepo();
-    }
+    ~CommitFixture() { clean_sysrepo(); }
 
     // set a leaf value in both Running and Startup datastores
     void set_initial_config(const std::string &xpath, const std::string &value)
@@ -98,6 +88,21 @@ class CommitFixture
     {
         CHECK(r.response.timestamp() == 0);
         CHECK(r.response.response_size() == 0);
+    }
+
+    // verify that a commit is in progress, send a plain Set and expect FAILED_PRECONDITION
+    void verify_commit_in_progress()
+    {
+        auto r = send_plain_set(test_xpath, "true");
+        CHECK(r.status.error_code() == grpc::StatusCode::FAILED_PRECONDITION);
+        CHECK_THAT(r.status.error_message(), Contains("previous Set has to be confirmed"));
+    }
+
+    // verify that no commit is in progress, send a plain Set and expect success
+    void verify_no_commit_in_progress()
+    {
+        auto r = send_plain_set(test_xpath, "true");
+        CHECK(r.status.ok());
     }
 
     // send a commit action, optionally with a mutation
@@ -162,7 +167,7 @@ class CommitFixture
         gnmi::SetRequest request;
         gnmi::SetResponse response;
         request.add_extension();
-        return {client->Set(&ctx, request, &response), std::move(response)};
+        return {gnmi_client->Set(&ctx, request, &response), std::move(response)};
     }
 
     // send a plain Set (no extension) with a mutation
@@ -174,7 +179,7 @@ class CommitFixture
         auto update = request.add_update();
         xpath_to_path(xpath, update->mutable_path());
         update->mutable_val()->set_json_ietf_val(value);
-        return {client->Set(&ctx, request, &response), std::move(response)};
+        return {gnmi_client->Set(&ctx, request, &response), std::move(response)};
     }
 
   private:
@@ -196,11 +201,8 @@ class CommitFixture
             xpath_to_path(mutation->first, update->mutable_path());
             update->mutable_val()->set_json_ietf_val(mutation->second);
         }
-        return {client->Set(&ctx, request, &response), std::move(response)};
+        return {gnmi_client->Set(&ctx, request, &response), std::move(response)};
     }
-
-    // clear any active confirmed-commit state
-    static void clean_confirm_state() { impl::Commit::get_singleton().clear(); }
 
     // remove test data from sysrepo
     static void clean_sysrepo()
@@ -209,19 +211,7 @@ class CommitFixture
         try
         {
             sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
-        }
-        catch (...)
-        {
-        }
-        try
-        {
             sr_sess->deleteItem("/gnmi-server-test:test/things[name='B']");
-        }
-        catch (...)
-        {
-        }
-        try
-        {
             sr_sess->applyChanges();
         }
         catch (...)
@@ -249,18 +239,23 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then confirm", "[commi
     REQUIRE(r1.response.response_size() == 1);
     CHECK(r1.response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     CHECK(path_to_xpath(r1.response.response().Get(0).path()) == test_xpath);
-    CHECK(impl::Commit::get_singleton().get_wait_confirm());
 
     // running changed
     check_value(sysrepo::Datastore::Running, test_xpath, "false");
+
+    // commit is in progress, plain Set must fail
+    verify_commit_in_progress();
 
     // confirm
     auto r2 = send_confirm("commit-confirm-1");
     CHECK(r2.status.ok());
     check_empty_success_response(r2);
 
-    CHECK(!impl::Commit::get_singleton().get_wait_confirm());
+    // config stays at the committed value
     check_value(sysrepo::Datastore::Running, test_xpath, "false");
+
+    // no commit in progress, plain Set must succeed
+    verify_no_commit_in_progress();
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then cancel (rollback)", "[commit]")
@@ -278,18 +273,20 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then cancel (rollback)
     REQUIRE(r1.response.response_size() == 1);
     CHECK(r1.response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     CHECK(path_to_xpath(r1.response.response().Get(0).path()) == test_xpath);
-    CHECK(impl::Commit::get_singleton().get_wait_confirm());
 
     check_value(sysrepo::Datastore::Running, test_xpath, "false");
+
+    verify_commit_in_progress();
 
     auto r2 = send_cancel("commit-cancel-1");
     CHECK(r2.status.ok());
     check_empty_success_response(r2);
 
-    CHECK(!impl::Commit::get_singleton().get_wait_confirm());
-
     // config rolled back to original
     check_value(sysrepo::Datastore::Running, test_xpath, "true");
+
+    // no commit in progress: plain Set must succeed
+    verify_no_commit_in_progress();
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then set_rollback_duration", "[commit]")
@@ -306,17 +303,19 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then set_rollback_dura
     REQUIRE(r1.response.response_size() == 1);
     CHECK(r1.response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     CHECK(path_to_xpath(r1.response.response().Get(0).path()) == test_xpath);
-    CHECK(impl::Commit::get_singleton().get_wait_confirm());
 
-    CHECK(impl::Commit::get_singleton().get_rollback_secs() == 120);
+    verify_commit_in_progress();
 
     auto r2 = send_set_rollback_duration("commit-srd-1", 300);
     CHECK(r2.status.ok());
     check_empty_success_response(r2);
 
-    CHECK(impl::Commit::get_singleton().get_rollback_secs() == 300);
+    // still in progress after set_rollback_duration
+    verify_commit_in_progress();
 
-    CHECK(impl::Commit::get_singleton().get_wait_confirm());
+    // clean up: cancel the pending commit
+    auto r3 = send_cancel("commit-srd-1");
+    CHECK(r3.status.ok());
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then timeout rollback", "[commit]")
@@ -332,16 +331,17 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then timeout rollback"
     REQUIRE(r1.response.response_size() == 1);
     CHECK(r1.response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     CHECK(path_to_xpath(r1.response.response().Get(0).path()) == test_xpath);
-    CHECK(impl::Commit::get_singleton().get_wait_confirm());
 
     check_value(sysrepo::Datastore::Running, test_xpath, "false");
 
     // wait for timer to expire (2s + buffer)
-    std::this_thread::sleep_for(std::chrono::seconds(4));
+    std::this_thread::sleep_for(std::chrono::seconds(3));
 
     // config rolled back
     check_value(sysrepo::Datastore::Running, test_xpath, "true");
-    CHECK(!impl::Commit::get_singleton().get_wait_confirm());
+
+    // no commit in progress after timeout
+    verify_no_commit_in_progress();
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: commit with default rollback duration",
@@ -358,9 +358,12 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit with default rollback 
     REQUIRE(r1.response.response_size() == 1);
     CHECK(r1.response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     CHECK(path_to_xpath(r1.response.response().Get(0).path()) == test_xpath);
-    CHECK(impl::Commit::get_singleton().get_wait_confirm());
 
-    CHECK(impl::Commit::get_singleton().get_rollback_secs() == 600);
+    verify_commit_in_progress();
+
+    // clean up: cancel the pending commit
+    auto r2 = send_cancel("commit-default-1");
+    CHECK(r2.status.ok());
 }
 
 // negative tests
@@ -386,6 +389,9 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit while waiting", "[comm
     CHECK(r2.status.error_code() == grpc::StatusCode::FAILED_PRECONDITION);
     CHECK_THAT(r2.status.error_message(), Contains("commit already in progress"));
     check_error_response(r2);
+
+    // clean up
+    send_cancel("commit-wait-1");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: plain Set while waiting", "[commit-neg]")
@@ -399,6 +405,9 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: plain Set while waiting", "[c
     CHECK(r2.status.error_code() == grpc::StatusCode::FAILED_PRECONDITION);
     CHECK_THAT(r2.status.error_message(), Contains("previous Set has to be confirmed"));
     check_error_response(r2);
+
+    // clean up
+    send_cancel("commit-plain-1");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: commit with zero rollback duration",
@@ -432,6 +441,9 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: id mismatch on confirm", "[co
     CHECK(r2.status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(r2.status.error_message(), Contains("commit id mismatch"));
     check_error_response(r2);
+
+    // clean up
+    send_cancel("mismatch-A");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: confirm while not waiting", "[commit-neg]")
@@ -460,10 +472,11 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: mutations ignored on confirm"
     CHECK(r2.status.ok());
     check_empty_success_response(r2);
 
-    CHECK(!impl::Commit::get_singleton().get_wait_confirm());
-
-    // mutation was ignored; config stays at the committed value
+    // mutation was ignored, config stays at the committed value
     check_value(sysrepo::Datastore::Running, test_xpath, "false");
+
+    // no commit in progress, plain Set must succeed
+    verify_no_commit_in_progress();
 }
 
 // https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md#323-cancel
@@ -480,6 +493,9 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: id mismatch on cancel", "[com
     CHECK(r2.status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(r2.status.error_message(), Contains("commit id mismatch"));
     check_error_response(r2);
+
+    // clean up
+    send_cancel("cancel-mismatch-A");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: cancel while not waiting", "[commit-neg]")
@@ -508,10 +524,11 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: mutations ignored on cancel",
     CHECK(r2.status.ok());
     check_empty_success_response(r2);
 
-    CHECK(!impl::Commit::get_singleton().get_wait_confirm());
-
-    // cancel rolled back to original; mutation ignored
+    // cancel rolled back to original, mutation ignored
     check_value(sysrepo::Datastore::Running, test_xpath, "true");
+
+    // no commit in progress, plain Set must succeed
+    verify_no_commit_in_progress();
 }
 
 // https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md#324-set-rollback-duration
@@ -528,6 +545,9 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: id mismatch on set_rollback_d
     CHECK(r2.status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(r2.status.error_message(), Contains("commit id mismatch"));
     check_error_response(r2);
+
+    // clean up
+    send_cancel("srd-mismatch-A");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration while not waiting",
@@ -558,6 +578,9 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration with du
     CHECK(r2.status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(r2.status.error_message(), Contains("rollback_duration must be greater than 0"));
     check_error_response(r2);
+
+    // clean up
+    send_cancel("dur-zero-1");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration with negative duration",
@@ -572,6 +595,9 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration with ne
     CHECK(r2.status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(r2.status.error_message(), Contains("rollback_duration must be greater than 0"));
     check_error_response(r2);
+
+    // clean up
+    send_cancel("dur-neg-1");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: mutations ignored on set_rollback_duration",
@@ -586,10 +612,11 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: mutations ignored on set_roll
     CHECK(r2.status.ok());
     check_empty_success_response(r2);
 
-    CHECK(impl::Commit::get_singleton().get_rollback_secs() == 60);
-
     // mutation was ignored; config stays at the committed value
     check_value(sysrepo::Datastore::Running, test_xpath, "false");
+
+    // clean up
+    send_cancel("mut-srd-1");
 }
 
 TEST_CASE_METHOD(CommitFixture, "Commit extension: no action set", "[commit-neg]")

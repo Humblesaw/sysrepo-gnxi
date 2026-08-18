@@ -1,5 +1,11 @@
-/*
+/**
+ * @file test_subscribe.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Subscribe RPC tests
+ *
+ * @copyright
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +45,7 @@ TEST_CASE("Subscribe (once)", "[subs]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -90,7 +96,7 @@ TEST_CASE("Subscribe (poll)", "[subs]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -174,7 +180,7 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -243,7 +249,7 @@ TEST_CASE("Subscribe (once) with prefix", "[subs]")
     xpath_to_path("/gnmi-server-test:test-state", list->mutable_prefix());
     xpath_to_path("/things[name='A']", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -294,7 +300,7 @@ TEST_CASE("Subscribe (once) with target", "[subs]")
     *list->mutable_prefix()->mutable_target() = "foo";
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -345,7 +351,7 @@ TEST_CASE("Subscribe (once) with wildcards", "[subs]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/*/counter", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -401,7 +407,6 @@ TEST_CASE("Subscribe (on-change, no updates)", "[subs]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -412,7 +417,7 @@ TEST_CASE("Subscribe (on-change, no updates)", "[subs]")
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -459,7 +464,6 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -475,7 +479,7 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -578,7 +582,6 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -594,7 +597,7 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -655,7 +658,6 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -671,7 +673,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     xpath_to_path("/gnmi-server-test:test-state/things[name='C']/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -740,7 +742,6 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -756,7 +757,7 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
                   sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -822,7 +823,6 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -838,7 +838,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     xpath_to_path("/gnmi-server-test:test-state/things[name='C']/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -923,7 +923,7 @@ TEST_CASE("Subscribe with non-existent path (once)", "[subs]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='C']", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -967,7 +967,7 @@ TEST_CASE("Subscribe with non-existent path (poll)", "[subs]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='C']", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1038,7 +1038,7 @@ TEST_CASE("Subscribe with non-existent path (stream-sample)", "[subs]")
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1095,7 +1095,7 @@ TEST_CASE("Subscribe with non-existent path (on-change)", "[subs]")
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1130,7 +1130,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -1150,7 +1149,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
                   sub2->mutable_path());
     sub2->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1252,7 +1251,6 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -1273,7 +1271,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     xpath_to_path("/gnmi-server-test-wine:wines", sub2->mutable_path());
     sub2->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1410,7 +1408,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
                   sub2->mutable_path());
     sub2->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1512,12 +1510,10 @@ static void update_counter()
 
 TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
 {
-    ScaleTestLogLevelReducer _log_reducer;
     for (uint32_t i = 0; i < 2000; i++)
     {
         grpc::ClientContext ctx;
         gnmi::SubscribeRequest request;
-        gnmi::SubscribeRequest poll_request;
         gnmi::SubscribeResponse response;
 
         auto list = request.mutable_subscribe();
@@ -1538,7 +1534,7 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
         // around same time it's being subscribed to below.
         auto update_thread = std::thread(update_counter);
 
-        auto rw = client->Subscribe(&ctx);
+        auto rw = gnmi_client->Subscribe(&ctx);
         auto success = rw->Write(request);
         CHECK(success == true);
 
@@ -1588,7 +1584,6 @@ TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
 
     auto list = request.mutable_subscribe();
@@ -1604,11 +1599,9 @@ TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
     xpath_to_path("/gnmi-server-test:test-state/things[name='C']/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
-
-    ScaleTestLogLevelReducer _log_reducer;
 
     // Just generate a huge amount of updates without reading so that the Write call from the server
     // hangs This shouldn't cause any delay for the applyChanges call, which would normally be a
@@ -1642,7 +1635,7 @@ TEST_CASE("Subscribe (empty)", "[subs-neg]")
     gnmi::SubscribeRequest request;
     gnmi::SubscribeResponse response;
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -1665,7 +1658,7 @@ TEST_CASE("Subscribe (once) with invalid mode", "[subs-neg]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:non-existent", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -1688,7 +1681,7 @@ TEST_CASE("Subscribe (once) with unsupported encoding type", "[subs-neg]")
     list->set_encoding(gnmi::Encoding::BYTES);
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -1711,7 +1704,7 @@ TEST_CASE("Subscribe (once) with another unsupported encoding type", "[subs-neg]
     list->set_encoding(gnmi::Encoding::PROTO);
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
     success = rw->Read(&response);
@@ -1736,7 +1729,7 @@ TEST_CASE("Subscribe (poll) with updates_only", "[subs-neg]")
     list->set_updates_only(true);
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1765,7 +1758,7 @@ TEST_CASE("Subscribe (poll) with dup sub request", "[subs-neg]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1786,7 +1779,6 @@ TEST_CASE("Subscribe (stream-sample) with huge sample interval", "[subs-neg]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
     auto list = request.mutable_subscribe();
     auto sub = list->add_subscription();
@@ -1797,7 +1789,7 @@ TEST_CASE("Subscribe (stream-sample) with huge sample interval", "[subs-neg]")
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::numeric_limits<uint64_t>::max());
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 
@@ -1825,7 +1817,7 @@ TEST_CASE("Subscribe (stream) with updates_only", "[subs-neg]")
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
 
-    auto rw = client->Subscribe(&ctx);
+    auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
     CHECK(success == true);
 

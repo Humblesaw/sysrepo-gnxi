@@ -42,20 +42,63 @@ class Commit
     Commit(sysrepo::Session sess);
     ~Commit();
 
-    static Commit &get_singleton() { return *singleton_; }
+    /**
+     * @brief Check whether we are waiting for commit confirm.
+     *
+     * @return true Commit confirm is expected.
+     * @return false No commit was issued. Commit confirm is not expected.
+     */
     bool get_wait_confirm();
-    int64_t get_rollback_secs();
+
+    /**
+     * @brief Reset to the before-commit state.
+     *
+     */
     void clear();
 
-    grpc::Status request_setup(const std::string &commit_id, int64_t rollback_secs);
+    /**
+     * @brief Commit request: gnmi's CommitRequest. Checks and sets up the internal state variables.
+     *
+     * @param[in] commit_id Commit.id - must match the CommitRequest id.
+     * @param[in] rollback_secs The number of seconds to set the timeout to.
+     * @return grpc::Status::OK on success, failure otherwise.
+     */
+    grpc::Status request_setup(const std::string &commit_id, int64_t rollback_secs,
+                               const std::string &username);
+
+    /**
+     * @brief Finishes the commit: gnmi's CommitRequest. Starts the rollback timer.
+     *
+     */
     void request_finish();
-    grpc::Status confirm(const std::string &commit_id);
-    grpc::Status cancel(const std::string &commit_id);
-    grpc::Status set_rollback_duration(const std::string &commit_id, int64_t rollback_secs);
+
+    /**
+     * @brief Confirm commit: gnmi's CommitConfirm.
+     *
+     * @param[in] commit_id Commit.id - must match the CommitRequest id.
+     * @return grpc::Status::OK on success, failure otherwise.
+     */
+    grpc::Status confirm(const std::string &commit_id, const std::string &username);
+
+    /**
+     * @brief Cancel commit: gnmi's CommitCancel.
+     *
+     * @param[in] commit_id Commit.id - must match the CommitRequest id.
+     * @return grpc::Status::OK on success, failure otherwise.
+     */
+    grpc::Status cancel(const std::string &commit_id, const std::string &username);
+
+    /**
+     * @brief Set rollback duration: gnmi's CommitSetRollbackDuration.
+     *
+     * @param[in] commit_id Commit.id - must match the CommitRequest id.
+     * @param[in] rollback_secs The number of seconds to reset the timeout to.
+     * @return grpc::Status::OK on success, failure otherwise.
+     */
+    grpc::Status set_rollback_duration(const std::string &commit_id, int64_t rollback_secs,
+                                       const std::string &username);
 
   private:
-    // singleton for tests
-    static Commit *singleton_;
     // locking
     std::mutex mutex_;
     // timer
@@ -73,9 +116,26 @@ class Commit
     int64_t rollback_secs_;
     // the active commit id (from Commit.id)
     std::string commit_id_;
+    // username of the user that initiated the confirmed commit
+    // (empty when unauthenticated), only that user can confirm/cancel
+    std::string commit_username_;
 
+    /**
+     * @brief Reset private values (to before-commit state). Caller handles locking.
+     *
+     */
     void clear_no_lock_();
+
+    /**
+     * @brief Handles commit rollback by restoring config. Caller handles locking.
+     *
+     */
     void restore_config_no_lock_();
+
+    /**
+     * @brief Loop to check timeout for rollback.
+     *
+     */
     void check_confirm_loop_();
 };
 

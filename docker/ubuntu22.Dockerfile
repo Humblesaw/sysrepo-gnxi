@@ -49,14 +49,17 @@ RUN cmake -DBUILD_TESTING=OFF ..
 RUN make -j4
 RUN make install
 
+# refresh
+RUN ldconfig
+
 # third-party dependencies
-RUN apt install -y libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev
+RUN apt install -y libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev libssl-dev
 
 # install sysrepo-gnxi
 COPY . /root/sysrepo-gnxi
 WORKDIR /root/sysrepo-gnxi
 RUN mkdir build
 WORKDIR /root/sysrepo-gnxi/build
-RUN cmake -DENABLE_TESTS=ON ..
+RUN cmake -DENABLE_TESTS=ON -DENABLE_YANG_RPC=ON ..
 RUN make -j4
 RUN ctest --output-on-failure

@@ -21,7 +21,7 @@
  */
 
 #include <grpc/grpc.h>
-#include <proto/gnxi.grpc.pb.h>
+#include <proto/yang_rpc.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
 #include "rpc.h"
@@ -32,12 +32,12 @@
 namespace impl
 {
 
-grpc::Status Rpc::run(const gnxi::RpcRequest *request, gnxi::RpcResponse *response)
+grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse *response)
 {
     try
     {
         auto xpath = gnmi_to_xpath(request->path());
-        auto [status, input_node] = encodef->decode(xpath, request->val(), EncodePurpose::Rpc);
+        auto [status, input_node] = encodef->decode(xpath, request->input(), EncodePurpose::Rpc);
         if (!status.ok())
         {
             SLOG_WARN("Rpc input value error: ", status.error_message());
@@ -50,8 +50,8 @@ grpc::Status Rpc::run(const gnxi::RpcRequest *request, gnxi::RpcResponse *respon
 
         if (output_node.has_value())
         {
-            status =
-                encodef->encode(request->encoding(), output_node.value(), response->mutable_val());
+            status = encodef->encode(request->encoding(), output_node.value(),
+                                     response->mutable_output());
             if (!status.ok())
             {
                 SLOG_WARN("Rpc output value error: ", status.error_message());

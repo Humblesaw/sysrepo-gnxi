@@ -1,6 +1,12 @@
-/*
+/**
+ * @file gnmi.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief gNMI service implementation
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,19 +67,15 @@ void GNMIService::TryCancelAll(void)
 grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetRequest *request,
                               gnmi::SetResponse *response)
 {
-    (void)context;
-    impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Startup),
-                  sr_con.sessionStart(sysrepo::Datastore::Running),
-                  sr_con.sessionStart(sysrepo::Datastore::Candidate), commit_state);
-    return rpc.run(request, response);
+    impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Running), commit_state, auth_);
+    return rpc.run(context, request, response);
 }
 
 grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetRequest *request,
                               gnmi::GetResponse *response)
 {
-    (void)context;
-    impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
-    return rpc.run(request, response);
+    impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running), auth_);
+    return rpc.run(context, request, response);
 }
 
 grpc::Status GNMIService::Subscribe(
@@ -90,7 +92,6 @@ grpc::Status GNMIService::Subscribe(
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, std::string("Server is shutting down"));
     }
 
-    gnmi::SubscribeRequest request;
-    impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
+    impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running), auth_);
     return rpc.run(context, stream);
 }

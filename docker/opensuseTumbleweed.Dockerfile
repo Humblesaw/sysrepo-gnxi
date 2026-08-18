@@ -1,11 +1,12 @@
 FROM opensuse/tumbleweed:latest AS base
 
-RUN zypper update -y
+RUN zypper dup -y
 RUN zypper install -y -t pattern devel_basis devel_C_C++
 RUN zypper install -y git
 
 # install libyang
 RUN zypper install -y cmake pcre2-devel
+RUN echo "/usr/local/lib64" > /etc/ld.so.conf.d/local.conf
 WORKDIR /root
 RUN git clone https://github.com/CESNET/libyang.git
 WORKDIR /root/libyang
@@ -50,14 +51,17 @@ RUN cmake -DBUILD_TESTING=OFF ..
 RUN make -j4
 RUN make install
 
+# refresh
+RUN ldconfig
+
 # third-party dependencies
-RUN zypper install -y grpc-devel protobuf-devel
+RUN zypper install -y grpc-devel protobuf-devel libopenssl-devel
 
 # install sysrepo-gnxi
 COPY . /root/sysrepo-gnxi
 WORKDIR /root/sysrepo-gnxi
 RUN mkdir build
 WORKDIR /root/sysrepo-gnxi/build
-RUN cmake -DENABLE_TESTS=ON ..
+RUN cmake -DENABLE_TESTS=ON -DENABLE_YANG_RPC=ON ..
 RUN make -j4
 RUN ctest --output-on-failure

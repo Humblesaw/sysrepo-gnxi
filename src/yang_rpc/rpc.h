@@ -22,10 +22,10 @@
 
 #pragma once
 
-#include <proto/gnxi.grpc.pb.h>
+#include <proto/yang_rpc.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
-#include "gnmi/encode/encode.h"
+#include "encode/encode.h"
 
 namespace impl
 {
@@ -36,7 +36,7 @@ class Rpc
     Rpc(sysrepo::Session sess) : sr_sess(sess) { encodef = std::make_shared<Encode>(sr_sess); }
     ~Rpc() {}
 
-    grpc::Status run(const gnxi::RpcRequest *req, gnxi::RpcResponse *response);
+    grpc::Status run(const yang_rpc::RpcRequest *req, yang_rpc::RpcResponse *response);
 
   private:
     sysrepo::Session sr_sess;        // sysrepo session

@@ -1,6 +1,12 @@
-/*
+/**
+ * @file utils.h
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Utilities implementation
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +25,8 @@
 
 #include <cassert>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <proto/gnmi.grpc.pb.h>
 #include <stdexcept>
 #include <string>
@@ -31,6 +39,36 @@ inline uint64_t get_time_nanosec()
         std::chrono::system_clock::now().time_since_epoch());
 
     return ts.count();
+}
+
+/**
+ * @brief Get contents of a file.
+ *
+ * @param[in] path Path to the file.
+ * @return File contents.
+ */
+inline std::string get_file_content(const std::filesystem::path &path)
+{
+    std::ifstream ifs(path, std::ios::binary | std::ios::ate);
+    if (!ifs)
+    {
+        throw std::runtime_error("Cannot open file: " + path.string());
+    }
+
+    auto size = ifs.tellg();
+    if (size <= 0)
+    {
+        throw std::runtime_error("File is empty: " + path.string());
+    }
+
+    ifs.seekg(0);
+    std::string content(static_cast<size_t>(size), '\0');
+    if (!ifs.read(content.data(), size))
+    {
+        throw std::runtime_error("Failed to read file: " + path.string());
+    }
+
+    return content;
 }
 
 // We don't conform to the gNMI spec in that namespaces on paths are

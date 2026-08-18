@@ -32,24 +32,24 @@ find_package(GRPC)
 
 get_filename_component(gnmi_proto "gnmi.proto" ABSOLUTE)
 get_filename_component(gnmi_ext_proto "gnmi_ext.proto" ABSOLUTE)
-get_filename_component(gnxi_proto "gnxi.proto" ABSOLUTE)
+get_filename_component(yang_rpc_proto "yang_rpc.proto" ABSOLUTE)
 
 # official generator
 protobuf_generate_cpp(gnmi_proto_srcs gnmi_proto_hdrs ${gnmi_proto})
 protobuf_generate_cpp(gnmi_ext_proto_srcs gnmi_ext_proto_hdrs ${gnmi_ext_proto})
-protobuf_generate_cpp(gnxi_proto_srcs gnxi_proto_hdrs ${gnxi_proto})
+protobuf_generate_cpp(yang_rpc_proto_srcs yang_rpc_proto_hdrs ${yang_rpc_proto})
 
 # custom generator: official `protobuf_generate_cpp` can't use grpc plugins
 PROTOBUF_GENERATE_GRPC_CPP(gnmi_grpc_srcs gnmi_grpc_hdrs ${gnmi_proto})
 PROTOBUF_GENERATE_GRPC_CPP(gnmi_ext_grpc_srcs gnmi_ext_grpc_hdrs ${gnmi_ext_proto})
-PROTOBUF_GENERATE_GRPC_CPP(gnxi_grpc_srcs gnxi_grpc_hdrs ${gnxi_proto})
+PROTOBUF_GENERATE_GRPC_CPP(yang_rpc_grpc_srcs yang_rpc_grpc_hdrs ${yang_rpc_proto})
 
 # LINK OPTIONS FOR GNMI-SERVER
 ##############################
 
 # create a new library named gnmi
-add_library(gnmi ${gnmi_grpc_srcs} ${gnmi_ext_grpc_srcs} ${gnxi_grpc_srcs}
-                ${gnmi_proto_srcs} ${gnmi_ext_proto_srcs} ${gnxi_proto_srcs})
+add_library(gnmi ${gnmi_grpc_srcs} ${gnmi_ext_grpc_srcs} ${yang_rpc_grpc_srcs}
+                ${gnmi_proto_srcs} ${gnmi_ext_proto_srcs} ${yang_rpc_proto_srcs})
 
 # link our new gnmi library with grpc and protobuf libraries, PUBLIC so the
 # imported targets (and their include directories) propagate transitively to

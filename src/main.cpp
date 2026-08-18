@@ -1,6 +1,12 @@
-/*
+/**
+ * @file main.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Main executable implementation
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,101 +21,199 @@
  * limitations under the License.
  */
 
+#include <chrono>
+#include <csignal>
+#include <exception>
 #include <getopt.h>
+#include <string>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include <grpcpp/server.h>
+#include <grpcpp/server_builder.h>
+
+#include <proto/gnmi.grpc.pb.h>
+#include <proto/yang_rpc.grpc.pb.h>
 
 #include <sysrepo-cpp/Connection.hpp>
 #include <sysrepo-cpp/utils/exception.hpp>
 
-#include <security/authentication.h>
+#include <gnmi/gnmi.h>
+#include <security/auth.h>
 #include <utils/log.h>
+#include <yang_rpc/yang_rpc.h>
 
-#include "gnmi/gnmi.h"
-
-static void show_usage(std::string name)
+static struct
 {
-    std::cerr << "Usage: " << name << " <option(s)>\n"
-              << "Options:\n"
-              << "\t-h,--help\t\t\tShow this help message\n"
-              << "\t-u,--username USERNAME\t\tDefine connection username\n"
-              << "\t-p,--password PASSWORD\t\tDefine connection password\n"
-              << "\t-f,--force-insecure\t\tNo TLS connection, no password authentication\n"
-              << "\t-k,--private-key PRIVATE_KEY\tpath to server TLS private key\n"
-              << "\t-c,--cert CERTIFICATE\tpath to server TLS certificate\n"
-              << "\t-r,--ca CERTIFICATE\tpath to root certificate/CA certificate\n"
-              << "\t-l,--log-level LOG_LEVEL\tLog level\n"
-              << "\t\t 0 = all logging turned off\n"
-              << "\t\t 1 = log only error messages\n"
-              << "\t\t 2 = (default) log error and warning messages\n"
-              << "\t\t 3 = log error, warning and informational messages\n"
-              << "\t\t 4 = log everything, including development debug messages\n"
-              << "\t-b,--bind URI\t\t\tBind to an URI\n"
-              << "\t\t URI = PREFIX://IP:PORT\n"
-              << "\t\t URI = IP:PORT, default to dns:// prefix\n"
-              << "\t\t URI = IP, default to dns:// prefix and port 443\n"
-              << std::endl;
+    std::unique_ptr<grpc::Server> server;
+    int pipefd[2];
+} g_state;
+
+extern "C" void signal_handler(int signum)
+{
+    if (write(g_state.pipefd[1], &signum, sizeof(signum)) < 0)
+    {
+        exit(2);
+    }
 }
+
+void SetupSignalHandler(void)
+{
+    // Set up the signal handler
+    if (pipe(g_state.pipefd) < 0)
+    {
+        std::cerr << "Failed to create signal handler pipe " << strerror(errno) << std::endl;
+        exit(1);
+    }
+
+    // Block all signals for the main thread and other new threads
+    sigset_t set;
+    sigfillset(&set);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
+    // Register the signal handler
+    struct sigaction sa;
+    sa.sa_handler = &signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGINT, &sa, NULL);
+}
+
+static void wait_for_terminate(void)
+{
+    int signal = 0;
+
+    // UnBlock all signals for this thread
+    sigset_t set;
+    sigfillset(&set);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+
+    while (read(g_state.pipefd[0], &signal, sizeof(signal)) < 0)
+    {
+        // ignore interrupted system call
+    }
+
+    SLOG_DEBUG("Shutting down due to ", strsignal(signal), " signal");
+    GNMIService::TryCancelAll();
+    // deadline set to 100 ms so that we do not have to wait during shutdown
+    g_state.server->Shutdown(std::chrono::system_clock::now() + std::chrono::milliseconds(100));
+}
+
+void RunServer(std::string bind_addr, Auth &auth)
+{
+    // Get log environment variable
+    slog::get_log_env();
+
+    sysrepo::Connection sr_conn = sysrepo::Connection();
+    std::shared_ptr<grpc::ServerCredentials> cred = auth.init();
+    GNMIService gnmi(sr_conn, auth); // gNMI Service
+
+    grpc::ServerBuilder builder;
+    int selected_port = 0;
+    builder.AddListeningPort(bind_addr, cred, &selected_port);
+    builder.RegisterService(&gnmi);
+#ifdef GNXI_SERVICE_ENABLED
+    YANG_RPCService yang_rpc(sr_conn); // gNXI Service is only compiled in when enabled
+    builder.RegisterService(&yang_rpc);
+#endif
+    g_state.server = builder.BuildAndStart();
+
+    if (g_state.server == nullptr)
+    {
+        SLOG_ERROR("Failed to build gRPC server");
+        exit(1);
+    }
+
+    if (selected_port != 0)
+    {
+        SLOG_INFO("Server listening on ", bind_addr, " (port: ", selected_port, ")");
+    }
+    else
+    {
+        SLOG_INFO("Server listening on ", bind_addr);
+    }
+
+    wait_for_terminate();
+
+    SLOG_INFO("GNMI Server exited");
+}
+
+const char *USAGE = R"(Usage:
+  sysrepo-gnxi -f [-l LOG_LEVEL] [-b URI]
+  sysrepo-gnxi -k PATH -c PATH -r PATH -u PATH [-l LOG_LEVEL] [-b URI]
+
+Options:
+  -h,--help                 Show help
+  -f,--force-insecure       Insecure connection (no TLS, no passwords)
+  -k,--private-key PATH     Path to server TLS private key
+  -c,--cert PATH            Path to server TLS certificate
+  -r,--ca PATH              Path to root certificate/CA certificate
+  -u,--userdb PATH          Path to user database JSON file
+  -l,--log-level LOG_LEVEL  Logging level
+    0 = log fatal messages
+    1 = log error messages and all above
+    2 = (default) log warning messages and all above
+    3 = log informational messages and all above
+    4 = log debug messages and all above
+  -b,--bind URI
+    [PREFIX] HOST [":" PORT]
+    unix:/path/to/socket
+
+    defaults:
+      PREFIX = dns:///
+      HOST = 127.0.0.1
+      PORT = 443
+)";
 
 int main(int argc, char *argv[])
 {
-    int c;
+    int c, option_index = 0;
     extern char *optarg;
-    int option_index = 0;
-    std::string bind_addr = "localhost:50051";
-    std::string username, password;
-    AuthBuilder auth;
+    std::string bind_addr = "127.0.0.1";
+    Auth auth;
 
-    static struct option long_options[] = {
-        {"help", no_argument, 0, 'h'},
-        {"log-level", required_argument, 0, 'l'}, // log level
-        {"username", required_argument, 0, 'u'},
-        {"password", required_argument, 0, 'p'},
-        {"private-key", required_argument, 0, 'k'}, // private key
-        {"cert", required_argument, 0, 'c'},        // certificate chain
-        {"ca", required_argument, 0, 'r'},          // certificate chain
-        {"force-insecure", no_argument, 0, 'f'},    // insecure mode
-        {"bind", required_argument, 0, 'b'},        // insecure mode
-        {0, 0, 0, 0}};
+    static struct option long_options[] = {{"help", no_argument, 0, 'h'},
+                                           {"force-insecure", no_argument, 0, 'f'},
+                                           {"private-key", required_argument, 0, 'k'},
+                                           {"cert", required_argument, 0, 'c'},
+                                           {"ca", required_argument, 0, 'r'},
+                                           {"userdb", required_argument, 0, 'u'},
+                                           {"log-level", required_argument, 0, 'l'},
+                                           {"bind", required_argument, 0, 'b'},
+                                           {0, 0, 0, 0}};
 
-    /*
-     * An option character followed by ('') indicates no argument
-     * An option character followed by (‘:’) indicates a required argument.
-     * An option character is followed by (‘::’) indicates an optional argument.
-     * Here: no argument after (h,f) ; mandatory argument after (p,u,l,b,c,k,r)
-     */
-    while ((c = getopt_long(argc, argv, "hfl:p:u:c:k:r:b:", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "hfk:c:r:u:l:b:", long_options, &option_index)) != -1)
     {
         switch (c)
         {
-        case '?': // help
-        case 'h':
-            show_usage(argv[0]);
-            exit(0);
-            break;
-        case 'u': // username
-            auth.setUsername(std::string(optarg));
-            break;
-        case 'p': // password
-            auth.setPassword(std::string(optarg));
+        case 'f': // force insecure connection
+            auth.insecure = true;
             break;
         case 'k': // server private key
-            auth.setKeyPath(std::string(optarg));
+            auth.private_key_path = std::string(optarg);
             break;
         case 'c': // server certificate
-            auth.setCertPath(std::string(optarg));
+            auth.cert_path = std::string(optarg);
             break;
         case 'r': // CA/root certificate
-            auth.setRootCertPath(std::string(optarg));
+            auth.root_cert_path = std::string(optarg);
+            break;
+        case 'u': // user database
+            auth.user_db_path = std::string(optarg);
             break;
         case 'l': // log level
             slog::set_level(std::atoi(optarg));
             break;
         case 'b': // binding address
-            bind_addr = optarg;
+            bind_addr = std::string(optarg);
             break;
-        case 'f': // force insecure connection
-            auth.setInsecure(true);
-            break;
-        default: /* You won't get there */
+        case '?': // help
+        case 'h':
+            std::cout << USAGE;
+            exit(0);
+        default: // unhandled option
+            std::cerr << USAGE;
             exit(1);
         }
     }
@@ -118,14 +222,11 @@ int main(int argc, char *argv[])
 
     try
     {
-        sysrepo::Connection sr_con = sysrepo::Connection();
-
-        // start the gnmi server
-        RunServer(bind_addr, auth.build(), sr_con);
+        RunServer(bind_addr, auth);
     }
-    catch (sysrepo::ErrorWithCode &exc)
+    catch (const std::exception &exc)
     {
-        SLOG_ERROR("Connection to sysrepo failed ", exc.what());
+        SLOG_FATAL("GNMI server aborted: ", exc.what());
         exit(1);
     }
 

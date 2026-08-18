@@ -1,5 +1,11 @@
-/*
+/**
+ * @file test_get.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Get RPC tests
+ *
+ * @copyright
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +48,7 @@ TEST_CASE("Top-level Get request", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
     std::cout << __func__ << ":" << __LINE__ << std::endl;
 
@@ -75,7 +81,7 @@ static void single_get()
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -119,7 +125,7 @@ TEST_CASE("Get request of all module oper state", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -148,7 +154,7 @@ TEST_CASE("Get request of one list item oper state", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='A']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -178,7 +184,7 @@ TEST_CASE("Get request of one leaf of oper state", "[get]")
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='A']/counter", request.add_path());
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
 
     CHECK(status.ok());
 
@@ -208,7 +214,7 @@ TEST_CASE("Get request with prefix", "[get]")
     xpath_to_path("/gnmi-server-test:test-state/things[name='A']", request.mutable_prefix());
     xpath_to_path("/counter", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -238,7 +244,7 @@ TEST_CASE("Get request with target", "[get]")
     *request.mutable_prefix()->mutable_target() = "foo";
     xpath_to_path("/gnmi-server-test:test-state/things[name='A']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -267,7 +273,7 @@ TEST_CASE("Get request for config datastore", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(response.extension_size() == 0);
     REQUIRE(response.notification_size() == 1);
     CHECK(response.notification().Get(0).delete__size() == 0);
@@ -281,7 +287,7 @@ TEST_CASE("Get request for config datastore", "[get]")
     sr_sess->applyChanges();
 
     grpc::ClientContext ctx2;
-    status = client->Get(&ctx2, request, &response);
+    status = gnmi_client->Get(&ctx2, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -311,7 +317,7 @@ TEST_CASE("Get request with wildcard", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/*/counter", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -346,7 +352,7 @@ TEST_CASE("Get request with multiple paths", "[get]")
     xpath_to_path("/gnmi-server-test:test-state/things[name='A']/counter", request.add_path());
     xpath_to_path("/gnmi-server-test:test-state/things[name='B']/counter", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -387,7 +393,7 @@ TEST_CASE("Get request of empty container", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/cargo", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -414,7 +420,7 @@ TEST_CASE("Get request of list container", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -447,7 +453,7 @@ TEST_CASE("Get request with non-existent path", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='not-found']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
     CHECK(response.extension_size() == 0);
     REQUIRE(response.notification_size() == 1);
@@ -472,7 +478,7 @@ TEST_CASE("Get request of one list item where name contains /", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -516,7 +522,7 @@ TEST_CASE("Get request of one leaf where parent name contains /", "[get]")
     sr_sess->setItem("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']/counter", "5");
     sr_sess->applyChanges();
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -557,7 +563,7 @@ TEST_CASE("Get request of one list item where name contains [", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='One[1]']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -593,7 +599,7 @@ TEST_CASE("Get request of one list item where name contains '", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name=\"to-cpe2'\"]", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -632,7 +638,7 @@ TEST_CASE("Get request of one list item where name contains \\", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='to\\cpe2']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -681,7 +687,7 @@ TEST_CASE("Get request from list with composite key ", "[get-composite-key]")
     CHECK_THAT(reqpath.elem(1).key().at("type"), Equals("bar"));
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -735,7 +741,7 @@ TEST_CASE("Get request from list with composite key having slashes ",
     CHECK_THAT(reqpath.elem(1).key().at("type"), Equals("bar/cat/fish"));
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -790,7 +796,7 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
     CHECK_THAT(reqpath.elem(1).key().at("type"), Equals("bar/cat/fish"));
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -831,7 +837,7 @@ TEST_CASE("Get request with unsupported encoding type", "[get-neg]")
     request.set_encoding(gnmi::Encoding::BYTES);
     xpath_to_path("/gnmi-server-test:test-state", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("BYTES"));
 }
@@ -849,7 +855,7 @@ TEST_CASE("Get request with unsupported use of models", "[get-neg]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("use_model feature unsupported"));
 }
@@ -864,7 +870,7 @@ TEST_CASE("Get request with invalid datatype", "[get-neg]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals(""));
 }
@@ -878,7 +884,7 @@ TEST_CASE("Get request with relative path", "[get-neg]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/cargo/../things[name='A']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Relative paths not allowed"));
 }
@@ -895,6 +901,6 @@ TEST_CASE("Get request of one list item where name contains \"", "[get]")
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/gnmi-server-test:test-state/things[name='to-cpe1\"']", request.add_path());
 
-    auto status = client->Get(&ctx, request, &response);
+    auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
 }

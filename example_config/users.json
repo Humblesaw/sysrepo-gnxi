@@ -1,0 +1,10 @@
+{
+  "sysrepo-gnxi-users:users": {
+    "user": [
+      {
+        "name": "admin",
+        "password": "plaintext$admin"
+      }
+    ]
+  }
+}

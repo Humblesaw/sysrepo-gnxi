@@ -35,8 +35,6 @@
 namespace impl
 {
 
-Commit *Commit::singleton_ = nullptr;
-
 Commit::Commit(sysrepo::Session sess) : sr_sess_(sess)
 {
     timer_thread_exit_ = false;
@@ -44,7 +42,6 @@ Commit::Commit(sysrepo::Session sess) : sr_sess_(sess)
     timer_reset_ = false;
     rollback_secs_ = 0;
     timer_thread_ = std::thread(&Commit::check_confirm_loop_, this);
-    singleton_ = this;
 }
 
 Commit::~Commit()
@@ -55,50 +52,22 @@ Commit::~Commit()
     }
     cv_.notify_one();
     timer_thread_.join();
-    singleton_ = nullptr;
 }
 
-/**
- * @brief Check whether we are waiting for commit confirm.
- *
- * @return true Commit confirm is expected.
- * @return false No commit was issued. Commit confirm is not expected.
- */
 bool Commit::get_wait_confirm()
 {
     std::lock_guard<std::mutex> lock(mutex_);
     return wait_confirm_;
 }
 
-/**
- * @brief Get the current rollback duration.
- *
- * @return Rollback duration in seconds.
- */
-int64_t Commit::get_rollback_secs()
-{
-    std::lock_guard<std::mutex> lock(mutex_);
-    return rollback_secs_;
-}
-
-/**
- * @brief Reset to the before-commit state.
- *
- */
 void Commit::clear()
 {
     std::lock_guard<std::mutex> lock(mutex_);
     clear_no_lock_();
 }
 
-/**
- * @brief Commit request: gnmi's CommitRequest. Checks and sets up the internal state variables.
- *
- * @param[in] commit_id Commit.id - must match the CommitRequest id.
- * @param[in] rollback_secs The number of seconds to set the timeout to.
- * @return grpc::Status::OK on success, failure otherwise.
- */
-grpc::Status Commit::request_setup(const std::string &commit_id, int64_t rollback_secs)
+grpc::Status Commit::request_setup(const std::string &commit_id, int64_t rollback_secs,
+                                   const std::string &username)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (wait_confirm_)
@@ -119,27 +88,18 @@ grpc::Status Commit::request_setup(const std::string &commit_id, int64_t rollbac
     cfg_snapshot_ = sr_sess_.getData("/*");
     wait_confirm_ = true;
     commit_id_ = commit_id;
+    commit_username_ = username;
     rollback_secs_ = rollback_secs;
     return grpc::Status::OK;
 }
 
-/**
- * @brief Finishes the commit: gnmi's CommitRequest. Starts the rollback timer.
- *
- */
 void Commit::request_finish()
 {
     // notify the timer thread to start the rollback countdown
     cv_.notify_one();
 }
 
-/**
- * @brief Confirm commit: gnmi's CommitConfirm.
- *
- * @param[in] commit_id Commit.id - must match the CommitRequest id.
- * @return grpc::Status::OK on success, failure otherwise.
- */
-grpc::Status Commit::confirm(const std::string &commit_id)
+grpc::Status Commit::confirm(const std::string &commit_id, const std::string &username)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!wait_confirm_)
@@ -149,6 +109,11 @@ grpc::Status Commit::confirm(const std::string &commit_id)
     if (commit_id_ != commit_id)
     {
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
+    }
+    if (commit_username_ != username)
+    {
+        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                            "only the original user can confirm this commit");
     }
 
     // clear the internal state
@@ -156,13 +121,7 @@ grpc::Status Commit::confirm(const std::string &commit_id)
     return grpc::Status::OK;
 }
 
-/**
- * @brief Cancel commit: gnmi's CommitCancel.
- *
- * @param[in] commit_id Commit.id - must match the CommitRequest id.
- * @return grpc::Status::OK on success, failure otherwise.
- */
-grpc::Status Commit::cancel(const std::string &commit_id)
+grpc::Status Commit::cancel(const std::string &commit_id, const std::string &username)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!wait_confirm_)
@@ -172,6 +131,11 @@ grpc::Status Commit::cancel(const std::string &commit_id)
     if (commit_id_ != commit_id)
     {
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
+    }
+    if (commit_username_ != username)
+    {
+        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                            "only the original user can cancel this commit");
     }
 
     // per spec, cancel MUST rollback the configuration to the state prior to the
@@ -180,14 +144,8 @@ grpc::Status Commit::cancel(const std::string &commit_id)
     return grpc::Status::OK;
 }
 
-/**
- * @brief Set rollback duration: gnmi's CommitSetRollbackDuration.
- *
- * @param[in] commit_id Commit.id - must match the CommitRequest id.
- * @param[in] rollback_secs The number of seconds to reset the timeout to.
- * @return grpc::Status::OK on success, failure otherwise.
- */
-grpc::Status Commit::set_rollback_duration(const std::string &commit_id, int64_t rollback_secs)
+grpc::Status Commit::set_rollback_duration(const std::string &commit_id, int64_t rollback_secs,
+                                           const std::string &username)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!wait_confirm_)
@@ -197,6 +155,11 @@ grpc::Status Commit::set_rollback_duration(const std::string &commit_id, int64_t
     if (commit_id_ != commit_id)
     {
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
+    }
+    if (commit_username_ != username)
+    {
+        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                            "only the original user can set rollback duration for this commit");
     }
     if (rollback_secs <= 0)
     {
@@ -212,10 +175,6 @@ grpc::Status Commit::set_rollback_duration(const std::string &commit_id, int64_t
     return grpc::Status::OK;
 }
 
-/**
- * @brief Reset private values (to before-commit state). Caller handles locking.
- *
- */
 void Commit::clear_no_lock_()
 {
     cfg_snapshot_ = std::nullopt;
@@ -223,15 +182,12 @@ void Commit::clear_no_lock_()
     timer_reset_ = false;
     rollback_secs_ = 0;
     commit_id_.clear();
+    commit_username_.clear();
 
     // reset the confirm loop
     cv_.notify_one();
 }
 
-/**
- * @brief Handles commit rollback by restoring config. Caller handles locking.
- *
- */
 void Commit::restore_config_no_lock_()
 {
     SLOG_DEBUG("Restoring config");
@@ -256,10 +212,6 @@ void Commit::restore_config_no_lock_()
     clear_no_lock_();
 }
 
-/**
- * @brief Loop to check timeout for rollback.
- *
- */
 void Commit::check_confirm_loop_()
 {
     SLOG_DEBUG("Commit confirm timer thread started");

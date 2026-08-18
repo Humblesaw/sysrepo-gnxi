@@ -1,5 +1,5 @@
 /**
- * @file rpc.cpp
+ * @file test_rpc.cpp
  * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
  * @brief Rpc RPC tests
  *
@@ -37,29 +37,29 @@ using Catch::Matchers::Equals;
 TEST_CASE("Rpc rpc", "[rpc]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{\"interface\": \"eth45\"}");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.ok());
     CHECK(response.timestamp() > 0);
-    CHECK_THAT(response.val().json_ietf_val(), Equals("{\"old-stats\":\"613\"}"));
+    CHECK_THAT(response.output().json_ietf_val(), Equals("{\"old-stats\":\"613\"}"));
 }
 
 TEST_CASE("Rpc action", "[rpc]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:action-test/action-test", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{\"foo\": \"bar\"}");
+    request.mutable_input()->set_json_ietf_val("{\"foo\": \"bar\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.ok());
     CHECK(response.timestamp() > 0);
-    CHECK_THAT(response.val().json_ietf_val(), Equals("{\"bar\":\"action-result\"}"));
+    CHECK_THAT(response.output().json_ietf_val(), Equals("{\"bar\":\"action-result\"}"));
 }
 
 // negative tests
@@ -67,127 +67,127 @@ TEST_CASE("Rpc action", "[rpc]")
 TEST_CASE("Rpc (no path)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     request.mutable_path();
-    request.mutable_val()->set_json_ietf_val("{\"interface\": \"eth45\"}");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (no value)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
-    request.mutable_val();
+    request.mutable_input();
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (unsupported encoding)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{\"interface\": \"eth45\"}");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
     request.set_encoding(gnmi::BYTES);
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (unsupported input type)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
-    request.mutable_val()->set_string_val("eth45");
+    request.mutable_input()->set_string_val("eth45");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (nonexistent path)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:nonexistent", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{\"interface\": \"eth45\"}");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (malformed value)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{bad");
+    request.mutable_input()->set_json_ietf_val("{bad");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (callback error)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{\"interface\": \"error\"}");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"error\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::ABORTED);
     CHECK_THAT(status.error_message(), Contains("Fiddlesticks: /gnmi-server-test:clear-stats"));
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (no subscriber)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:no-subscriber", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{\"foo\": \"bar\"}");
+    request.mutable_input()->set_json_ietf_val("{\"foo\": \"bar\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::ABORTED);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }
 
 TEST_CASE("Rpc (timeout)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
-    gnxi::RpcRequest request;
-    gnxi::RpcResponse response;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
-    request.mutable_val()->set_json_ietf_val("{\"interface\": \"timeout\"}");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"timeout\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED);
     CHECK(response.timestamp() == 0);
-    CHECK(response.val().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
 }

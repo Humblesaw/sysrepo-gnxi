@@ -1,6 +1,6 @@
 # sysrepo-gnxi
 
-A C++ server based on [gNMI specification](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md) to communicate with [sysrepo](https://github.com/sysrepo/sysrepo) datastore.
+A C++ server based on [gNMI specification](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md) to communicate with [sysrepo](https://github.com/sysrepo/sysrepo) datastore via gRPC protocol.
 
 **Supported gNMI RPCs:**
 
@@ -9,7 +9,7 @@ A C++ server based on [gNMI specification](https://github.com/openconfig/referen
 * [X] Get
 * [X] Subscribe
 
-**Supported gNXI RPCs (defined in proto/gnxi.proto):**
+**Supported YANG_RPC RPCs (defined in proto/yang_rpc.proto):**
 
 * [X] Rpc
 
@@ -23,27 +23,33 @@ A C++ server based on [gNMI specification](https://github.com/openconfig/referen
 
 **Supported encoding:**
 
-* [ ] No encoding / gNMI native encoding (use `PROTO`)
-* [X] JSON IETF encoding  (use `JSON_IETF`)
 * [X] JSON encoding (if you ask for `JSON` you will have `JSON_IETF`)
-* [ ] ~~Protobuf encoding~~
-* [ ] ~~Binary encoding~~
-* [ ] ~~ASCII encoding~~
+* [ ] Bytes encoding
+* [ ] Proto encoding
+* [ ] ASCII encoding
+* [X] JSON IETF encoding
 
-**Supported encryption & authentication methods:**
+**Supported encryption & authentication/authorization**
 
-* [x] no encryption, no username/password (DEBUGGING ONLY)
-* [ ] ~~no encryption, username/password~~
-* [ ] ~~TLS/SSL encryption only~~
-* [x] TLS/SSL encryption + username/password authentication (server key pair + CA certificate)
-* [x] TLS/SSL encryption & authentication (server/client key pairs + CA certificate) (RECOMMENDED)
+The server supports two connection modes: **insecure connection** and **mTLS connection with username/password authentication/authorization**.
+Insecure mode does not provide any encryption of the server/client communication and no authentication/authorization of any sorts, therefore it should only be used in fully secure environments.
+Secure mode follows the gNMI specification and requires both the server and client to authenticate via certificate. On top of that the spec requires that the client authenticates using a username and password. The server checks them against a user JSON database which is provided as an argument when the server is started. Furthermore each user inside this database can have read-only and/or read-write access to multiple sysrepo modules. The server then checks each request and decides whether the particular user has the right to execute specific RPC. Rpc RPC does not need to be authorized, but since you can run any rpc or action on the server side via this, it can effectively overwrite data of any module and therefore bypass all authorization rules.
+
+| RPC          | Required privilege (per module in RPC)                    |
+|--------------|-----------------------------------------------------------|
+| Capabilities | -                                                         |
+| Get          | read-only or read-write                                   |
+| Set          | read-write                                                |
+| Subscribe    | read-only or read-write                                   |
+| Rpc          | - (if enabled authorization does not work properly)       |
 
 ## Dependencies
 
 - C++20 compiler
-- cmake >= 3.18.1
+- cmake >= 3.12
 - protobuf >= 3.12.4
 - grpc (cpp) >= 1.30.2
+- OpenSSL >= 3
 - libyang-cpp (master branch)
 - sysrepo-cpp (master branch)
   - libyang (devel branch)
@@ -60,7 +66,7 @@ make install
 
 ## Docker build
 
-We currently support Ubuntu Jammy, Noble and Resolute, Fedora 43 and 44, OpenSUSE Tumbleweed and Leap 16, ArchLinux. See `docker/` folder.
+We currently support Ubuntu 22.04, 24.04 and 26.04, Fedora 43 and 44, OpenSUSE Tumbleweed and Leap 16, ArchLinux. See `docker/` folder.
 
 ```
 sudo docker build --no-cache -t ubuntu26 -f ./docker/ubuntu26.Dockerfile .
@@ -69,23 +75,21 @@ sudo docker run -it ubuntu26
 
 ## Get started
 
-- **INSECURE mode with no TLS connection (no username/password authentication):**
+- **INSECURE mode (no TLS connection & no username/password authentication/authorization):**
 ```
-sysrepo-gnxi -f
-gnmic capabilities --insecure -a localhost --port 50051
-```
-
-- **TLS connection (username/password authentication):**
-```
-sysrepo-gnxi -k example_config/server.key -c example_config/server.crt -u cesnet -p cesnet -r example_config/ca.crt
-gnmic capabilities -a localhost --port 50051 -u cesnet -p cesnet --tls-ca example_config/ca.crt
+sysrepo-gnxi -f -b 127.0.0.1:50051
+gnmic capabilities --insecure -a 127.0.0.1 --port 50051
 ```
 
-- **TLS connection (client certificate authentication):**
+- **mTLS connection & username/password authentication/authorization:**
 ```
-sysrepo-gnxi -k example_config/server.key -c example_config/server.crt -r example_config/ca.crt
-gnmic capabilities -a localhost --port 50051 --tls-key example_config/client.key --tls-cert example_config/client.crt --tls-ca example_config/ca.crt
+sysrepo-gnxi -k example_config/server.key -c example_config/server.crt -r example_config/ca.crt -u example_config/users.json -b 127.0.0.1:50051
+gnmic capabilities --tls-key example_config/client.key --tls-cert example_config/client.crt --tls-ca example_config/ca.crt -u admin -p admin -a 127.0.0.1 --port 50051
 ```
+
+## User JSON database utility
+
+To correctly populate the user database which is sent to the server via `-u/--userdb` argument you can use the `sysrepo-gnxi-users` utility.
 
 ## Clients
 

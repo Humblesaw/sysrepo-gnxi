@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [new_gnmi, devel, master]
+    branches: [devel, master]
   pull_request:
-    branches: [new_gnmi, devel, master]
+    branches: [devel, master]
 
 jobs:
   build-and-test:

@@ -1,5 +1,11 @@
-/*
+/**
+ * @file test_set.cpp
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Set RPC tests
+ *
+ * @copyright
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +45,7 @@ TEST_CASE("Top-level Set request (replace) empty", "[set]")
 
     xpath_to_path("/*", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val("{}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -64,7 +70,7 @@ TEST_CASE("Empty leaf Set request (update)", "[set]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/ready", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("[null]");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -100,7 +106,7 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
 
     xpath_to_path("/gnmi-server-test:test4/params", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val("[\"speed\", \"mtu\", \"queue\"]");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -146,7 +152,7 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
 //     xpath_to_path("/gnmi-server-test:test/things[name=\"A\"]/amount-history",
 //                   replace->mutable_path());
 //     replace->mutable_val()->set_json_ietf_val("[4,5,6]");
-//     auto status = client->Set(&ctx, request, &response);
+//     auto status = gnmi_client->Set(&ctx, request, &response);
 //     REQUIRE(status.ok());
 
 //     auto vals = sr_sess->getData("/gnmi-server-test:test/things[name=\"A\"]/amount-history");
@@ -179,7 +185,7 @@ TEST_CASE("Top-level Set request leaflist (update)", "[set]")
 
     xpath_to_path("/gnmi-server-test:test4/params", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("[\"speed\", \"mtu\", \"queue\"]");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -216,7 +222,7 @@ TEST_CASE("Top-level Set request (update)", "[set]")
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("{\"gnmi-server-test:test\":{\"things\":[{\"name\":"
                                              "\"A\",\"enabled\":true, \"ready\":[null]}]}}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -262,7 +268,7 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
     xpath_to_path("/", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -307,7 +313,7 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
     replace->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\"gnmi-server-"
         "test:test2\":{}}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -357,7 +363,7 @@ TEST_CASE("Top-level Set request (multi replace + update)", "[set]")
     update->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":false}]},\"gnmi-"
         "server-test:test2\":{\"enabled2\":false}}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -406,7 +412,7 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     sr_sess->applyChanges();
 
     xpath_to_path("/", request.add_delete_());
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -433,7 +439,7 @@ TEST_CASE("Path-based Set request (delete)", "[set]")
     sr_sess->applyChanges();
 
     xpath_to_path("/gnmi-server-test:test/things[name='B']/enabled", request.add_delete_());
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -459,7 +465,7 @@ TEST_CASE("Path-based Set request (update)", "[set]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("{\"enabled\":true}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -489,7 +495,7 @@ TEST_CASE("Leaf Set request (update)", "[set]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -520,7 +526,7 @@ TEST_CASE("Set request (with prefix)", "[set]")
     xpath_to_path("/gnmi-server-test:test/things[name='A']", request.mutable_prefix());
     xpath_to_path("/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -553,7 +559,7 @@ TEST_CASE("Set request (with empty prefix)", "[set]")
     request.mutable_prefix();
     xpath_to_path("/gnmi-server-test:test/things[name='A']/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -589,7 +595,7 @@ TEST_CASE("Set request transaction (update)", "[set]")
     update->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"B\",\"enabled\":true}]}}");
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -633,7 +639,7 @@ TEST_CASE("Set request transaction (delete+update)", "[set]")
     update->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -673,7 +679,7 @@ TEST_CASE("Set request (delete with wildcards)", "[set]")
     sr_sess->applyChanges();
 
     xpath_to_path("/gnmi-server-test:test/*/enabled", request.add_delete_());
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -702,7 +708,7 @@ TEST_CASE("Set request (delete) with non-existent path", "[set]")
 
     xpath_to_path("/gnmi-server-test:test-state/things[name='not-found']", request.add_delete_());
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
 
     CHECK(response.extension_size() == 0);
@@ -731,7 +737,7 @@ TEST_CASE("Set request (delete) the same path", "[set]")
     xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
     xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
 
     CHECK(response.extension_size() == 0);
@@ -765,7 +771,7 @@ TEST_CASE("Set request (delete) child then parent", "[set]")
     xpath_to_path("/gnmi-server-test:test/things[name='foo']/enabled", request.add_delete_());
     xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
 
     CHECK(response.extension_size() == 0);
@@ -800,7 +806,7 @@ TEST_CASE("Set request (delete) parent then child", "[set]")
     xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
     xpath_to_path("/gnmi-server-test:test/things[name='foo']/enabled", request.add_delete_());
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
 
     CHECK(response.extension_size() == 0);
@@ -845,7 +851,7 @@ TEST_CASE("Set request for list with composite key", "[set]")
 
     update->mutable_val()->set_json_ietf_val("\"baz\"");
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
     auto val =
@@ -877,7 +883,6 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
 {
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    ScaleTestLogLevelReducer _log_reducer;
 
     for (int i = 0; i < 100; i++)
     {
@@ -895,7 +900,7 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
             xpath_to_path(xpath, update->mutable_path());
             update->mutable_val()->set_json_ietf_val(generate_random_string(1000));
         }
-        auto status = client->Set(&ctx, request, &response);
+        auto status = gnmi_client->Set(&ctx, request, &response);
         REQUIRE(status.ok());
     }
 
@@ -919,7 +924,7 @@ TEST_CASE("Set request (no val type)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val();
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Value not set"));
 
@@ -938,7 +943,7 @@ TEST_CASE("Set request (ascii val type)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_ascii_val("true");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported ASCII Encoding"));
 
@@ -957,7 +962,7 @@ TEST_CASE("Set request (JSON val type)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_json_val("true");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported JSON Encoding"));
 
@@ -976,7 +981,7 @@ TEST_CASE("Set request (bytes val type)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_bytes_val("1");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported protobuf bytes type"));
 
@@ -995,7 +1000,7 @@ TEST_CASE("Set request (proto-bytes val type)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_proto_bytes("1");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported PROTOBUF BYTE Encoding"));
 
@@ -1014,7 +1019,7 @@ TEST_CASE("Set request (any-val val type)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->mutable_any_val()->set_value("1");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported PROTOBUF Encoding"));
 
@@ -1033,7 +1038,7 @@ TEST_CASE("Set request (leaf-list val type)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->mutable_leaflist_val()->add_element()->set_string_val("true");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported protobuf leaflist type"));
 
@@ -1052,7 +1057,7 @@ TEST_CASE("Set request (bool val)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_bool_val(true);
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported protobuf bool type"));
 
@@ -1071,7 +1076,7 @@ TEST_CASE("Set request (string val)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/description", update->mutable_path());
     update->mutable_val()->set_string_val("This is item A");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported protobuf string type"));
 
@@ -1090,7 +1095,7 @@ TEST_CASE("Set request (uint val)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/amount", update->mutable_path());
     update->mutable_val()->set_uint_val(42);
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported protobuf uint type"));
 
@@ -1109,7 +1114,7 @@ TEST_CASE("Set request (int val)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/signed-amount", update->mutable_path());
     update->mutable_val()->set_int_val(-42);
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported protobuf int type"));
 
@@ -1128,7 +1133,7 @@ TEST_CASE("Set request (double val)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/things[name='A']/decimal-amount", update->mutable_path());
     update->mutable_val()->set_double_val(42.1);
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("Unsupported protobuf double type"));
 
@@ -1146,7 +1151,7 @@ TEST_CASE("Set request (no path)", "[set-neg]")
     auto update = request.add_update();
 
     update->mutable_val();
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Update no path or value"));
 
@@ -1166,7 +1171,7 @@ TEST_CASE("Set request (incorrect prefix)", "[set-neg]")
     xpath_to_path("/gnmi-server-test:test/things[name='A']", update->mutable_path());
     // The prefix, if any, should be gnmi-server-test
     update->mutable_val()->set_json_ietf_val("{\"gnmi-server-test-wine:enabled\":true}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Can't parse value fragment data: LY_EVALID"));
 
@@ -1194,7 +1199,7 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
     update->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"B\",\"enabled\":\"maybe\"}]}}");
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Can't parse data: LY_EVALID"));
 
@@ -1216,7 +1221,7 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"C\",\"enabled\":true}]}}");
-    status = client->Set(&ctx2, request, &response);
+    status = gnmi_client->Set(&ctx2, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -1260,7 +1265,7 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     update->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":\"maybe\"}]}}");
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Can't parse data: LY_EVALID"));
 
@@ -1282,7 +1287,7 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
         "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"C\",\"enabled\":true}]}}");
-    status = client->Set(&ctx2, request, &response);
+    status = gnmi_client->Set(&ctx2, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -1325,7 +1330,7 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     // Contains bad value for enabled so expected to fail
     update->mutable_val()->set_json_ietf_val("\"maybe\"");
 
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Can't parse value fragment data: LY_EVALID"));
 
@@ -1347,7 +1352,7 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     update = request.add_update();
     xpath_to_path("/gnmi-server-test:test/things[name='C']/enabled", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("true");
-    status = client->Set(&ctx2, request, &response);
+    status = gnmi_client->Set(&ctx2, request, &response);
     CHECK(status.ok());
 
     CHECK(response.extension_size() == 0);
@@ -1382,7 +1387,7 @@ TEST_CASE("Top-level Set request (update, no namespace)", "[set-neg]")
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
         "{\"test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Can't parse data: LY_EVALID"));
 
@@ -1400,7 +1405,7 @@ TEST_CASE("Set request (update with wildcards)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test/*/enabled", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("true");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Equals("Can't parse value fragment data: LY_EVALID"));
 }
@@ -1414,7 +1419,7 @@ TEST_CASE("Set request (application error string)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test2/custom-error", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("1");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::ABORTED);
     CHECK_THAT(status.error_message(),
                Equals("Fiddlesticks: /gnmi-server-test:test2/custom-error"));
@@ -1429,7 +1434,7 @@ TEST_CASE("Set request (data model error)", "[set-neg]")
 
     xpath_to_path("/gnmi-server-test:test2/must-error", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("1");
-    auto status = client->Set(&ctx, request, &response);
+    auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::ABORTED);
     CHECK_THAT(status.error_message(), Equals("Must condition \"current() > 42\" not satisfied. "
                                               "(path \"/gnmi-server-test:test2/must-error\")"));

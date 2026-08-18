@@ -1,0 +1,81 @@
+module sysrepo-gnxi-users {
+  yang-version 1.1;
+  namespace "urn:sysrepo:gnxi:users";
+  prefix sgu;
+
+  description
+    "User database for the sysrepo-gnxi gNMI server.
+
+     Defines users with (optionally) hashed passwords and
+     per-YANG-module access control lists (ACLs).  This module is
+     NOT installed into sysrepo; it is loaded by the gNMI server
+     into a private libyang context to validate and query the user
+     database JSON file.";
+
+  revision 2026-07-28 {
+    description "Initial revision.";
+  }
+
+  typedef access-level {
+    type enumeration {
+      enum ro {
+        description "Read-only access to the module.";
+      }
+      enum rw {
+        description "Read-write access to the module.";
+      }
+    }
+    description "Access level granted for a YANG module.";
+  }
+
+  container users {
+    description "User database root container.";
+
+    list user {
+      key "name";
+      description "A user account.";
+
+      leaf name {
+        type string {
+          pattern '[a-zA-Z0-9_-]+';
+        }
+        description "Username (alphanumeric, dash, underscore only).";
+      }
+
+      leaf password {
+        type string;
+        mandatory true;
+        description
+          "Password, either in plaintext of the form 'plaintext$<password>'
+           or as an OpenSSL digest string of the form '<algorithm>$<salt-hex>$<digest-hex>',
+           where the digest is computed over the concatenation of the salt bytes and
+           the password.
+           Supported algorithms are all one-shot EVP digest names
+           accepted by EVP_get_digestbyname(), e.g. md5, sha1,
+           sha224, sha256, sha384, sha512, sha512-224, sha512-256,
+           sha3-224, sha3-256, sha3-384, sha3-512, blake2b512, blake2s256.
+           Manage this file with the 'sysrepo-gnxi-users' command-line
+           utility.";
+      }
+
+      list acl {
+        key "module";
+        description
+          "Access control list entries for this user.
+           Each entry grants access to a YANG module.";
+
+        leaf module {
+          type string;
+          description
+            "YANG module name.";
+        }
+
+        leaf access {
+          type access-level;
+          mandatory true;
+          description "Access level granted to this module.";
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,12 @@
-/*
+/**
+ * @file subscribe.h
+ * @author Ondrej Kusnirik (kusnirik@cesnet.cz)
+ * @brief Subscribe RPC header
+ *
+ * @copyright
  * Copyright 2020 Yohan Pipereau
  * Copyright 2025 Graphiant Inc.
+ * Copyright (c) 2026 CESNET, z.s.p.o.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +24,7 @@
 #pragma once
 
 #include "encode/encode.h"
+#include "security/auth.h"
 #include "utils/sysrepo.h"
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
@@ -31,7 +38,7 @@ class Scheduler;
 class Subscribe
 {
   public:
-    Subscribe(sysrepo::Session sess) : sr_sess(sess)
+    Subscribe(sysrepo::Session sess, const Auth &auth) : sr_sess(sess), auth_(auth)
     {
         encodef = std::make_shared<Encode>(sr_sess);
     }
@@ -80,6 +87,7 @@ class Subscribe
   private:
     sysrepo::Session sr_sess;        // sysrepo session
     std::shared_ptr<Encode> encodef; // support for json ietf encoding
+    const Auth &auth_;               // authentication/authorization data
     std::recursive_mutex stream_mutex;
 };
 

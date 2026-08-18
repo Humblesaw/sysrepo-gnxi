@@ -49,14 +49,17 @@ RUN cmake -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF ..
 RUN make -j4
 RUN make install
 
+# refresh
+RUN ldconfig
+
 # third-party dependencies
-RUN pacman -S --noconfirm grpc protobuf
+RUN pacman -S --noconfirm grpc protobuf openssl
 
 # install sysrepo-gnxi
 COPY . /root/sysrepo-gnxi
 WORKDIR /root/sysrepo-gnxi
 RUN mkdir build
 WORKDIR /root/sysrepo-gnxi/build
-RUN cmake -DENABLE_TESTS=ON ..
+RUN cmake -DENABLE_TESTS=ON -DENABLE_YANG_RPC=ON ..
 RUN make -j4
 RUN ctest --output-on-failure
