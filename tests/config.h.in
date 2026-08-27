@@ -1,6 +1,6 @@
 #pragma once
 
-#define GNXI_SCHEMA_DIR "@CMAKE_SOURCE_DIR@/src/files"
+#define GNXI_SCHEMA_DIR "@CMAKE_SOURCE_DIR@/modules"
 #define SERVER_BINARY "@CMAKE_BINARY_DIR@/@PROJECT_NAME@"
 #define USERS_BINARY "@CMAKE_BINARY_DIR@/@USERS_CLI@"
 #define TESTS_SCHEMA_DIR "@CMAKE_SOURCE_DIR@/tests/files"

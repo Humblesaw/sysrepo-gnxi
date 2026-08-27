@@ -25,21 +25,27 @@
 #include <csignal>
 #include <exception>
 #include <getopt.h>
+#include <stdexcept>
 #include <string>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <vector>
 
 #include <grpcpp/server.h>
 #include <grpcpp/server_builder.h>
+
+#include <libyang-cpp/DataNode.hpp>
 
 #include <proto/gnmi.grpc.pb.h>
 #include <proto/yang_rpc.grpc.pb.h>
 
 #include <sysrepo-cpp/Connection.hpp>
+#include <sysrepo-cpp/Session.hpp>
 #include <sysrepo-cpp/utils/exception.hpp>
 
 #include <gnmi/gnmi.h>
 #include <security/auth.h>
+#include <security/crypto.h>
 #include <utils/log.h>
 #include <yang_rpc/yang_rpc.h>
 
@@ -100,18 +106,203 @@ static void wait_for_terminate(void)
     g_state.server->Shutdown(std::chrono::system_clock::now() + std::chrono::milliseconds(100));
 }
 
-void RunServer(std::string bind_addr, Auth &auth)
+/**
+ * @brief Read a single configuration node by its absolute path. Throws on error.
+ *
+ * @param[in] sess Sysrepo session.
+ * @param[in] path Absolute path to the leaf.
+ * @param[in] what Description of the leaf.
+ * @return Leaf value.
+ */
+static std::string config_value(sysrepo::Session &sess, const std::string &path,
+                                const std::string &what)
+{
+    auto data = sess.getData(path);
+    if (!data.has_value())
+    {
+        throw std::runtime_error(what + " not found");
+    }
+
+    auto node = data->findPath(path);
+    if (!node.has_value())
+    {
+        throw std::runtime_error(what + " not found");
+    }
+    return node->asTerm().valueStr();
+}
+
+/**
+ * @brief Read all configuration nodes matching an XPath.
+ *
+ * @param[in] sess Sysrepo session.
+ * @param[in] xpath XPath to find.
+ * @return Matching nodes.
+ */
+static std::vector<libyang::DataNode> config_values(sysrepo::Session &sess,
+                                                    const std::string &xpath)
+{
+    auto data = sess.getData(xpath);
+    if (!data.has_value())
+    {
+        return {};
+    }
+
+    auto nodes = data->findXPath(xpath);
+    std::vector<libyang::DataNode> values;
+    for (auto node : nodes)
+    {
+        values.push_back(node);
+    }
+    return values;
+}
+
+/**
+ * @brief Read the configured listen endpoints and build gRPC listen URIs.
+ *
+ * @param[in] sess Sysrepo session.
+ * @return gRPC listen URIs, e.g. 127.0.0.1:50051 or unix:/path.
+ */
+static std::vector<std::string> loadBindAddrs(sysrepo::Session &sess)
+{
+    std::vector<std::string> addrs;
+
+    auto data = sess.getData("/sysrepo-gnxi-server:server/listen/endpoint");
+    if (!data.has_value())
+    {
+        return addrs;
+    }
+
+    for (auto endpoint : data->findXPath("/sysrepo-gnxi-server:server/listen/endpoint"))
+    {
+        auto name = endpoint.findPath("name")->asTerm().valueStr();
+
+        // each endpoint selects exactly one transport (mandatory choice)
+        if (auto path = endpoint.findPath("unix/path"))
+        {
+            addrs.push_back("unix:" + path->asTerm().valueStr());
+            continue;
+        }
+
+        if (auto address = endpoint.findPath("dns/address"))
+        {
+            auto port = endpoint.findPath("dns/port");
+            addrs.push_back("dns:///" + address->asTerm().valueStr() + ":" +
+                            (port ? port->asTerm().valueStr() : std::string("50051")));
+            continue;
+        }
+
+        if (auto address = endpoint.findPath("ip/address"))
+        {
+            auto port = endpoint.findPath("ip/port");
+            auto addr = address->asTerm().valueStr();
+            auto port_str = port ? port->asTerm().valueStr() : std::string("50051");
+            if (addr.find(':') != std::string::npos)
+            {
+                // IPv6 addresses must be enclosed in brackets
+                addrs.push_back("[" + addr + "]:" + port_str);
+            }
+            else
+            {
+                addrs.push_back(addr + ":" + port_str);
+            }
+            continue;
+        }
+
+        throw std::runtime_error("listen endpoint '" + name + "' has no transport configured");
+    }
+
+    return addrs;
+}
+
+/**
+ * @brief Load the TLS server material from sysrepo.
+ *
+ * Reads the server identity (private key and certificate chain from
+ * ietf-keystore) and the client verification CA bundle (ietf-truststore)
+ * referenced by the server configuration. The stored base64 bodies are
+ * wrapped into PEM for gRPC.
+ *
+ * @param[in] sess Sysrepo session.
+ * @return TLS material wrapped into PEM.
+ */
+static Auth::TlsMaterial loadTlsConfig(sysrepo::Session &sess)
+{
+    Auth::TlsMaterial tls;
+
+    // the referenced key/certificate/bag names fluctuate, read them first
+    std::string key_name =
+        config_value(sess,
+                     "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
+                     "central-keystore-reference/asymmetric-key",
+                     "TLS server identity asymmetric-key reference");
+    std::string cert_name =
+        config_value(sess,
+                     "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
+                     "central-keystore-reference/certificate",
+                     "TLS server identity certificate reference");
+    std::string bag_name =
+        config_value(sess,
+                     "/sysrepo-gnxi-server:server/tls/client-authentication/ca-certs/"
+                     "central-truststore-reference",
+                     "TLS client authentication CA-certs truststore reference");
+
+    // private key of the server identity
+    std::string key_path =
+        "/ietf-keystore:keystore/asymmetric-keys/asymmetric-key[name='" + key_name + "']";
+    tls.private_key_pem = pem_wrap_private_key(
+        config_value(sess, key_path + "/cleartext-private-key",
+                     "cleartext-private-key of asymmetric-key '" + key_name + "'"),
+        config_value(sess, key_path + "/private-key-format",
+                     "private-key-format of asymmetric-key '" + key_name + "'"));
+
+    // server certificate chain - the referenced certificate first, then the
+    // remaining certificates of the same asymmetric key (intermediates)
+    tls.certificate_pem = pem_wrap_certificate(config_value(
+        sess, key_path + "/certificates/certificate[name='" + cert_name + "']/cert-data",
+        "certificate '" + cert_name + "' of asymmetric-key '" + key_name + "'"));
+    for (auto node : config_values(sess, key_path + "/certificates/certificate[not(name='" +
+                                             cert_name + "')]/cert-data"))
+    {
+        tls.certificate_pem += "\n" + pem_wrap_certificate(node.asTerm().valueStr());
+    }
+
+    // CA certificates for client verification
+    for (auto node :
+         config_values(sess, "/ietf-truststore:truststore/certificate-bags/certificate-bag[name='" +
+                                 bag_name + "']/certificate/cert-data"))
+    {
+        if (!tls.ca_certificate_pem.empty())
+        {
+            tls.ca_certificate_pem += "\n";
+        }
+        tls.ca_certificate_pem += pem_wrap_certificate(node.asTerm().valueStr());
+    }
+    if (tls.ca_certificate_pem.empty())
+    {
+        throw std::runtime_error("certificate-bag '" + bag_name +
+                                 "' not found or contains no certificates");
+    }
+
+    SLOG_INFO("TLS configuration loaded from sysrepo "
+              "(key: ",
+              key_name, ", cert: ", cert_name, ", CA bag: ", bag_name, ")");
+
+    return tls;
+}
+
+void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs, Auth &auth)
 {
     // Get log environment variable
     slog::get_log_env();
 
-    sysrepo::Connection sr_conn = sysrepo::Connection();
-    std::shared_ptr<grpc::ServerCredentials> cred = auth.init();
+    std::shared_ptr<grpc::ServerCredentials> cred = auth.credentials();
     GNMIService gnmi(sr_conn, auth); // gNMI Service
 
     grpc::ServerBuilder builder;
-    int selected_port = 0;
-    builder.AddListeningPort(bind_addr, cred, &selected_port);
+    for (const auto &bind_addr : bind_addrs)
+    {
+        builder.AddListeningPort(bind_addr, cred);
+    }
     builder.RegisterService(&gnmi);
 #ifdef GNXI_SERVICE_ENABLED
     YANG_RPCService yang_rpc(sr_conn); // gNXI Service is only compiled in when enabled
@@ -125,11 +316,7 @@ void RunServer(std::string bind_addr, Auth &auth)
         exit(1);
     }
 
-    if (selected_port != 0)
-    {
-        SLOG_INFO("Server listening on ", bind_addr, " (port: ", selected_port, ")");
-    }
-    else
+    for (const auto &bind_addr : bind_addrs)
     {
         SLOG_INFO("Server listening on ", bind_addr);
     }
@@ -140,73 +327,42 @@ void RunServer(std::string bind_addr, Auth &auth)
 }
 
 const char *USAGE = R"(Usage:
-  sysrepo-gnxi -f [-l LOG_LEVEL] [-b URI]
-  sysrepo-gnxi -k PATH -c PATH -r PATH -u PATH [-l LOG_LEVEL] [-b URI]
+  sysrepo-gnxi [-l LOG_LEVEL]
+  sysrepo-gnxi -f [-l LOG_LEVEL]
 
 Options:
   -h,--help                 Show help
   -f,--force-insecure       Insecure connection (no TLS, no passwords)
-  -k,--private-key PATH     Path to server TLS private key
-  -c,--cert PATH            Path to server TLS certificate
-  -r,--ca PATH              Path to root certificate/CA certificate
-  -u,--userdb PATH          Path to user database JSON file
   -l,--log-level LOG_LEVEL  Logging level
     0 = log fatal messages
     1 = log error messages and all above
     2 = (default) log warning messages and all above
     3 = log informational messages and all above
     4 = log debug messages and all above
-  -b,--bind URI
-    [PREFIX] HOST [":" PORT]
-    unix:/path/to/socket
 
-    defaults:
-      PREFIX = dns:///
-      HOST = 127.0.0.1
-      PORT = 443
+Server configuration is read from sysrepo.
 )";
 
 int main(int argc, char *argv[])
 {
     int c, option_index = 0;
     extern char *optarg;
-    std::string bind_addr = "127.0.0.1";
-    Auth auth;
+    bool insecure = false;
 
     static struct option long_options[] = {{"help", no_argument, 0, 'h'},
                                            {"force-insecure", no_argument, 0, 'f'},
-                                           {"private-key", required_argument, 0, 'k'},
-                                           {"cert", required_argument, 0, 'c'},
-                                           {"ca", required_argument, 0, 'r'},
-                                           {"userdb", required_argument, 0, 'u'},
                                            {"log-level", required_argument, 0, 'l'},
-                                           {"bind", required_argument, 0, 'b'},
                                            {0, 0, 0, 0}};
 
-    while ((c = getopt_long(argc, argv, "hfk:c:r:u:l:b:", long_options, &option_index)) != -1)
+    while ((c = getopt_long(argc, argv, "hfl:", long_options, &option_index)) != -1)
     {
         switch (c)
         {
         case 'f': // force insecure connection
-            auth.insecure = true;
-            break;
-        case 'k': // server private key
-            auth.private_key_path = std::string(optarg);
-            break;
-        case 'c': // server certificate
-            auth.cert_path = std::string(optarg);
-            break;
-        case 'r': // CA/root certificate
-            auth.root_cert_path = std::string(optarg);
-            break;
-        case 'u': // user database
-            auth.user_db_path = std::string(optarg);
+            insecure = true;
             break;
         case 'l': // log level
             slog::set_level(std::atoi(optarg));
-            break;
-        case 'b': // binding address
-            bind_addr = std::string(optarg);
             break;
         case '?': // help
         case 'h':
@@ -222,7 +378,29 @@ int main(int argc, char *argv[])
 
     try
     {
-        RunServer(bind_addr, auth);
+        sysrepo::Connection sr_conn;
+        std::vector<std::string> bind_addrs;
+        Auth::TlsMaterial tls;
+
+        {
+            // read server configuration
+            auto sess = sr_conn.sessionStart(sysrepo::Datastore::Running);
+            bind_addrs = loadBindAddrs(sess);
+            if (bind_addrs.empty())
+            {
+                throw std::runtime_error("no listen endpoint configured "
+                                         "(sysrepo-gnxi-server:server/listen/endpoint)");
+            }
+            if (!insecure)
+            {
+                tls = loadTlsConfig(sess);
+            }
+            // session terminates
+        }
+
+        Auth auth(insecure, sr_conn, tls);
+
+        RunServer(sr_conn, bind_addrs, auth);
     }
     catch (const std::exception &exc)
     {

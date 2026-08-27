@@ -7,10 +7,17 @@ module sysrepo-gnxi-users {
     "User database for the sysrepo-gnxi gNMI server.
 
      Defines users with (optionally) hashed passwords and
-     per-YANG-module access control lists (ACLs).  This module is
-     NOT installed into sysrepo; it is loaded by the gNMI server
-     into a private libyang context to validate and query the user
-     database JSON file.";
+     per-YANG-module access control lists (ACLs).
+
+     This module is installed into sysrepo and its data is stored in
+     the running datastore.  It is private: it must never be accessible
+     via gNMI RPCs.  Protection is enforced by a code-level blocklist
+     in the server and by filesystem permissions (0600) on the module
+     data file.";
+
+  revision 2026-08-26 {
+    description "Install into sysrepo instead of a private libyang context.";
+  }
 
   revision 2026-07-28 {
     description "Initial revision.";

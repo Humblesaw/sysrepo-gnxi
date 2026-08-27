@@ -23,9 +23,11 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <grpcpp/client_context.h>
 #include <grpcpp/support/sync_stream.h>
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include <grpcpp/grpcpp.h>
@@ -34,7 +36,8 @@
 #include "config.h"
 #include "proto/gnmi.pb.h"
 #include "test_main.h"
-#include <utils/utils.h>
+
+// helpers
 
 /**
  * @brief Client certificate bundle.
@@ -47,16 +50,28 @@ struct PemBundle
     std::string client_cert;
 };
 
-// helpers
+/**
+ * @brief Read a file into a string (PEM material for the gRPC channels).
+ */
+static std::string read_file(const std::filesystem::path &path)
+{
+    std::ifstream ifs(path);
+    if (!ifs)
+    {
+        throw std::runtime_error("Cannot open file: " + path.string());
+    }
+    return {std::istreambuf_iterator<char>(ifs), {}};
+}
+
 const PemBundle &pem_bundle()
 {
     static PemBundle b = []()
     {
         std::filesystem::path dir = TESTS_SCHEMA_DIR;
         return PemBundle{
-            .ca_cert = get_file_content(dir / "ca.crt"),
-            .client_key = get_file_content(dir / "client.key"),
-            .client_cert = get_file_content(dir / "client.crt"),
+            .ca_cert = read_file(dir / "ca.crt"),
+            .client_key = read_file(dir / "client.key"),
+            .client_cert = read_file(dir / "client.crt"),
         };
     }();
     return b;
@@ -118,7 +133,7 @@ grpc::Status do_get(const std::shared_ptr<grpc::Channel> &channel, std::string x
     prepare_context(ctx, username, password);
     gnmi::GetRequest request;
     request.set_type(gnmi::GetRequest::CONFIG);
-    request.set_encoding(gnmi::JSON_IETF);
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path(xpath, request.add_path());
     gnmi::GetResponse response;
     return stub->Get(&ctx, request, &response);
@@ -155,13 +170,6 @@ do_subscribe(const std::shared_ptr<grpc::Channel> &channel, grpc::ClientContext 
 }
 
 // positive tests
-
-TEST_CASE("Insecure: connect without auth", "[auth]")
-{
-    auto ch = make_insecure_channel(insecure_addr);
-    auto status = do_capabilities(ch);
-    CHECK(status.ok());
-}
 
 TEST_CASE("mTLS: valid cert + valid credentials (hashed password)", "[auth]")
 {
@@ -327,13 +335,6 @@ TEST_CASE("mTLS: no client cert", "[auth-neg]")
 TEST_CASE("Insecure client to mTLS port", "[auth-neg]")
 {
     auto ch = make_insecure_channel(mtls_addr);
-    auto status = do_capabilities(ch);
-    CHECK(!status.ok());
-}
-
-TEST_CASE("mTLS client to insecure port", "[auth-neg]")
-{
-    auto ch = make_mtls_channel(insecure_addr);
     auto status = do_capabilities(ch);
     CHECK(!status.ok());
 }

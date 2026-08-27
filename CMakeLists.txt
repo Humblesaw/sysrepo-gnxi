@@ -41,17 +41,6 @@ pkg_check_modules(LIBYANG REQUIRED libyang-cpp IMPORTED_TARGET)
 
 find_package(OpenSSL 3 REQUIRED) # for password hashing
 
-find_program(SYSREPOCTL_EXECUTABLE sysrepoctl)
-
-# install the user database YANG module into sysrepo at configure time
-execute_process(
-    COMMAND ${SYSREPOCTL_EXECUTABLE} -i "${CMAKE_SOURCE_DIR}/src/files/sysrepo-gnxi-users.yang"
-    RESULT_VARIABLE _sysrepoctl_result
-)
-if(NOT _sysrepoctl_result EQUAL 0)
-    message(FATAL_ERROR "sysrepoctl install failed with (rc=${_sysrepoctl_result})")
-endif()
-
 add_subdirectory(proto) # compile and link proto files
 
 # COMPILER & LINKER
@@ -74,6 +63,7 @@ set(GNXI_SRC src/encode/encode.cpp
              src/gnmi/set.cpp
              src/gnmi/subscribe.cpp
              src/security/auth.cpp
+             src/security/crypto.cpp
              src/security/hash.cpp
              src/utils/log.cpp
              src/utils/sysrepo.cpp
@@ -88,6 +78,7 @@ set(GNXI_HEADERS src/encode/encode.h
                  src/gnmi/set.h
                  src/gnmi/subscribe.h
                  src/security/auth.h
+                 src/security/crypto.h
                  src/security/hash.h
                  src/utils/log.h
                  src/utils/sysrepo.h
@@ -119,8 +110,8 @@ target_link_libraries(${PROJECT_NAME} gnmi
 
 # user database management utility
 set(USERS_CLI sysrepo-gnxi-users)
-add_executable(${USERS_CLI} src/users.cpp src/security/hash.cpp)
-target_include_directories(${USERS_CLI} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src)
+add_executable(${USERS_CLI} src/users.cpp src/security/hash.cpp src/security/crypto.cpp)
+target_include_directories(${USERS_CLI} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src ${CMAKE_BINARY_DIR})
 
 target_include_directories(${USERS_CLI}
     PRIVATE
@@ -223,6 +214,13 @@ endif()
 # INSTALLATION
 ##############
 
+# install the YANG modules into sysrepo using a script
+option(SYSREPO_SETUP "Install required YANG modules into sysrepo using a script" ON)
+set(GNXI_YANG_MODULE_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/sysrepo-gnxi/modules"
+    CACHE STRING "Directory where to copy the YANG modules to")
+set(GNXI_SCRIPTS_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/sysrepo-gnxi"
+    CACHE STRING "Directory where to copy the helper scripts to")
+
 # server
 install(TARGETS ${PROJECT_NAME}
         RUNTIME DESTINATION sbin
@@ -233,6 +231,53 @@ install(TARGETS ${PROJECT_NAME}
 install(TARGETS ${USERS_CLI}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+# YANG modules
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/modules/"
+        DESTINATION ${GNXI_YANG_MODULE_DIR}
+)
+
+# helper scripts and files
+install(PROGRAMS scripts/setup.sh
+        DESTINATION ${GNXI_SCRIPTS_DIR}
+)
+install(FILES example_config/minimal-configuration.json
+        DESTINATION ${GNXI_SCRIPTS_DIR}
+)
+
+if(SYSREPO_SETUP)
+    find_program(SYSREPOCTL_EXECUTABLE sysrepoctl)
+    if(NOT SYSREPOCTL_EXECUTABLE)
+        message(FATAL_ERROR "Unable to find sysrepoctl, set SYSREPOCTL_EXECUTABLE manually.")
+    endif()
+    find_program(SYSREPOCFG_EXECUTABLE sysrepocfg)
+    if(NOT SYSREPOCFG_EXECUTABLE)
+        message(FATAL_ERROR "Unable to find sysrepocfg, set SYSREPOCFG_EXECUTABLE manually.")
+    endif()
+
+    # install the modules into sysrepo using the installed setup.sh,
+    # the module directory is passed via environment variables (like netopeer2)
+    install(CODE "
+        message(STATUS \"Installing YANG modules into sysrepo (setup.sh)...\")
+        set(ENV{GNXI_MODULE_DIR} \"${GNXI_YANG_MODULE_DIR}\")
+        set(ENV{SYSREPOCTL_EXECUTABLE} \"${SYSREPOCTL_EXECUTABLE}\")
+        set(ENV{SYSREPOCFG_EXECUTABLE} \"${SYSREPOCFG_EXECUTABLE}\")
+        set(ENV{GNXI_CONFIG_FILE} \"${GNXI_SCRIPTS_DIR}/minimal-configuration.json\")
+        execute_process(COMMAND \"\$ENV{DESTDIR}${GNXI_SCRIPTS_DIR}/setup.sh\"
+            RESULT_VARIABLE CMD_RES
+            OUTPUT_VARIABLE CMD_OUT
+            ERROR_VARIABLE CMD_ERR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_STRIP_TRAILING_WHITESPACE)
+        if(NOT CMD_RES EQUAL 0)
+            string(REPLACE \"\\n\" \"\\n \" CMD_OUT_F \"\${CMD_OUT}\")
+            string(REPLACE \"\\n\" \"\\n \" CMD_ERR_F \"\${CMD_ERR}\")
+            message(FATAL_ERROR \" OUTPUT:\\n \${CMD_OUT_F}\\n ERROR:\\n \${CMD_ERR_F}\")
+        endif()
+    ")
+else()
+    message(WARNING "Server will refuse to start if the YANG modules are not installed!")
+endif()
 
 # FORMAT
 ########

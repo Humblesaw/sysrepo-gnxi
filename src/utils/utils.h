@@ -25,11 +25,10 @@
 
 #include <cassert>
 #include <chrono>
-#include <filesystem>
-#include <fstream>
 #include <proto/gnmi.grpc.pb.h>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 
 /* Get current time since epoch in nanosec */
 inline uint64_t get_time_nanosec()
@@ -39,36 +38,6 @@ inline uint64_t get_time_nanosec()
         std::chrono::system_clock::now().time_since_epoch());
 
     return ts.count();
-}
-
-/**
- * @brief Get contents of a file.
- *
- * @param[in] path Path to the file.
- * @return File contents.
- */
-inline std::string get_file_content(const std::filesystem::path &path)
-{
-    std::ifstream ifs(path, std::ios::binary | std::ios::ate);
-    if (!ifs)
-    {
-        throw std::runtime_error("Cannot open file: " + path.string());
-    }
-
-    auto size = ifs.tellg();
-    if (size <= 0)
-    {
-        throw std::runtime_error("File is empty: " + path.string());
-    }
-
-    ifs.seekg(0);
-    std::string content(static_cast<size_t>(size), '\0');
-    if (!ifs.read(content.data(), size))
-    {
-        throw std::runtime_error("Failed to read file: " + path.string());
-    }
-
-    return content;
 }
 
 // We don't conform to the gNMI spec in that namespaces on paths are
@@ -220,4 +189,24 @@ inline bool gnmi_path_equals(const gnmi::Path &path1, const gnmi::Path &path2)
         }
     }
     return true;
+}
+
+/**
+ * @brief Check whether a YANG module name belongs to a private module
+ *        that must never be accessible via gNMI RPCs.
+ *
+ * The set of private modules is hardcoded. It includes all modules that
+ * store server configuration, TLS credentials or user database data.
+ *
+ * @param[in] name Module name to check.
+ * @return True if the module is private, false otherwise.
+ */
+inline bool isPrivateModule(const std::string &name)
+{
+    static const std::unordered_set<std::string> private_modules = {
+        "sysrepo-gnxi-server", "sysrepo-gnxi-users",         "ietf-keystore",
+        "ietf-truststore",     "ietf-crypto-types",          "ietf-tls-server",
+        "ietf-tls-common",     "iana-tls-cipher-suite-algs",
+    };
+    return private_modules.contains(name);
 }

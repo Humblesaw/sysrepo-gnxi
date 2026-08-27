@@ -195,7 +195,7 @@ grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
         {
             paths.push_back(p);
         }
-        auth_.authorize(context, sr_sess.getContext(),
+        auth_.authorize(context, sr_sess,
                         req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
                         Auth::Access::ReadOnly);
     }

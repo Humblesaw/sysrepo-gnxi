@@ -1,0 +1,134 @@
+module sysrepo-gnxi-server {
+  yang-version 1.1;
+  namespace "urn:sysrepo:gnxi:server";
+  prefix sgs;
+
+  import ietf-inet-types {
+    prefix inet;
+    description
+      "RFC 9911: Common YANG Data Types.
+        Used for the ip-address, domain-name and port-number typedefs.";
+  }
+  import ietf-tls-server {
+    prefix tlss;
+    description
+      "RFC 9645: YANG Groupings for TLS Clients and TLS Servers.
+       Provides the tls-server-grouping used for TLS configuration.";
+  }
+
+  organization
+    "CESNET, z.s.p.o.";
+  contact
+    "Ondrej Kusnirik <kusnirik@cesnet.cz>";
+  description
+    "This module defines the server configuration for the sysrepo-gnxi
+     server.
+
+     The TLS configuration uses the standard ietf-tls-server grouping
+     (RFC 9645) which references keys and certificates stored in the
+     ietf-keystore (RFC 9642) and ietf-truststore (RFC 9641) modules,
+     making the configuration compatible with netopeer2 and other
+     standard NETCONF servers.
+
+     This module is private, it must never be accessible via gNMI RPCs.
+
+     Copyright (c) 2026 CESNET, z.s.p.o.
+
+     Licensed under the Apache License, Version 2.0 (the 'License');
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+     http://www.apache.org/licenses/LICENSE-2.0";
+
+  revision 2026-08-26 {
+    description "Initial revision.";
+  }
+
+  container server {
+    description
+      "Server configuration root container.";
+
+    container listen {
+      description
+        "Listen endpoints of the server. The server prepends the
+         required gRPC scheme prefix (dns:/// or unix:) based on the
+         selected transport of each endpoint, ip addresses are used
+         bare.";
+
+      list endpoint {
+        key "name";
+        description
+          "Endpoints to listen on. At least one endpoint must be
+           configured for the server to start.";
+
+        leaf name {
+          type string;
+          description
+            "Unique endpoint name.";
+        }
+
+        choice transport {
+          mandatory true;
+          description
+            "Transport parameters of the endpoint.";
+
+          container ip {
+            description
+              "Listen on an IPv4 or IPv6 address.";
+            leaf address {
+              type inet:ip-address;
+              default "127.0.0.1";
+              description
+                "IP address to listen on.";
+            }
+            leaf port {
+              type inet:port-number;
+              default 50051;
+              description
+                "Port to listen on.";
+            }
+          }
+
+          container dns {
+            description
+              "Listen on a DNS name.";
+            leaf address {
+              type inet:domain-name;
+              mandatory true;
+              description
+                "DNS name to listen on.";
+            }
+            leaf port {
+              type inet:port-number;
+              default 50051;
+              description
+                "Port to listen on.";
+            }
+          }
+
+          container unix {
+            description
+              "Listen on a Unix domain socket.";
+            leaf path {
+              type string;
+              mandatory true;
+              description
+                "Path to the socket to listen on.";
+            }
+          }
+        }
+      }
+    }
+
+    container tls {
+      presence "Indicates that TLS is configured.";
+      description
+        "TLS server configuration.
+
+         Uses the ietf-tls-server grouping (RFC 9645) which references
+         the ietf-keystore (RFC 9642) for the server identity (private
+         key + certificate) and the ietf-truststore (RFC 9641) for the
+         CA certificate bundle used to verify client certificates.";
+      uses tlss:tls-server-grouping;
+    }
+  }
+}

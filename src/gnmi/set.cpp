@@ -287,7 +287,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             paths.push_back(r.path());
         }
         // TODO add union_replace authorization
-        auth_.authorize(context, sr_sess.getContext(),
+        auth_.authorize(context, sr_sess,
                         request->has_prefix() ? std::optional(request->prefix()) : std::nullopt,
                         paths, Auth::Access::ReadWrite);
     }

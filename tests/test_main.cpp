@@ -26,11 +26,14 @@
 #include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
+#include <fstream>
 #include <grpcpp/grpcpp.h>
 #include <netinet/in.h>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <thread>
@@ -43,7 +46,6 @@
 
 #include "config.h"
 #include "test_main.h"
-#include <utils/utils.h>
 
 std::string insecure_addr;
 std::string mtls_addr;
@@ -190,58 +192,194 @@ static sysrepo::ErrorCode action_test_cb(sysrepo::Session session, uint32_t sub_
     return sysrepo::ErrorCode::Ok;
 }
 
+/**
+ * @brief Apply a complete JSON configuration to the running datastore.
+ *
+ * @param[in] sess Sysrepo session.
+ * @param[in] file JSON configuration file to apply.
+ * @param[in] sock_path Socket path to substitute for the placeholder.
+ */
+static void apply_config(sysrepo::Session &sess, const std::filesystem::path &file,
+                         const std::string &sock_path)
+{
+    std::ifstream in(file);
+    if (!in)
+    {
+        throw std::runtime_error("cannot open " + file.string());
+    }
+    std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+    // replace path to the unix socket in configuration
+    if (!sock_path.empty())
+    {
+        auto pos = data.find("@SOCKET_PATH@");
+        if (pos != std::string::npos)
+        {
+            data.replace(pos, std::string("@SOCKET_PATH@").size(), sock_path);
+        }
+    }
+
+    // apply configuration
+    auto tree = sess.getContext().parseData(data, libyang::DataFormat::JSON,
+                                            libyang::ParseOptions::ParseOnly |
+                                                libyang::ParseOptions::NoState |
+                                                libyang::ParseOptions::Strict);
+    if (!tree.has_value())
+    {
+        throw std::runtime_error("no data parsed from " + file.string());
+    }
+    sess.switchDatastore(sysrepo::Datastore::Running);
+    sess.editBatch(tree.value(), sysrepo::DefaultOperation::Replace);
+    sess.applyChanges();
+}
+
+/**
+ * @brief Create fresh repository and SHM directories for a sysrepo instance.
+ *
+ * @param[in] repo_path Path to the repository directory.
+ * @param[in] shm_path Path to the SHM directory.
+ */
+static void prepare_sysrepo_dirs(const std::string &repo_path, const std::string &shm_path)
+{
+    if (std::filesystem::exists(shm_path))
+    {
+        std::filesystem::remove_all(shm_path);
+    }
+    if (std::filesystem::exists(repo_path))
+    {
+        std::filesystem::remove_all(repo_path);
+    }
+
+    // copy the YANG modules into the repository yang dir
+    std::filesystem::path modules_dir = GNXI_SCHEMA_DIR;
+    std::filesystem::path yang_dst_dir = std::filesystem::path(repo_path) / "yang";
+    std::filesystem::create_directories(yang_dst_dir);
+    for (const auto &entry : std::filesystem::directory_iterator(modules_dir))
+    {
+        if (entry.path().extension() == ".yang")
+        {
+            std::filesystem::copy(entry.path(), yang_dst_dir / entry.path().filename(),
+                                  std::filesystem::copy_options::overwrite_existing);
+        }
+    }
+}
+
+/**
+ * @brief Install all the required modules into the repository.
+ *
+ * @param[in] sr_conn Sysrepo connection.
+ */
+static void install_test_modules(sysrepo::Connection &sr_conn)
+{
+    std::filesystem::path files_dir{TESTS_SCHEMA_DIR};
+    std::filesystem::path modules_dir{GNXI_SCHEMA_DIR};
+
+    auto make_inst = [](const std::filesystem::path &dir, const std::string &file,
+                        std::vector<std::string> features = {},
+                        std::optional<mode_t> permissions = std::nullopt)
+    {
+        sysrepo::ModuleInstallation inst;
+        inst.schema = dir / file;
+        inst.features = std::move(features);
+        if (permissions)
+        {
+            inst.permissions = *permissions;
+        }
+        return inst;
+    };
+
+    std::vector<sysrepo::ModuleInstallation> modules = {
+        make_inst(files_dir, "gnmi-server-test.yang"),
+        make_inst(files_dir, "gnmi-server-test-wine.yang"),
+        make_inst(modules_dir, "iana-tls-cipher-suite-algs@2024-03-16.yang"),
+        make_inst(modules_dir, "ietf-crypto-types@2024-10-10.yang",
+                  {"cleartext-private-keys", "one-asymmetric-key-format"}),
+        make_inst(modules_dir, "ietf-keystore@2024-10-10.yang",
+                  {"central-keystore-supported", "asymmetric-keys"}),
+        make_inst(modules_dir, "ietf-truststore@2024-10-10.yang",
+                  {"central-truststore-supported", "certificates"}),
+        make_inst(modules_dir, "ietf-tls-common@2024-10-10.yang"),
+        make_inst(modules_dir, "ietf-tls-server@2024-10-10.yang",
+                  {"server-ident-x509-cert", "client-auth-supported", "client-auth-x509-cert"}),
+        make_inst(modules_dir, "sysrepo-gnxi-server.yang", {}, 0600),
+        make_inst(modules_dir, "sysrepo-gnxi-users.yang", {}, 0600),
+    };
+    sr_conn.installModules(modules, {files_dir, modules_dir});
+}
+
 class SetupServer
 {
   public:
-    SetupServer(const std::string &test_name, bool debug = false) : debug_(debug)
+    /**
+     * @brief Launch the server subprocess for this test binary.
+     *
+     * @param[in] test_name Name of the test (for per-binary paths).
+     * @param[in] debug Wait for the user before starting the server.
+     * @param[in] secure Launch the secure (mTLS) server instead of the
+     *                   insecure one.
+     */
+    SetupServer(const std::string &test_name, bool debug = false, bool secure = false)
+        : debug_(debug), secure_(secure)
     {
-        // insecure server - per-binary paths so tests can run in parallel
-        insecure_sock_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + ".sock");
-        insecure_log_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-insecure.log");
-        std::filesystem::remove(insecure_sock_);
-        std::filesystem::remove(insecure_log_);
-        insecure_addr = "unix:" + insecure_sock_.string();
-        insecure_pid_ =
-            run_server({"-f", "-b", insecure_addr, "-l", "4"}, insecure_log_, "Insecure");
-        wait_for_unix(insecure_sock_);
+        if (secure_)
+        {
+            // the secure server reads its whole configuration (including
+            // TLS) from sysrepo, so it must be written to the repository
+            // before the launch
+            log_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-mtls.log");
+            std::filesystem::remove(log_);
+            mtls_addr = std::string(HOST) + ":" + std::to_string(PORT);
 
-#ifdef AUTH_MTLS_ENABLED
-        // secure server is listening on 127.0.0.1:50052
-        mtls_log_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-mtls.log");
-        std::filesystem::remove(mtls_log_);
-        mtls_addr = std::string(HOST) + ":" + std::to_string(PORT);
-        std::filesystem::path dir = TESTS_SCHEMA_DIR;
-        mtls_pid_ = run_server({"-k", (dir / "server.key").string(), "-c",
-                                (dir / "server.crt").string(), "-r", (dir / "ca.crt").string(),
-                                "-u", (dir / "users.json").string(), "-b", mtls_addr, "-l", "4"},
-                               mtls_log_, "mTLS");
-        wait_for_tcp(HOST, PORT);
-#endif
+            apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "secure.json", "");
+            server_pid_ = run_server({"-l", "4"}, log_.string(), "mTLS");
+        }
+        else
+        {
+            // insecure server - per-binary paths so tests can run in parallel
+            sock_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + ".sock");
+            log_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-insecure.log");
+            std::filesystem::remove(sock_);
+            std::filesystem::remove(log_);
+            insecure_addr = "unix:" + sock_.string();
+
+            apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json",
+                         sock_.string());
+            server_pid_ = run_server({"-f", "-l", "4"}, log_.string(), "Insecure");
+        }
+    }
+
+    /**
+     * @brief Wait for the launched server to become ready.
+     *
+     * @throws std::runtime_error if the server does not start listening
+     *         within the timeout.
+     */
+    void wait_ready()
+    {
+        if (secure_)
+        {
+            wait_for_tcp(HOST, PORT);
+        }
+        else
+        {
+            wait_for_unix(sock_.string());
+        }
     }
 
     ~SetupServer()
     {
-        stop(insecure_pid_);
-        std::filesystem::remove(insecure_sock_);
-        std::filesystem::remove(insecure_log_);
-
-#ifdef AUTH_MTLS_ENABLED
-        stop(mtls_pid_);
-        std::filesystem::remove(mtls_log_);
-#endif
+        stop(server_pid_);
+        // the log is kept
     }
 
   private:
-    pid_t insecure_pid_ = -1;
-    std::filesystem::path insecure_sock_;
-    std::filesystem::path insecure_log_;
-#ifdef AUTH_MTLS_ENABLED
-    pid_t mtls_pid_ = -1;
+    pid_t server_pid_ = -1;
+    std::filesystem::path sock_;
+    std::filesystem::path log_;
     static constexpr const char *HOST = "127.0.0.1";
     static constexpr uint16_t PORT = 50052;
-    std::filesystem::path mtls_log_;
-#endif
     bool debug_;
+    bool secure_;
 
     /**
      * @brief Stop process by killing it and waiting for it.
@@ -410,20 +548,14 @@ class SetupSysrepo
     SetupSysrepo()
     {
         auto sr_conn = sysrepo::Connection();
-        std::filesystem::path files_dir{TESTS_SCHEMA_DIR};
-        std::filesystem::path path1 = files_dir / "gnmi-server-test.yang";
-        std::filesystem::path path2 = files_dir / "gnmi-server-test-wine.yang";
-        std::vector<struct sysrepo::ModuleInstallation> modules = {{.schema = path1},
-                                                                   {.schema = path2}};
-
-        // install yang modules
-        sr_conn.installModules(modules, {files_dir});
+        install_test_modules(sr_conn);
 
         sr_sess = sr_conn.sessionStart();
 
         sub = sr_sess->onModuleChange("gnmi-server-test", module_change_cb,
                                       "/gnmi-server-test:test2/custom-error");
 
+        // operational data for the Get/Subscribe tests
         sr_sess->switchDatastore(sysrepo::Datastore::Operational);
         sr_sess->setItem("/gnmi-server-test:test-state/things[name='A']", std::nullopt);
         sr_sess->setItem("/gnmi-server-test:test-state/things[name='B']", std::nullopt);
@@ -440,10 +572,7 @@ class SetupSysrepo
 
     ~SetupSysrepo()
     {
-        fprintf(stderr, "Removing sysrepo data\n");
         sub.reset();
-        sr_sess->getConnection().removeModules({"gnmi-server-test", "gnmi-server-test-wine"},
-                                               sysrepo::ModuleRemoval::WithDependencies);
         // don't hold onto sr_sess forever.
         sr_sess.reset();
     }
@@ -471,23 +600,8 @@ class SetupTests
 
         // namespace per-binary so tests can run in parallel
         repo_path = std::string(TESTS_WORKING_DIR) + "/" + test_name + "-repository";
-        sr_shm_path = "/dev/shm/gnmi-server-test-" + test_name;
-
-        if (std::filesystem::exists(repo_path))
-        {
-            std::filesystem::remove_all(repo_path);
-        }
-        if (std::filesystem::exists(sr_shm_path))
-        {
-            std::filesystem::remove_all(sr_shm_path);
-        }
-
-        // copy the userDB YANG file into the per-binary repo
-        std::filesystem::path yang_dst =
-            std::filesystem::path(repo_path) / "yang" / "sysrepo-gnxi-users.yang";
-        std::filesystem::create_directories(yang_dst.parent_path());
-        std::filesystem::copy(std::filesystem::path(GNXI_SCHEMA_DIR) / "sysrepo-gnxi-users.yang",
-                              yang_dst, std::filesystem::copy_options::overwrite_existing);
+        sr_shm_path = std::string(TESTS_WORKING_DIR) + "/" + test_name + "-shm";
+        prepare_sysrepo_dirs(repo_path, sr_shm_path);
 
         if (setenv("SYSREPO_REPOSITORY_PATH", repo_path.c_str(), 0))
         {
@@ -512,16 +626,6 @@ class SetupTests
                 "Running tests with \nSYSREPO_REPOSITORY_PATH=%s\n"
                 "SYSREPO_SHM_DIR=%s\nSR_ENV_RUN_TESTS=1\n",
                 repo_path.c_str(), sr_shm_path.c_str());
-    }
-
-    ~SetupTests()
-    {
-        fprintf(stderr, "Removing test directories\n");
-        if (!repo_path.empty())
-        {
-            std::filesystem::remove_all(repo_path);
-            std::filesystem::remove_all(sr_shm_path);
-        }
     }
 
   private:
@@ -553,18 +657,34 @@ int main(int argc, char *argv[])
     std::filesystem::path test_path(argv[0]);
     std::string test_name = test_path.stem().string();
 
-    SetupTests _setup_tests(test_name);
-    SetupSysrepo _setup_sysrepo;
-    SetupServer _setup_server(test_name, debug);
+    try
+    {
+        SetupTests _setup_tests(test_name);
+        SetupSysrepo _setup_sysrepo;
 
-    auto main_channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
-    main_channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
-    gnmi_client = gnmi::gNMI::NewStub(main_channel);
+#ifdef AUTH_MTLS_ENABLED
+        // this binary tests the secure (mTLS) server
+        SetupServer _setup_server(test_name, debug, true);
+        _setup_server.wait_ready();
+#else
+        SetupServer _setup_server(test_name, debug, false);
+        _setup_server.wait_ready();
+
+        auto main_channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
+        main_channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
+        gnmi_client = gnmi::gNMI::NewStub(main_channel);
 #ifdef GNXI_SERVICE_ENABLED
-    gnxi_client = yang_rpc::YANG_RPC::NewStub(main_channel);
+        gnxi_client = yang_rpc::YANG_RPC::NewStub(main_channel);
+#endif
 #endif
 
-    result = Catch::Session().run(argc, argv);
+        result = Catch::Session().run(argc, argv);
+    }
+    catch (const std::exception &exc)
+    {
+        fprintf(stderr, "Test setup failed: %s\n", exc.what());
+        result = EXIT_FAILURE;
+    }
 
     return result;
 }

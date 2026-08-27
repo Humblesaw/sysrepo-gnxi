@@ -27,6 +27,7 @@
 #include "rpc.h"
 #include <sysrepo-cpp/utils/exception.hpp>
 #include <utils/log.h>
+#include <utils/sysrepo.h>
 #include <utils/utils.h>
 
 namespace impl
@@ -36,7 +37,27 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
 {
     try
     {
+        // an invoked RPC/action must be identified by its path
+        if (request->path().elem_size() == 0)
+        {
+            SLOG_WARN("Rpc error: no path provided");
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "no path provided");
+        }
+
         auto xpath = gnmi_to_xpath(request->path());
+
+        // reject any access to private modules
+        auto mods = collect_xpath_mods(sr_sess.getContext(), xpath.c_str());
+        for (const auto &mod : mods)
+        {
+            if (isPrivateModule(mod))
+            {
+                SLOG_WARN("RPC access denied to private module '", mod, "'");
+                return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                                    "Access to module '" + mod + "' is forbidden.");
+            }
+        }
+
         auto [status, input_node] = encodef->decode(xpath, request->input(), EncodePurpose::Rpc);
         if (!status.ok())
         {
