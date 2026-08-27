@@ -21,35 +21,27 @@
 
 #include <cstdlib>
 #include <exception>
-#include <filesystem>
-#include <fstream>
 #include <getopt.h>
 #include <iostream>
-#include <libyang-cpp/Enum.hpp>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
-#include <libyang-cpp/Context.hpp>
-#include <libyang-cpp/DataNode.hpp>
-#include <libyang/libyang.h>
-#include <libyang/parser_schema.h>
-#include <sysrepo.h>
 #include <sysrepo-cpp/Connection.hpp>
 #include <sysrepo-cpp/Session.hpp>
 
 #include "security/hash.h"
+#include "utils/utils.h"
 
 const char *USAGE = R"(Usage:
-  sysrepo-gnxi-users add --db FILE --name NAME --password PASS [--hash ALGO]
-                         [--rm MOD[,MOD...]] [--ro MOD[,MOD...]] [--rw MOD[,MOD...]]
-  sysrepo-gnxi-users edit --db FILE --name NAME [--password PASS [--hash ALGO]]
-                           [--rm MOD[,MOD...]] [--ro MOD[,MOD...]] [--rw MOD[,MOD...]]
-  sysrepo-gnxi-users remove --db FILE --name NAME
+  sysrepo-gnxi-users add --name NAME --password PASS [--hash ALGO]
+                        [--rm MOD[,MOD...]] [--ro MOD[,MOD...]] [--rw MOD[,MOD...]]
+  sysrepo-gnxi-users edit --name NAME [--password PASS [--hash ALGO]]
+                          [--rm MOD[,MOD...]] [--ro MOD[,MOD...]] [--rw MOD[,MOD...]]
+  sysrepo-gnxi-users remove --name NAME
 
 Options:
-  -d,--db FILE        user database JSON file (created by 'add' if missing)
   -n,--name NAME      username ([a-zA-Z0-9_-]+)
   -p,--password PASS  password
   -s,--hash ALGO      digest algorithm: md5, sha1, sha224, sha256, sha384,
@@ -66,6 +58,9 @@ Options:
                       or '*' for all modules currently installed in sysrepo
 
 The order of operations in add/edit mode is following: 1. --rm, 2. --ro, 3. --rw.
+
+The user database is stored in sysrepo under
+/sysrepo-gnxi-users:users and is protected by filesystem permissions.
 )";
 
 /**
@@ -74,7 +69,7 @@ The order of operations in add/edit mode is following: 1. --rm, 2. --ro, 3. --rw
  */
 struct Options
 {
-    std::string command, db, name, password, hash;
+    std::string command, name, password, hash;
     std::vector<std::string> rm_mods, ro_mods, rw_mods;
 };
 
@@ -133,25 +128,18 @@ Options parse_args(int argc, char *argv[])
         std::exit(-1);
     }
 
-    static struct option long_options[] = {{"db", required_argument, 0, 'd'},
-                                           {"name", required_argument, 0, 'n'},
-                                           {"password", required_argument, 0, 'p'},
-                                           {"hash", required_argument, 0, 's'},
-                                           {"rm", required_argument, 0, 'x'},
-                                           {"ro", required_argument, 0, 'r'},
-                                           {"rw", required_argument, 0, 'w'},
-                                           {"help", no_argument, 0, 'h'},
-                                           {0, 0, 0, 0}};
+    static struct option long_options[] = {
+        {"name", required_argument, 0, 'n'}, {"password", required_argument, 0, 'p'},
+        {"hash", required_argument, 0, 's'}, {"rm", required_argument, 0, 'x'},
+        {"ro", required_argument, 0, 'r'},   {"rw", required_argument, 0, 'w'},
+        {"help", no_argument, 0, 'h'},       {0, 0, 0, 0}};
 
     optind = 2; // skip program name and command
     int c;
-    while ((c = getopt_long(argc, argv, "d:n:p:s:x:r:w:h", long_options, nullptr)) != -1)
+    while ((c = getopt_long(argc, argv, "n:p:s:x:r:w:h", long_options, nullptr)) != -1)
     {
         switch (c)
         {
-        case 'd':
-            opts.db = optarg;
-            break;
         case 'n':
             opts.name = optarg;
             break;
@@ -180,9 +168,9 @@ Options parse_args(int argc, char *argv[])
         }
     }
 
-    if (opts.db.empty() || opts.name.empty())
+    if (opts.name.empty())
     {
-        std::cerr << "Missing --db or --name\n\n" << USAGE;
+        std::cerr << "Missing --name\n\n" << USAGE;
         std::exit(-1);
     }
     if (opts.command == "add" && opts.password.empty())
@@ -206,64 +194,6 @@ Options parse_args(int argc, char *argv[])
 }
 
 /**
- * @brief Retrieve libyang context.
- *
- * @return Libyang context.
- */
-const libyang::Context make_ctx()
-{
-    // find the installed YANG module via the sysrepo repository path
-    std::filesystem::path yang_dir = std::filesystem::path(sr_get_repo_path()) / "yang";
-    libyang::Context ctx(yang_dir, libyang::ContextOptions::NoYangLibrary);
-    ctx.loadModule("sysrepo-gnxi-users");
-    ly_log_level(LY_LLERR); // keep the CLI quiet
-    return ctx;
-}
-
-/**
- * @brief Load or create database.
- *
- * @param[in] ctx Libyang context.
- * @param[in] db_path Path to the database file.
- * @return Libyang data tree representing the database.
- */
-libyang::DataNode load_or_create_db(libyang::Context &ctx, const std::string &db_path)
-{
-    if (std::filesystem::exists(db_path))
-    {
-        auto tree = ctx.parseData(std::filesystem::path(db_path), libyang::DataFormat::JSON);
-        if (!tree.has_value())
-        {
-            throw std::runtime_error("no top-level data in " + db_path);
-        }
-        return std::move(tree.value());
-    }
-    // create an empty users container
-    return ctx.newPath("/sysrepo-gnxi-users:users");
-}
-
-/**
- * @brief Find user in the database.
- *
- * @param[in] root Database to use.
- * @param[in] name Username to find.
- * @return User node, nullopt if not found.
- */
-std::optional<libyang::DataNode> find_user(libyang::DataNode &root, const std::string &name)
-{
-    auto users = root.findXPath("/sysrepo-gnxi-users:users/user");
-    for (auto user : users)
-    {
-        auto node = user.findPath("name");
-        if (node.has_value() && node->asTerm().valueStr() == name)
-        {
-            return user;
-        }
-    }
-    return std::nullopt;
-}
-
-/**
  * @brief Return hash for the password or the password.
  *
  * @param[in] opts Command line options (password and hash algorithm to use).
@@ -279,18 +209,18 @@ std::string compute_stored_password(const Options &opts)
 }
 
 /**
- * @brief Get all of the module names inside sysrepo.
+ * @brief Get all of the module names inside sysrepo, excluding private and
+ * internal modules.
  *
  * @return Sysrepo module names.
  */
 std::vector<std::string> sysrepo_modules()
 {
     sysrepo::Connection conn;
-    ly_log_level(LY_LLERR); // keep the CLI quiet
     std::vector<std::string> result;
     for (const auto &mod : conn.sessionStart().getContext().modules())
     {
-        if (mod.implemented() && mod.name() != "sysrepo")
+        if (mod.implemented() && mod.name() != "sysrepo" && !isPrivateModule(mod.name()))
         {
             result.push_back(mod.name());
         }
@@ -299,57 +229,48 @@ std::vector<std::string> sysrepo_modules()
 }
 
 /**
- * @brief Unlink @p modules nodes.
+ * @brief Check if a user exists in the sysrepo user database.
  *
- * @param[in] modules Nodes to unlink.
+ * @param[in] sess Sysrepo session.
+ * @param[in] name Username to check.
+ * @return True if user exists.
  */
-void unlink_modules(const libyang::Set<libyang::DataNode> &modules)
+bool user_exists(sysrepo::Session &sess, const std::string &name)
 {
-    std::vector<libyang::DataNode> to_unlink;
-    for (auto entry : modules)
-    {
-        to_unlink.push_back(entry);
-    }
-    for (auto &entry : to_unlink)
-    {
-        entry.unlink();
-    }
+    auto data = sess.getData("/sysrepo-gnxi-users:users/user[name='" + name + "']");
+    return data.has_value();
 }
 
 /**
  * @brief Set permissions for the @name user.
  *
- * @param[in] root Database to use.
+ * @param[in] sess Sysrepo session.
  * @param[in] name Username to change permissions for.
  * @param[in] opts Command line options (read/write permissions).
  */
-void set_acl(libyang::DataNode &root, const std::string &name, const Options &opts)
+void set_acl(sysrepo::Session &sess, const std::string &name, const Options &opts)
 {
+    std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + name + "']";
+
     // 1. remove specified modules from the ACL
     if (!opts.rm_mods.empty())
     {
         if (opts.rm_mods[0] == "*")
         {
-            unlink_modules(
-                root.findXPath("/sysrepo-gnxi-users:users/user[name='" + name + "']/acl"));
+            sess.deleteItem(user_path + "/acl");
         }
         else
         {
             for (const auto &m : opts.rm_mods)
             {
-                unlink_modules(root.findXPath("/sysrepo-gnxi-users:users/user[name='" + name +
-                                              "']/acl[module='" + m + "']"));
+                sess.deleteItem(user_path + "/acl[module='" + m + "']");
             }
         }
     }
 
     // 2. add read-only/read-write modules
     auto add_acl = [&](const std::string &module, const char *access)
-    {
-        root.newPath("/sysrepo-gnxi-users:users/user[name='" + name + "']/acl[module='" + module +
-                         "']/access",
-                     access, libyang::CreationOptions::Update);
-    };
+    { sess.setItem(user_path + "/acl[module='" + module + "']/access", access); };
     if (!opts.ro_mods.empty())
     {
         for (const auto &m : opts.ro_mods[0] == "*" ? sysrepo_modules() : opts.ro_mods)
@@ -367,56 +288,25 @@ void set_acl(libyang::DataNode &root, const std::string &name, const Options &op
 }
 
 /**
- * @brief Save the database.
- *
- * @param[in] root Database to save.
- * @param[in] db_path Path to the save file.
- */
-void save_database(libyang::DataNode &root, const std::string &db_path)
-{
-    auto json = root.printStr(libyang::DataFormat::JSON, libyang::PrintFlags::Siblings);
-    if (!json.has_value())
-    {
-        throw std::runtime_error("Failed to serialize user database");
-    }
-
-    auto tmp_path = db_path + ".tmp";
-    {
-        std::ofstream ofs(tmp_path, std::ios::trunc);
-        if (!ofs)
-        {
-            throw std::runtime_error("Cannot open file for writing: " + tmp_path);
-        }
-        ofs << json.value();
-        if (!ofs.good())
-        {
-            throw std::runtime_error("Failed to write user database: " + tmp_path);
-        }
-    }
-
-    std::filesystem::rename(tmp_path, db_path);
-}
-
-/**
  * @brief Add a new user to the database.
  *
  * @param[in] opts Command line options.
  */
 void cmd_add(const Options &opts)
 {
-    auto ctx = make_ctx();
-    auto root = load_or_create_db(ctx, opts.db);
+    sysrepo::Connection conn;
+    auto sess = conn.sessionStart(sysrepo::Datastore::Running);
 
-    if (find_user(root, opts.name).has_value())
+    if (user_exists(sess, opts.name))
     {
         throw std::runtime_error("User '" + opts.name + "' already exists");
     }
 
-    root.newPath("/sysrepo-gnxi-users:users/user[name='" + opts.name + "']/password",
-                 compute_stored_password(opts));
-    set_acl(root, opts.name, opts);
-    save_database(root, opts.db);
-    std::cout << "User '" << opts.name << "' added to " << opts.db << "\n";
+    std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + opts.name + "']";
+    sess.setItem(user_path + "/password", compute_stored_password(opts));
+    set_acl(sess, opts.name, opts);
+    sess.applyChanges();
+    std::cout << "User '" << opts.name << "' added to sysrepo\n";
 }
 
 /**
@@ -426,23 +316,22 @@ void cmd_add(const Options &opts)
  */
 void cmd_edit(const Options &opts)
 {
-    auto ctx = make_ctx();
-    auto root = load_or_create_db(ctx, opts.db);
+    sysrepo::Connection conn;
+    auto sess = conn.sessionStart(sysrepo::Datastore::Running);
 
-    if (!find_user(root, opts.name).has_value())
+    if (!user_exists(sess, opts.name))
     {
-        throw std::runtime_error("User '" + opts.name + "' not found in " + opts.db);
+        throw std::runtime_error("User '" + opts.name + "' not found in sysrepo");
     }
 
+    std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + opts.name + "']";
     if (!opts.password.empty())
     {
-        // replace the password leaf
-        root.newPath("/sysrepo-gnxi-users:users/user[name='" + opts.name + "']/password",
-                     compute_stored_password(opts), libyang::CreationOptions::Update);
+        sess.setItem(user_path + "/password", compute_stored_password(opts));
     }
-    set_acl(root, opts.name, opts);
-    save_database(root, opts.db);
-    std::cout << "User '" << opts.name << "' updated in " << opts.db << "\n";
+    set_acl(sess, opts.name, opts);
+    sess.applyChanges();
+    std::cout << "User '" << opts.name << "' updated in sysrepo\n";
 }
 
 /**
@@ -452,18 +341,17 @@ void cmd_edit(const Options &opts)
  */
 void cmd_remove(const Options &opts)
 {
-    auto ctx = make_ctx();
-    auto root = load_or_create_db(ctx, opts.db);
-    auto user = find_user(root, opts.name);
+    sysrepo::Connection conn;
+    auto sess = conn.sessionStart(sysrepo::Datastore::Running);
 
-    if (!user.has_value())
+    if (!user_exists(sess, opts.name))
     {
-        throw std::runtime_error("User '" + opts.name + "' not found in " + opts.db);
+        throw std::runtime_error("User '" + opts.name + "' not found in sysrepo");
     }
 
-    user->unlink();
-    save_database(root, opts.db);
-    std::cout << "User '" << opts.name << "' removed from " << opts.db << "\n";
+    sess.deleteItem("/sysrepo-gnxi-users:users/user[name='" + opts.name + "']");
+    sess.applyChanges();
+    std::cout << "User '" << opts.name << "' removed from sysrepo\n";
 }
 
 int main(int argc, char *argv[])

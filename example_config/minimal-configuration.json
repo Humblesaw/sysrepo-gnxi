@@ -1,0 +1,15 @@
+{
+  "sysrepo-gnxi-server:server": {
+    "listen": {
+      "endpoint": [
+        {
+          "name": "main",
+          "ip": {
+            "address": "127.0.0.1",
+            "port": 50051
+          }
+        }
+      ]
+    }
+  }
+}

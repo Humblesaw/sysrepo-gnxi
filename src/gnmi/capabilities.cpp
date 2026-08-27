@@ -25,6 +25,7 @@
 
 #include "gnmi.h"
 #include "utils/log.h"
+#include "utils/utils.h"
 
 grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
                                        const gnmi::CapabilityRequest *request,
@@ -45,7 +46,7 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
 
         for (auto module : sess.getContext().modules())
         {
-            if (module.implemented())
+            if (module.implemented() && !isPrivateModule(module.name()))
             {
                 auto model = response->add_supported_models();
                 model->set_name(module.name());

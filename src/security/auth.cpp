@@ -21,75 +21,50 @@
  * limitations under the License.
  */
 
-#include <filesystem>
-#include <libyang-cpp/Enum.hpp>
 #include <stdexcept>
-
-#include <libyang/parser_schema.h>
-#include <sysrepo.h>
 
 #include <proto/gnmi.grpc.pb.h>
 
 #include "utils/log.h"
 #include "utils/sysrepo.h"
+#include "utils/utils.h"
 
 #include "auth.h"
 #include "hash.h"
-#include "utils/utils.h"
 
-void Auth::loadUserDB()
+Auth::Auth(bool insecure, sysrepo::Connection conn, const TlsMaterial &tls) : insecure_(insecure)
 {
-    const std::lock_guard<std::mutex> lock(mutex_);
-
-    try
-    {
-        // create a standalone context with only the userDB module loaded
-        // find the YANG file via the sysrepo repository path
-        std::filesystem::path yang_dir = std::filesystem::path(sr_get_repo_path()) / "yang";
-        ctx_.emplace(yang_dir, libyang::ContextOptions::NoYangLibrary);
-        ctx_->loadModule("sysrepo-gnxi-users");
-        user_db_ = ctx_->parseData(std::filesystem::path(user_db_path), libyang::DataFormat::JSON);
-        if (!user_db_.has_value())
-        {
-            throw;
-        }
-        SLOG_INFO("User database loaded from ", user_db_path);
-    }
-    catch (const std::exception &exc)
-    {
-        SLOG_FATAL("Failed to load user database from ", user_db_path, ": ", exc.what());
-        throw std::runtime_error("failed to load the users database");
-    }
-}
-
-std::shared_ptr<grpc::ServerCredentials> Auth::init()
-{
-    if (insecure)
+    if (insecure_)
     {
         SLOG_INFO("Insecure authentication");
-        return grpc::InsecureServerCredentials();
+        credentials_ = grpc::InsecureServerCredentials();
+        return;
     }
-    else if (!private_key_path.empty() && !cert_path.empty() && !root_cert_path.empty() &&
-             !user_db_path.empty())
+
+    if (tls.private_key_pem.empty() || tls.certificate_pem.empty() ||
+        tls.ca_certificate_pem.empty())
     {
-        SLOG_INFO("Mutual TLS authentication");
-        loadUserDB();
-        grpc::SslServerCredentialsOptions ssl_opts;
-        ssl_opts.client_certificate_request =
-            GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;
-        ssl_opts.pem_key_cert_pairs.push_back(
-            {get_file_content(private_key_path), get_file_content(cert_path)});
-        ssl_opts.pem_root_certs = get_file_content(root_cert_path);
-        auto cred = grpc::SslServerCredentials(ssl_opts);
-        cred->SetAuthMetadataProcessor(std::make_shared<UserPassAuthenticator>(*this));
-        return cred;
+        SLOG_FATAL("Incomplete TLS configuration: private key, certificate, or CA bundle "
+                   "is empty. Ensure the server configuration, keystore, and truststore are "
+                   "properly configured in sysrepo.");
+        throw std::runtime_error("incomplete TLS configuration");
     }
-    else
-    {
-        SLOG_FATAL("Unsupported authentication method. Use insecure mode or provide "
-                   "private key, certificate, CA certificate and a user database.");
-        throw std::runtime_error("unsupported authentication method");
-    }
+
+    SLOG_INFO("Mutual TLS authentication");
+    grpc::SslServerCredentialsOptions ssl_opts;
+    ssl_opts.client_certificate_request =
+        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;
+    ssl_opts.pem_key_cert_pairs.push_back({tls.private_key_pem, tls.certificate_pem});
+    ssl_opts.pem_root_certs = tls.ca_certificate_pem;
+    credentials_ = grpc::SslServerCredentials(ssl_opts);
+    // the metadata processor authenticates before an RPC sysrepo session exists
+    credentials_->SetAuthMetadataProcessor(
+        std::make_shared<UserPassAuthenticator>(*this, std::move(conn)));
+}
+
+std::shared_ptr<grpc::ServerCredentials> Auth::credentials() const
+{
+    return credentials_;
 }
 
 std::string Auth::username(grpc::ServerContext *ctx) const
@@ -108,17 +83,24 @@ std::string Auth::username(grpc::ServerContext *ctx) const
     return std::string(vals[0].data(), vals[0].length());
 }
 
-void Auth::authenticate(const std::string &username, const std::string &password) const
+void Auth::authenticate(sysrepo::Session &sess, const std::string &username,
+                        const std::string &password) const
 {
-    const std::lock_guard<std::mutex> lock(mutex_);
-
     // insecure mode == no authentication
-    if (insecure)
+    if (insecure_)
     {
         return;
     }
 
-    auto users = user_db_->findXPath("/sysrepo-gnxi-users:users/user");
+    // read the user database live from sysrepo
+    auto data = sess.getData("/sysrepo-gnxi-users:users");
+    if (!data.has_value())
+    {
+        throw std::runtime_error("no user database found in sysrepo "
+                                 "(/sysrepo-gnxi-users:users)");
+    }
+
+    auto users = data->findXPath("user");
     for (const auto &user : users)
     {
         auto name = user.findPath("name");
@@ -144,16 +126,22 @@ void Auth::authenticate(const std::string &username, const std::string &password
     throw std::runtime_error("user not found");
 }
 
-void Auth::authorize(const std::string &username, const std::unordered_set<std::string> &modules,
-                     Access permission) const
+void Auth::authorize(sysrepo::Session &sess, const std::string &username,
+                     const std::unordered_set<std::string> &modules, Access permission) const
 {
-    const std::lock_guard<std::mutex> lock(mutex_);
-
     size_t modules_authorized = 0;
 
     try
     {
-        auto users = user_db_->findXPath("/sysrepo-gnxi-users:users/user");
+        // read the user database live from sysrepo
+        auto data = sess.getData("/sysrepo-gnxi-users:users");
+        if (!data.has_value())
+        {
+            throw std::runtime_error("no user database found in sysrepo "
+                                     "(/sysrepo-gnxi-users:users)");
+        }
+
+        auto users = data->findXPath("user");
         for (const auto &user : users)
         {
             auto name = user.findPath("name");
@@ -221,12 +209,12 @@ void Auth::authorize(const std::string &username, const std::unordered_set<std::
     }
 }
 
-void Auth::authorize(grpc::ServerContext *ctx, const libyang::Context &ly_ctx,
+void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
                      const std::optional<gnmi::Path> &prefix, const std::vector<gnmi::Path> &paths,
                      Access permission) const
 {
     // insecure mode == no authorization
-    if (insecure)
+    if (insecure_)
     {
         return;
     }
@@ -262,8 +250,22 @@ void Auth::authorize(grpc::ServerContext *ctx, const libyang::Context &ly_ctx,
 
     for (const auto &xpath : xpaths)
     {
-        // authorization of per XPath modules
-        authorize(name, collect_xpath_mods(ly_ctx, xpath.c_str()), permission);
+        auto mods = collect_xpath_mods(sess.getContext(), xpath.c_str());
+
+        // reject any access to private modules
+        for (const auto &mod : mods)
+        {
+            if (isPrivateModule(mod))
+            {
+                SLOG_WARN("Authorization failed (private module): User ", name,
+                          " attempted access to private module '", mod, "'.");
+                throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                                   "Access to module '" + mod + "' is forbidden.");
+            }
+        }
+
+        // authorize the remaining modules against the user's ACL
+        authorize(sess, name, mods, permission);
     }
 }
 
@@ -292,7 +294,9 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
 
     try
     {
-        auth_.authenticate(username, password);
+        // no RPC session exists at this point, authenticate with a fresh one
+        auto sess = conn_.sessionStart(sysrepo::Datastore::Running);
+        auth_.authenticate(sess, username, password);
     }
     catch (const std::exception &exc)
     {

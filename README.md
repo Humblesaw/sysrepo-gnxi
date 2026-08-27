@@ -33,7 +33,7 @@ A C++ server based on [gNMI specification](https://github.com/openconfig/referen
 
 The server supports two connection modes: **insecure connection** and **mTLS connection with username/password authentication/authorization**.
 Insecure mode does not provide any encryption of the server/client communication and no authentication/authorization of any sorts, therefore it should only be used in fully secure environments.
-Secure mode follows the gNMI specification and requires both the server and client to authenticate via certificate. On top of that the spec requires that the client authenticates using a username and password. The server checks them against a user JSON database which is provided as an argument when the server is started. Furthermore each user inside this database can have read-only and/or read-write access to multiple sysrepo modules. The server then checks each request and decides whether the particular user has the right to execute specific RPC. Rpc RPC does not need to be authorized, but since you can run any rpc or action on the server side via this, it can effectively overwrite data of any module and therefore bypass all authorization rules.
+Secure mode follows the gNMI specification and requires both the server and client to authenticate via certificate. On top of that the spec requires that the client authenticates using a username and password. The server checks them against the users stored inside the server configuration in sysrepo. Furthermore each user inside this database can have read-only and/or read-write access to multiple sysrepo modules. The server then checks each request and decides whether the particular user has the right to execute specific RPC. Rpc RPC does not need to be authorized, but since you can run any rpc or action on the server side via this, it can effectively overwrite data of any module and therefore bypass all authorization rules.
 
 | RPC          | Required privilege (per module in RPC)                    |
 |--------------|-----------------------------------------------------------|
@@ -57,6 +57,8 @@ Secure mode follows the gNMI specification and requires both the server and clie
 
 ## Build & Install
 
+During install all necessary YANG modules are installed to sysrepo and if sysrepo does not contain any sysrepo-gnxi server configuration, the minimal configuration is stored and used. The minimal configuration can be found in `example_config/minimal-configuration.json` and the setup script executed during install in `scripts/setup.sh`.
+
 ```
 mkdir -p build && cd build
 cmake ..
@@ -77,19 +79,21 @@ sudo docker run -it ubuntu26
 
 - **INSECURE mode (no TLS connection & no username/password authentication/authorization):**
 ```
-sysrepo-gnxi -f -b 127.0.0.1:50051
+sysrepo-gnxi -f
 gnmic capabilities --insecure -a 127.0.0.1 --port 50051
 ```
 
 - **mTLS connection & username/password authentication/authorization:**
 ```
-sysrepo-gnxi -k example_config/server.key -c example_config/server.crt -r example_config/ca.crt -u example_config/users.json -b 127.0.0.1:50051
+sysrepo-gnxi
 gnmic capabilities --tls-key example_config/client.key --tls-cert example_config/client.crt --tls-ca example_config/ca.crt -u admin -p admin -a 127.0.0.1 --port 50051
 ```
 
-## User JSON database utility
+To run the server in secure mode, you have to edit the server configuration using e.g. `sysrepocfg`. An example of possible configuration can be found in `example_config/configuration.json`.
 
-To correctly populate the user database which is sent to the server via `-u/--userdb` argument you can use the `sysrepo-gnxi-users` utility.
+## Users (ACL) utility
+
+To correctly populate the users which are stored in sysrepo you can use the `sysrepo-gnxi-users` utility.
 
 ## Clients
 

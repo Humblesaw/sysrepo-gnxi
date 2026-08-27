@@ -879,7 +879,7 @@ Subscribe::run(grpc::ServerContext *context,
             paths.push_back(s.path());
         }
 
-        auth_.authorize(context, sr_sess.getContext(),
+        auth_.authorize(context, sr_sess,
                         request.subscribe().has_prefix()
                             ? std::optional(request.subscribe().prefix())
                             : std::nullopt,

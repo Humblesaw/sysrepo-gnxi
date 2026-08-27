@@ -31,7 +31,8 @@
 
 #include <libyang-cpp/Context.hpp>
 #include <libyang-cpp/DataNode.hpp>
-#include <libyang/parser_schema.h>
+#include <sysrepo-cpp/Connection.hpp>
+#include <sysrepo-cpp/Session.hpp>
 
 #include "config.h"
 
@@ -39,23 +40,40 @@ using Catch::Matchers::Matches;
 
 /**
  * @brief Fixture: removes all temporary files and provides helpers for running and testing the
- * sysrepo-gnxi-users binary and the JSON file database.
+ * sysrepo-gnxi-users binary against the sysrepo user database.
  *
  */
 class UsersFixture
 {
   public:
     static std::filesystem::path log;
-    static std::filesystem::path db;
     UsersFixture()
     {
         std::filesystem::remove_all(log);
-        std::filesystem::remove_all(db);
+        // clean up any existing user data in sysrepo
+        try
+        {
+            auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
+            sess.deleteItem("/sysrepo-gnxi-users:users");
+            sess.applyChanges();
+        }
+        catch (...)
+        {
+        }
     };
     ~UsersFixture()
     {
         std::filesystem::remove_all(log);
-        std::filesystem::remove_all(db);
+        // clean up user data after tests
+        try
+        {
+            auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
+            sess.deleteItem("/sysrepo-gnxi-users:users");
+            sess.applyChanges();
+        }
+        catch (...)
+        {
+        }
     };
 
     // run the sysrepo-gnxi-users CLI binary as a subprocess
@@ -101,18 +119,16 @@ class UsersFixture
         return -1;
     }
 
-    // get user database root node
+    // get user database root node from sysrepo
     libyang::DataNode get_db(void)
     {
-        libyang::Context ctx(ly_yang_module_dir(), libyang::ContextOptions::NoYangLibrary);
-        ctx.parseModule(std::filesystem::path(GNXI_SCHEMA_DIR) / "sysrepo-gnxi-users.yang",
-                        libyang::SchemaFormat::YANG);
-        auto tree = ctx.parseData(UsersFixture::db, libyang::DataFormat::JSON);
-        if (!tree.has_value())
+        auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
+        auto data = sess.getData("/sysrepo-gnxi-users:users");
+        if (!data.has_value())
         {
-            throw std::runtime_error("no data in " + UsersFixture::db.string());
+            throw std::runtime_error("no user database in sysrepo");
         }
-        return std::move(tree.value());
+        return std::move(data.value());
     }
 
     // get user with a specific name
@@ -139,18 +155,36 @@ class UsersFixture
         }
         return password->asTerm().valueStr();
     }
+
+    // check if any users exist in the database
+    bool db_empty(void)
+    {
+        try
+        {
+            auto root = get_db();
+            auto users = root.findXPath("/sysrepo-gnxi-users:users/user");
+            for (auto u : users)
+            {
+                (void)u;
+                return false;
+            }
+            return true;
+        }
+        catch (...)
+        {
+            return true;
+        }
+    }
 };
 
 std::filesystem::path UsersFixture::log =
     std::filesystem::path(TESTS_WORKING_DIR) / "test-users-cli.log";
-std::filesystem::path UsersFixture::db =
-    std::filesystem::path(TESTS_WORKING_DIR) / "test-users-db.json";
 
 // add
 
 TEST_CASE_METHOD(UsersFixture, "Users: add user with plaintext password", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "secret123"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "secret123"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -160,8 +194,7 @@ TEST_CASE_METHOD(UsersFixture, "Users: add user with plaintext password", "[user
 
 TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha512) password", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "bob", "--password", "bobpass", "--hash",
-                     "sha512"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "bob", "--password", "bobpass", "--hash", "sha512"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "bob");
@@ -171,8 +204,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha512) password", 
 
 TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha256) password", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "carol", "--password", "carolpass", "--hash",
-                     "sha256"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "carol", "--password", "carolpass", "--hash", "sha256"}) ==
+            0);
 
     auto root = get_db();
     auto user = get_user(root, "carol");
@@ -182,8 +215,7 @@ TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha256) password", 
 
 TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha2 alias) password", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "dave", "--password", "davepass", "--hash",
-                     "sha2"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "dave", "--password", "davepass", "--hash", "sha2"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "dave");
@@ -193,8 +225,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha2 alias) passwor
 
 TEST_CASE_METHOD(UsersFixture, "Users: add duplicate user fails", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass1"}) == 0);
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass2"}) != 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass1"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass2"}) != 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -204,8 +236,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: add duplicate user fails", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: add with ACL", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass", "--hash", "sha512",
-                     "--rw", "gnmi-server-test", "--ro", "ietf-interfaces"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512", "--rw",
+                     "gnmi-server-test", "--ro", "ietf-interfaces"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -237,10 +269,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: add with ACL", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit password", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "oldpass", "--hash",
-                     "sha512"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--password", "newpass", "--hash",
-                     "sha256"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "oldpass", "--hash", "sha512"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--password", "newpass", "--hash", "sha256"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -250,9 +280,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit password", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit password to plaintext", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "oldpass", "--hash",
-                     "sha512"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--password", "newpass"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "oldpass", "--hash", "sha512"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--password", "newpass"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -262,9 +291,9 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit password to plaintext", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit ACL", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass", "--hash", "sha512",
-                     "--rw", "mod-a"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--ro", "mod-b,mod-c"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512", "--rw",
+                     "mod-a"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--ro", "mod-b,mod-c"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -275,21 +304,21 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit ACL", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit nonexistent user fails", "[users]")
 {
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "ghost", "--password", "pass"}) != 0);
-    CHECK(!std::filesystem::exists(db));
+    REQUIRE(run_bin({"edit", "--name", "ghost", "--password", "pass"}) != 0);
+    CHECK(db_empty());
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit with nothing to edit fails", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice"}) != 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice"}) != 0);
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit --rm single module", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass", "--rw",
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw",
                      "mod-a,mod-b,mod-c"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--rm", "mod-b"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-b"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -299,9 +328,9 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit --rm single module", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit --rm multiple modules", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass", "--rw",
-                     "mod-a,mod-b", "--ro", "mod-c"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--rm", "mod-a,mod-c"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw", "mod-a,mod-b", "--ro",
+                     "mod-c"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-a,mod-c"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -311,11 +340,9 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit --rm multiple modules", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit --rm then --ro (order matters)", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass", "--rw",
-                     "mod-a"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw", "mod-a"}) == 0);
     // remove mod-a, then add it back as ro - the remove runs first
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--rm", "mod-a", "--ro", "mod-a"}) ==
-            0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-a", "--ro", "mod-a"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -329,9 +356,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit --rm then --ro (order matters)", "[u
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit --rm nonexistent module is a no-op", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass", "--rw",
-                     "mod-a"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--rm", "mod-zzz"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw", "mod-a"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-zzz"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -340,8 +366,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit --rm nonexistent module is a no-op",
 
 TEST_CASE_METHOD(UsersFixture, "Users: --rm in add mode is a no-op", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass", "--rm", "mod-b",
-                     "--rw", "mod-b"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rm", "mod-b", "--rw",
+                     "mod-b"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -353,9 +379,9 @@ TEST_CASE_METHOD(UsersFixture, "Users: --rm in add mode is a no-op", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: remove user", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass1"}) == 0);
-    REQUIRE(run_bin({"add", "--db", db, "--name", "bob", "--password", "pass2"}) == 0);
-    REQUIRE(run_bin({"remove", "--db", db, "--name", "alice"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass1"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "bob", "--password", "pass2"}) == 0);
+    REQUIRE(run_bin({"remove", "--name", "alice"}) == 0);
 
     auto root = get_db();
     CHECK_THROWS(get_user(root, "alice"));
@@ -366,39 +392,34 @@ TEST_CASE_METHOD(UsersFixture, "Users: remove user", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: remove nonexistent user fails", "[users]")
 {
-    REQUIRE(run_bin({"remove", "--db", db, "--name", "ghost"}) != 0);
-    CHECK(!std::filesystem::exists(db));
+    REQUIRE(run_bin({"remove", "--name", "ghost"}) != 0);
+    CHECK(db_empty());
 }
 
 // error handling
 
-TEST_CASE_METHOD(UsersFixture, "Users: missing --db fails", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) != 0);
-}
-
 TEST_CASE_METHOD(UsersFixture, "Users: missing --name fails", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--password", "pass"}) != 0);
-    CHECK(!std::filesystem::exists(db));
+    REQUIRE(run_bin({"add", "--password", "pass"}) != 0);
+    CHECK(db_empty());
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: add without --password fails", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice"}) != 0);
-    CHECK(!std::filesystem::exists(db));
+    REQUIRE(run_bin({"add", "--name", "alice"}) != 0);
+    CHECK(db_empty());
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: --hash without --password (in edit) fails", "[users]")
 {
-    REQUIRE(run_bin({"add", "--db", db, "--name", "alice", "--password", "pass"}) == 0);
-    REQUIRE(run_bin({"edit", "--db", db, "--name", "alice", "--hash", "sha512"}) != 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--hash", "sha512"}) != 0);
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: unknown command fails", "[users]")
 {
-    REQUIRE(run_bin({"bogus", "--db", db}) != 0);
-    CHECK(!std::filesystem::exists(db));
+    REQUIRE(run_bin({"bogus"}) != 0);
+    CHECK(db_empty());
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: --help exits 0", "[users]")

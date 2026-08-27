@@ -1,0 +1,14 @@
+{
+  "sysrepo-gnxi-server:server": {
+    "listen": {
+      "endpoint": [
+        {
+          "name": "insecure",
+          "unix": {
+            "path": "@SOCKET_PATH@"
+          }
+        }
+      ]
+    }
+  }
+}
