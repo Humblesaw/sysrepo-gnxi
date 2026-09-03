@@ -36,6 +36,7 @@
 
 #include "config.h"
 
+using Catch::Matchers::Equals;
 using Catch::Matchers::Matches;
 
 /**
@@ -182,14 +183,14 @@ std::filesystem::path UsersFixture::log =
 
 // add
 
-TEST_CASE_METHOD(UsersFixture, "Users: add user with plaintext password", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: add user with default (sha512) hash", "[users]")
 {
     REQUIRE(run_bin({"add", "--name", "alice", "--password", "secret123"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
     auto password = get_password(user);
-    CHECK(password == "plaintext$secret123");
+    CHECK_THAT(password, Matches("^\\$6\\$[a-zA-Z0-9./]{16}\\$[a-zA-Z0-9./]{86}$"));
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha512) password", "[users]")
@@ -199,7 +200,7 @@ TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha512) password", 
     auto root = get_db();
     auto user = get_user(root, "bob");
     auto password = get_password(user);
-    CHECK_THAT(password, Matches("^sha512\\$[0-9A-F]{32}\\$[0-9A-F]{128}$"));
+    CHECK_THAT(password, Matches("^\\$6\\$[a-zA-Z0-9./]{16}\\$[a-zA-Z0-9./]{86}$"));
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha256) password", "[users]")
@@ -210,28 +211,37 @@ TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha256) password", 
     auto root = get_db();
     auto user = get_user(root, "carol");
     auto password = get_password(user);
-    CHECK_THAT(password, Matches("^sha256\\$[0-9A-F]{32}\\$[0-9A-F]{64}$"));
+    CHECK_THAT(password, Matches("^\\$5\\$[a-zA-Z0-9./]{16}\\$[a-zA-Z0-9./]{43}$"));
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (sha2 alias) password", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: add user with hashed (md5) password", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "dave", "--password", "davepass", "--hash", "sha2"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "dave", "--password", "davepass", "--hash", "md5"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "dave");
     auto password = get_password(user);
-    CHECK_THAT(password, Matches("^sha2\\$[0-9A-F]{32}\\$[0-9A-F]{64}$"));
+    CHECK_THAT(password, Matches("^\\$1\\$[a-zA-Z0-9./]{8}\\$[a-zA-Z0-9./]{22}$"));
+}
+
+TEST_CASE_METHOD(UsersFixture, "Users: add user with unknown hash algorithm fails", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "eve", "--password", "evepass", "--hash", "sha1"}) != 0);
+    CHECK(db_empty());
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: add duplicate user fails", "[users]")
 {
     REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass1"}) == 0);
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass2"}) != 0);
-
     auto root = get_db();
     auto user = get_user(root, "alice");
-    auto password = get_password(user);
-    CHECK(password == "plaintext$pass1");
+    auto password1 = get_password(user);
+
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass2"}) != 0);
+    root = get_db();
+    user = get_user(root, "alice");
+    auto password2 = get_password(user);
+    CHECK_THAT(password1, Equals(password2));
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: add with ACL", "[users]")
@@ -275,18 +285,21 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit password", "[users]")
     auto root = get_db();
     auto user = get_user(root, "alice");
     auto password = get_password(user);
-    CHECK_THAT(password, Matches("^sha256\\$[0-9A-F]{32}\\$[0-9A-F]{64}$"));
+    CHECK_THAT(password, Matches("^\\$5\\$[a-zA-Z0-9./]{16}\\$[a-zA-Z0-9./]{43}$"));
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: edit password to plaintext", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: edit password with default algorithm", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "oldpass", "--hash", "sha512"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--password", "newpass"}) == 0);
-
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "oldpass", "--hash", "md5"}) == 0);
     auto root = get_db();
     auto user = get_user(root, "alice");
-    auto password = get_password(user);
-    CHECK(password == "plaintext$newpass");
+    auto password1 = get_password(user);
+
+    REQUIRE(run_bin({"edit", "--name", "alice", "--password", "newpass"}) == 0);
+    root = get_db();
+    user = get_user(root, "alice");
+    auto password2 = get_password(user);
+    CHECK_THAT(password1, !Equals(password2));
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit ACL", "[users]")
@@ -387,7 +400,7 @@ TEST_CASE_METHOD(UsersFixture, "Users: remove user", "[users]")
     CHECK_THROWS(get_user(root, "alice"));
     auto user = get_user(root, "bob");
     auto password = get_password(user);
-    CHECK(password == "plaintext$pass2");
+    CHECK_THAT(password, Matches("^\\$6\\$[a-zA-Z0-9./]{16}\\$[a-zA-Z0-9./]{86}$"));
 }
 
 TEST_CASE_METHOD(UsersFixture, "Users: remove nonexistent user fails", "[users]")
@@ -431,4 +444,12 @@ TEST_CASE_METHOD(UsersFixture, "Users: --help exits 0", "[users]")
 TEST_CASE_METHOD(UsersFixture, "Users: no arguments shows usage and fails", "[users]")
 {
     REQUIRE(run_bin({}) != 0);
+}
+
+TEST_CASE_METHOD(UsersFixture, "Users: storing a '$0$' plaintext password is rejected", "[users]")
+{
+    auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
+    sess.setItem("/sysrepo-gnxi-users:users/user[name='eve']/password", "$0$plaintext");
+    CHECK_THROWS(sess.applyChanges());
+    CHECK(db_empty());
 }

@@ -19,216 +19,144 @@
  * limitations under the License.
  */
 
+#include <cstdlib>
 #include <stdexcept>
-#include <vector>
+#include <string>
+#include <string_view>
+
+#include <crypt.h>
 
 #include <openssl/crypto.h>
-#include <openssl/evp.h>
-#include <openssl/rand.h>
 
 #include "hash.h"
 
-constexpr size_t SALT_LENGTH = 16;
+namespace
+{
 
 /**
- * @brief Encode a part of the password in the hex format in order to store it.
+ * @brief Compare two hashes.
  *
- * @param[in] data Binary data to encode.
- * @param[in] len Length of the @p data data.
- * @return Binary data encoded in the hex format.
+ * @param[in] a First string.
+ * @param[in] b Second string.
+ * @return True if the hashes obtained from the strings are equal, false otherwise.
  */
-std::string hex_encode(const unsigned char *data, size_t len)
+bool secure_equals(std::string_view a, std::string_view b)
 {
-    // OpenSSL 3.0+ API writes null terminated uppercase hex
-    // reserve an extra byte for the null and strip it afterwards
-    std::string out(len * 2 + 1, '\0');
-    size_t out_len = 0;
-    if (OPENSSL_buf2hexstr_ex(out.data(), out.size(), &out_len, data, len, '\0') != 1)
-    {
-        throw std::runtime_error("OPENSSL_buf2hexstr_ex failed");
-    }
-    out.resize(out_len - 1);
-    return out;
-}
-
-/**
- * @brief Decode a part of the password from the hex format in order to compare it.
- *
- * @param[in] hex Stored hex to decode.
- * @param[in] out Decoded binary data on success.
- * @return True if the data were successfully decoded, false otherwise.
- */
-bool hex_decode(const std::string &hex, std::vector<unsigned char> &out)
-{
-    // check in case of db corruption
-    if (hex.empty() || hex.size() % 2 != 0)
+    // compare only the hash parts, the recomputed setting may be
+    // normalized by libcrypt and differ from the stored value (this
+    // also rejects values not in the modular crypt format)
+    auto last_dollar_a = a.rfind('$');
+    auto last_dollar_b = b.rfind('$');
+    if (last_dollar_a == std::string_view::npos || last_dollar_b == std::string_view::npos)
     {
         return false;
     }
-    out.assign(hex.size() / 2, 0);
-    size_t out_len = 0;
-    // fails on odd-length leftovers and non-hex characters
-    if (OPENSSL_hexstr2buf_ex(out.data(), out.size(), &out_len, hex.c_str(), '\0') != 1)
+    auto only_hash_a = a.substr(last_dollar_a + 1);
+    auto only_hash_b = b.substr(last_dollar_b + 1);
+    if (only_hash_a.size() != only_hash_b.size())
     {
         return false;
     }
-    out.resize(out_len);
-    return true;
+    return CRYPTO_memcmp(only_hash_a.data(), only_hash_b.data(), only_hash_a.size()) == 0;
 }
 
 /**
- * @brief Get a pointer to the structure representing the @p algo algorithm.
- *
- * @param[in] algo Algorithm name.
- * @return Algorithm (for the password hash).
+ * @brief RAII wrapper for struct crypt_data. The structure is
+ * heap-allocated as it is over 32 KiB large, and it is zeroed out before
+ * the memory is released since it holds password-derived data.
  */
-const EVP_MD *get_algo(const std::string &algo)
+class CryptData
 {
-    // convenience alias
-    if (algo == "sha2")
+  public:
+    CryptData()
+        : m_data(static_cast<struct crypt_data *>(std::calloc(1, sizeof(struct crypt_data))))
     {
-        return EVP_sha256();
+        if (!m_data)
+        {
+            throw std::runtime_error("calloc failed");
+        }
     }
-    return EVP_get_digestbyname(algo.c_str());
-}
+
+    ~CryptData()
+    {
+        OPENSSL_cleanse(m_data, sizeof(struct crypt_data));
+        std::free(m_data);
+    }
+
+    CryptData(const CryptData &) = delete;
+    CryptData &operator=(const CryptData &) = delete;
+
+    struct crypt_data *get() { return m_data; }
+
+  private:
+    struct crypt_data *m_data;
+};
 
 /**
- * @brief Compute the password hash.
+ * @brief Hash @p password for the crypt(3) @p setting.
  *
- * @param[in] md Algorithm to use.
- * @param[in] salt Random salt to add.
  * @param[in] password Password to hash.
- * @return Password hash.
+ * @param[in] setting crypt(3) setting string ("$<id>$[rounds=<N>$]<salt>...").
+ * @return Full crypt-hash string, e.g. "$6$<salt>$<hash>".
+ * @throws std::runtime_error if the hashing fails (unsupported setting).
  */
-std::vector<unsigned char> compute_hash(const EVP_MD *md, const std::vector<unsigned char> &salt,
-                                        const std::string &password)
+std::string crypt_hash(const std::string &password, const std::string &setting)
 {
-    std::vector<unsigned char> out(EVP_MAX_MD_SIZE);
-    std::vector<unsigned char> buf;
-    buf.reserve(salt.size() + password.size());
-    buf.insert(buf.end(), salt.begin(), salt.end());
-    buf.insert(buf.end(), password.begin(), password.end());
-    unsigned int out_len = 0;
-    if (EVP_Digest(buf.data(), buf.size(), out.data(), &out_len, md, nullptr) != 1)
+    CryptData data;
+    char *hash = crypt_r(password.c_str(), setting.c_str(), data.get());
+    if (!hash)
     {
-        throw std::runtime_error("EVP_Digest failed");
+        throw std::runtime_error("crypt_r failed");
     }
-    out.resize(out_len);
-    return out;
+    return std::string(hash);
 }
 
-/**
- * @brief Compare hashes.
- *
- * @param[in] a First hash.
- * @param[in] b Second hash.
- * @return True if the hashes are equal, false otherwise.
- */
-bool compare_hashes(const std::vector<unsigned char> &a, const std::vector<unsigned char> &b)
-{
-    if (a.size() != b.size())
-    {
-        return false;
-    }
-    return CRYPTO_memcmp(a.data(), b.data(), a.size()) == 0;
-}
-
-/**
- * @brief Compare plaintext passwords.
- *
- * @param[in] a First password.
- * @param[in] b Second password.
- * @return True if the passwords are equal, false otherwise.
- */
-bool compare_plaintext(const std::string &a, const std::string &b)
-{
-    if (a.size() != b.size())
-    {
-        return false;
-    }
-    return CRYPTO_memcmp(a.data(), b.data(), a.size()) == 0;
-}
+} // namespace
 
 std::string make_hash(const std::string &password, const std::string &algo)
 {
-    // if no algorithm was specified store as plaintext
-    if (algo.empty())
-    {
-        return "plaintext$" + password;
-    }
+    const char *prefix;
 
-    const EVP_MD *md = get_algo(algo);
-    if (!md)
+    if (algo.empty() || algo == "sha512")
+    {
+        prefix = "$6$";
+    }
+    else if (algo == "sha256")
+    {
+        prefix = "$5$";
+    }
+    else if (algo == "md5")
+    {
+        prefix = "$1$";
+    }
+    else
     {
         throw std::runtime_error("Unknown hash algorithm: " + algo);
     }
 
-    std::vector<unsigned char> salt(SALT_LENGTH);
-    if (RAND_bytes(salt.data(), static_cast<int>(salt.size())) != 1)
+    // generate a setting with a random salt (entropy is taken from the
+    // operating system) and the default number of rounds
+    char setting[CRYPT_GENSALT_OUTPUT_SIZE];
+    if (!crypt_gensalt_rn(prefix, 0, nullptr, 0, setting, sizeof(setting)))
     {
-        throw std::runtime_error("RAND_bytes failed");
+        throw std::runtime_error("crypt_gensalt_rn failed");
     }
 
-    auto digest = compute_hash(md, salt, password);
-
-    return algo + "$" + hex_encode(salt.data(), salt.size()) + "$" +
-           hex_encode(digest.data(), digest.size());
+    return crypt_hash(password, setting);
 }
 
 bool check_hash(const std::string &password, const std::string &stored)
 {
-    // <algorithm>$...
-    auto p1 = stored.find('$');
-    if (p1 == std::string::npos || p1 == 0)
-    {
-        return false;
-    }
-    std::string algo = stored.substr(0, p1);
-    if (algo == "plaintext")
-    {
-        // substr(p1+1) cannot throw out of range (pos == size() is allowed and yields empty string)
-        return compare_plaintext(password, stored.substr(p1 + 1));
-    }
-
-    // ...<salt>$...
-    auto p2 = stored.find('$', p1 + 1);
-    if (p2 == std::string::npos || p2 == p1 + 1)
-    {
-        return false;
-    }
-    std::string salt_hex = stored.substr(p1 + 1, p2 - p1 - 1);
-
-    // ...<digest>
-    std::string digest_hex = stored.substr(p2 + 1);
-    if (digest_hex.empty())
-    {
-        return false;
-    }
-
-    const EVP_MD *md = get_algo(algo);
-    if (!md)
-    {
-        // unknown algorithm
-        return false;
-    }
-
-    // decode stored salt and digest (password hash)
-    std::vector<unsigned char> salt, expected;
-    if (!hex_decode(salt_hex, salt) || !hex_decode(digest_hex, expected))
-    {
-        return false;
-    }
-
-    // compute hash with the retrieved salt and compare
-    std::vector<unsigned char> actual;
     try
     {
-        actual = compute_hash(md, salt, password);
+        auto computed = crypt_hash(password, stored);
+        auto matches = secure_equals(computed, stored);
+        OPENSSL_cleanse(computed.data(), computed.size());
+        return matches;
     }
     catch (const std::exception &)
     {
+        // hashing failure or malformed stored value
         return false;
     }
-
-    return compare_hashes(actual, expected);
 }

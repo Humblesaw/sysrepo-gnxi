@@ -39,7 +39,9 @@ pkg_check_modules(LIBYANGC REQUIRED libyang IMPORTED_TARGET)
 pkg_check_modules(SYSREPO REQUIRED sysrepo-cpp IMPORTED_TARGET)
 pkg_check_modules(LIBYANG REQUIRED libyang-cpp IMPORTED_TARGET)
 
-find_package(OpenSSL 3 REQUIRED) # for password hashing
+# for password hashing
+find_package(OpenSSL 3 REQUIRED)
+pkg_check_modules(LIBCRYPT REQUIRED libcrypt IMPORTED_TARGET)
 
 add_subdirectory(proto) # compile and link proto files
 
@@ -105,6 +107,7 @@ target_link_libraries(${PROJECT_NAME} gnmi
                       PkgConfig::SYSREPOC
                       PkgConfig::LIBYANG
                       PkgConfig::LIBYANGC
+                      PkgConfig::LIBCRYPT
                       OpenSSL::Crypto
 )
 
@@ -123,6 +126,7 @@ target_link_libraries(${USERS_CLI}
                       PkgConfig::SYSREPOC
                       PkgConfig::LIBYANG
                       PkgConfig::LIBYANGC
+                      PkgConfig::LIBCRYPT
                       OpenSSL::Crypto
 )
 
@@ -185,6 +189,7 @@ if (ENABLE_TESTS)
             PkgConfig::SYSREPOC
             PkgConfig::LIBYANG
             PkgConfig::LIBYANGC
+            PkgConfig::LIBCRYPT
             OpenSSL::Crypto
         )
     endforeach()

@@ -50,6 +50,7 @@ Secure mode follows the gNMI specification and requires both the server and clie
 - protobuf >= 3.12.4
 - grpc (cpp) >= 1.30.2
 - OpenSSL >= 3
+- crypt(3)
 - libyang-cpp (master branch)
 - sysrepo-cpp (master branch)
   - libyang (devel branch)

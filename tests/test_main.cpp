@@ -291,6 +291,7 @@ static void install_test_modules(sysrepo::Connection &sr_conn)
     std::vector<sysrepo::ModuleInstallation> modules = {
         make_inst(files_dir, "gnmi-server-test.yang"),
         make_inst(files_dir, "gnmi-server-test-wine.yang"),
+        make_inst(modules_dir, "iana-crypt-hash@2014-08-06.yang"),
         make_inst(modules_dir, "iana-tls-cipher-suite-algs@2024-03-16.yang"),
         make_inst(modules_dir, "ietf-crypto-types@2024-10-10.yang",
                   {"cleartext-private-keys", "one-asymmetric-key-format"}),

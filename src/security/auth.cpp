@@ -23,6 +23,8 @@
 
 #include <stdexcept>
 
+#include <openssl/crypto.h>
+
 #include <proto/gnmi.grpc.pb.h>
 
 #include "utils/log.h"
@@ -291,6 +293,11 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
                          auth_metadata.find("username")->second.length());
     std::string password(auth_metadata.find("password")->second.data(),
                          auth_metadata.find("password")->second.length());
+    auto cleanse = [&username, &password]()
+    {
+        OPENSSL_cleanse(username.data(), username.size());
+        OPENSSL_cleanse(password.data(), password.size());
+    };
 
     try
     {
@@ -301,6 +308,7 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
     catch (const std::exception &exc)
     {
         SLOG_DEBUG("Authentication failed for user '", username, "': ", exc.what());
+        cleanse();
         return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid username/password");
     }
 
@@ -310,6 +318,9 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
     // consume credentials so they don't reach the RPC handler metadata
     consumed_auth_metadata->insert(std::make_pair("username", username));
     consumed_auth_metadata->insert(std::make_pair("password", password));
+
+    // wipe the local copies of the credentials
+    cleanse();
 
     return grpc::Status::OK;
 }

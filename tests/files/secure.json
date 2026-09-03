@@ -37,7 +37,7 @@
     "user": [
       {
         "name": "alice",
-        "password": "sha512$859BA97CA9AD8CB4A1A31C7611257B20$D90BD5B8DC495C7FB98C251133CE730A2CAB3D9CA11D1382E00D623D8011ABAD3AEC363441549AFE2E62374CE84466FF03C6FDA8C1D6D829FF48F0CDA0BB9735",
+        "password": "$6$SaltForAlice$B0mGKNyu8MnxZe9IkjoaJIgqqWFVyNWyD9QIrTyp2j0mMBKEOiFiVq3EXn6eI4RLKMuy6Wr8sLWvJ0IZ266hj/",
         "acl": [
           {
             "module": "gnmi-server-test",
@@ -47,7 +47,7 @@
       },
       {
         "name": "bob",
-        "password": "sha256$71F9412CAB2999908C7DB43CF622ACC3$FEBAA7C81B6E2A4C10059975CEF58380D06AB21BD05BCAF9CFA731B24057BB61",
+        "password": "$5$SaltForBob$N8GciXki/e36uKpWqk6NCjQIoOEWOcSNVw15dmbktM9",
         "acl": [
           {
             "module": "gnmi-server-test",
@@ -57,7 +57,7 @@
       },
       {
         "name": "chuck",
-        "password": "plaintext$chuck$pass"
+        "password": "$1$SaltForC$hmKZ7F1LZlmIqUt.0lles."
       }
     ]
   },

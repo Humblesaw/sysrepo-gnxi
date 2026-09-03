@@ -31,6 +31,8 @@
 #include <sysrepo-cpp/Connection.hpp>
 #include <sysrepo-cpp/Session.hpp>
 
+#include <openssl/crypto.h>
+
 #include "security/hash.h"
 #include "utils/utils.h"
 
@@ -44,11 +46,7 @@ const char *USAGE = R"(Usage:
 Options:
   -n,--name NAME      username ([a-zA-Z0-9_-]+)
   -p,--password PASS  password
-  -s,--hash ALGO      digest algorithm: md5, sha1, sha224, sha256, sha384,
-                      sha512, sha512-224, sha512-256, sha3-224, sha3-256,
-                      sha3-384, sha3-512, blake2b512, blake2s256 or sha2
-                      (= sha256), if omitted the password is stored in
-                      plaintext
+  -s,--hash ALGO      hashing algorithm: md5, sha256 or sha512 (default)
   -x,--rm MOD,...     comma-separated modules to remove from the ACL
                       (no-op in add mode since the user does not exist yet)
                       or '*' for all modules present in the ACL
@@ -194,21 +192,6 @@ Options parse_args(int argc, char *argv[])
 }
 
 /**
- * @brief Return hash for the password or the password.
- *
- * @param[in] opts Command line options (password and hash algorithm to use).
- * @return Password hash or the password (no hash algorithm chosen).
- */
-std::string compute_stored_password(const Options &opts)
-{
-    if (opts.hash.empty())
-    {
-        std::cerr << "Warning: storing password for '" << opts.name << "' in plaintext\n";
-    }
-    return make_hash(opts.password, opts.hash);
-}
-
-/**
  * @brief Get all of the module names inside sysrepo, excluding private and
  * internal modules.
  *
@@ -303,7 +286,7 @@ void cmd_add(const Options &opts)
     }
 
     std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + opts.name + "']";
-    sess.setItem(user_path + "/password", compute_stored_password(opts));
+    sess.setItem(user_path + "/password", make_hash(opts.password, opts.hash));
     set_acl(sess, opts.name, opts);
     sess.applyChanges();
     std::cout << "User '" << opts.name << "' added to sysrepo\n";
@@ -327,7 +310,7 @@ void cmd_edit(const Options &opts)
     std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + opts.name + "']";
     if (!opts.password.empty())
     {
-        sess.setItem(user_path + "/password", compute_stored_password(opts));
+        sess.setItem(user_path + "/password", make_hash(opts.password, opts.hash));
     }
     set_acl(sess, opts.name, opts);
     sess.applyChanges();
@@ -385,8 +368,13 @@ int main(int argc, char *argv[])
     catch (const std::exception &exc)
     {
         std::cerr << exc.what() << "\n";
+        OPENSSL_cleanse(opts.password.data(), opts.password.size());
         return -2;
     }
+
+    // wipe the local copy of the password (the argv copy is not
+    // removable, it belongs to the C runtime)
+    OPENSSL_cleanse(opts.password.data(), opts.password.size());
 
     return 0;
 }

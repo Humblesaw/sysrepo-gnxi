@@ -3,6 +3,10 @@ module sysrepo-gnxi-users {
   namespace "urn:sysrepo:gnxi:users";
   prefix sgu;
 
+  import iana-crypt-hash {
+    prefix ianach;
+  }
+
   description
     "User database for the sysrepo-gnxi gNMI server.
 
@@ -50,19 +54,17 @@ module sysrepo-gnxi-users {
       }
 
       leaf password {
-        type string;
+        type ianach:crypt-hash;
         mandatory true;
+        must "not(starts-with(., '$0$'))" {
+          error-message
+            "Plaintext passwords are not allowed, store a hash";
+        }
         description
-          "Password, either in plaintext of the form 'plaintext$<password>'
-           or as an OpenSSL digest string of the form '<algorithm>$<salt-hex>$<digest-hex>',
-           where the digest is computed over the concatenation of the salt bytes and
-           the password.
-           Supported algorithms are all one-shot EVP digest names
-           accepted by EVP_get_digestbyname(), e.g. md5, sha1,
-           sha224, sha256, sha384, sha512, sha512-224, sha512-256,
-           sha3-224, sha3-256, sha3-384, sha3-512, blake2b512, blake2s256.
-           Manage this file with the 'sysrepo-gnxi-users' command-line
-           utility.";
+          "Password in the iana-crypt-hash crypt-hash format
+           '$<id>$<salt>$<hash>' with the hash function identified by
+           <id>: 1 (MD5-crypt), 5 (SHA-256-crypt) or 6 (SHA-512-crypt).
+           The '$0$' cleartext form is not allowed.";
       }
 
       list acl {

@@ -171,14 +171,14 @@ do_subscribe(const std::shared_ptr<grpc::Channel> &channel, grpc::ClientContext 
 
 // positive tests
 
-TEST_CASE("mTLS: valid cert + valid credentials (hashed password)", "[auth]")
+TEST_CASE("mTLS: valid cert + valid credentials (sha512-hashed password)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
     auto status = do_capabilities(ch, "alice", "alicepass");
     CHECK(status.ok());
 }
 
-TEST_CASE("mTLS: valid cert + valid credentials (plaintext password)", "[auth]")
+TEST_CASE("mTLS: valid cert + valid credentials (md5-hashed password)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
     auto status = do_capabilities(ch, "chuck", "chuck$pass");

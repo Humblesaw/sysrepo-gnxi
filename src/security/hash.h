@@ -24,20 +24,26 @@
 #include <string>
 
 /**
- * @brief Hash password with a random salt. Throws error on unknown algorithm or
- * OpenSSL failure.
+ * @brief Hash password with a random salt using the crypt(3) algorithms
+ * modeled by the iana-crypt-hash YANG module: MD5-crypt ($1$),
+ * SHA-256-crypt ($5$) or SHA-512-crypt ($6$), computed by libcrypt.
+ * Throws error on unknown algorithm or hashing failure.
  *
  * @param[in] password Password to be hashed.
- * @param[in] algo Hashing algorithm to use.
- * @return Password hash.
+ * @param[in] algo Hashing algorithm to use: "md5", "sha256" or "sha512"
+ *                 (used when @p algo is empty).
+ * @return Password hash in the crypt-hash format, e.g. "$6$<salt>$<hash>".
  */
 std::string make_hash(const std::string &password, const std::string &algo);
 
 /**
- * @brief Verify a password against a stored hash (or plaintext) string.
+ * @brief Verify a password against a stored crypt-hash value. The '$0$'
+ * cleartext form is an unsupported crypt(3) setting - it never
+ * authenticates (the schema rejects storing it as well).
  *
  * @param[in] password Password to be checked.
  * @param[in] stored Stored hash to compare against.
- * @return True if password produced the same hash, false otherwise.
+ * @return True if password produced the same hash, false otherwise
+ *         (including for malformed stored values).
  */
 bool check_hash(const std::string &password, const std::string &stored);

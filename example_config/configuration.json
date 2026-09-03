@@ -37,7 +37,7 @@
     "user": [
       {
         "name": "admin",
-        "password": "plaintext$admin"
+        "password": "$6$SaltForAdmin$L6P4u8F9Be4DcO8YgTVxvE98PvjNG5Q/4dfB43k3VJ23DpCF.EWRJJjLoBZVyM.aJcbiE3SRUTiztRcdOS4fg."
       }
     ]
   },
