@@ -53,9 +53,8 @@ Auth::Auth(bool insecure, sysrepo::Connection conn, const TlsMaterial &tls) : in
     }
 
     SLOG_INFO("Mutual TLS authentication");
-    grpc::SslServerCredentialsOptions ssl_opts;
-    ssl_opts.client_certificate_request =
-        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY;
+    grpc::SslServerCredentialsOptions ssl_opts(
+        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
     ssl_opts.pem_key_cert_pairs.push_back({tls.private_key_pem, tls.certificate_pem});
     ssl_opts.pem_root_certs = tls.ca_certificate_pem;
     credentials_ = grpc::SslServerCredentials(ssl_opts);
@@ -117,21 +116,22 @@ void Auth::authenticate(sysrepo::Session &sess, const std::string &username,
 
         if (!check_hash(password, stored_password->asTerm().valueStr()))
         {
-            SLOG_DEBUG("Invalid password for user '", username, "'");
-            throw std::runtime_error("invalid password for '" + username + "'");
+            throw std::runtime_error("invalid username or password");
         }
 
         return; // authenticated
     }
 
-    SLOG_DEBUG("User '", username, "' not found in user database");
-    throw std::runtime_error("user not found");
+    // unknown user: verify against a dummy hash anyway so that the response
+    // time does not reveal whether the user exists
+    check_hash(password, dummy_crypt_hash());
+    throw std::runtime_error("invalid username or password");
 }
 
 void Auth::authorize(sysrepo::Session &sess, const std::string &username,
                      const std::unordered_set<std::string> &modules, Access permission) const
 {
-    size_t modules_authorized = 0;
+    std::unordered_set<std::string> modules_authorized;
 
     try
     {
@@ -172,7 +172,7 @@ void Auth::authorize(sysrepo::Session &sess, const std::string &username,
                 if ((permission == Auth::Access::ReadWrite && acc == "rw") ||
                     (permission == Auth::Access::ReadOnly && (acc == "rw" || acc == "ro")))
                 {
-                    ++modules_authorized;
+                    modules_authorized.insert(mod);
                     continue;
                 }
                 // insufficient permissions
@@ -202,12 +202,19 @@ void Auth::authorize(sysrepo::Session &sess, const std::string &username,
     }
 
     // authorized only if every used module has been covered by an ACL entry
-    if (modules_authorized != modules.size())
+    if (modules_authorized.size() != modules.size())
     {
-        SLOG_WARN("Authorization failed (module not in ACL): User ", username,
-                  " lacks an ACL entry for at least one module.");
-        throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                           "User " + username + " lacks an ACL entry for at least one module.");
+        for (const auto &mod : modules)
+        {
+            if (!modules_authorized.contains(mod))
+            {
+                SLOG_WARN("Authorization failed (module not in ACL): User '", username,
+                          "' lacks an ACL entry for module '", mod, "'.");
+                throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                                   "User " + username + " lacks an ACL entry for module '" + mod +
+                                       "'.");
+            }
+        }
     }
 }
 

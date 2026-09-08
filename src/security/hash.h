@@ -47,3 +47,14 @@ std::string make_hash(const std::string &password, const std::string &algo);
  *         (including for malformed stored values).
  */
 bool check_hash(const std::string &password, const std::string &stored);
+
+/**
+ * @brief A constant, validly-formatted SHA-512 crypt hash ($6$). Hashing a
+ * password against it performs the same work as against a real stored hash,
+ * so authentication of unknown users can be made timing-equal to
+ * authentication of existing users. It is derived from a fixed dummy
+ * secret, not from any user password.
+ *
+ * @return The dummy crypt hash value.
+ */
+std::string dummy_crypt_hash();

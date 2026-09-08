@@ -375,3 +375,13 @@ TEST_CASE("mTLS: commit confirm is bound to the initiating user", "[auth-commit]
         CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
     }
 }
+
+TEST_CASE("mTLS: unknown user and wrong password are indistinguishable", "[auth-neg]")
+{
+    auto ch = make_mtls_channel(mtls_addr);
+    auto unknown = do_capabilities(ch, "nosuchuser", "wrongpass");
+    auto wrong_password = do_capabilities(ch, "alice", "wrongpass");
+    CHECK(unknown.error_code() == grpc::StatusCode::UNAUTHENTICATED);
+    CHECK(wrong_password.error_code() == grpc::StatusCode::UNAUTHENTICATED);
+    CHECK(unknown.error_message() == wrong_password.error_message());
+}

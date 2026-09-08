@@ -145,6 +145,13 @@ std::string make_hash(const std::string &password, const std::string &algo)
     return crypt_hash(password, setting);
 }
 
+std::string dummy_crypt_hash()
+{
+    // sha512-crypt of a fixed dummy secret with a fixed salt, generated once
+    return "$6$DummySaltForTi$olIyY0KjyfgO0tfOMbZHDxhJn7M69."
+           "lAE0jgu3Owl9Q72rdtYIDaQCjmlcsgQK9J7Iuj7DoO68M/PI05Ee89i1";
+}
+
 bool check_hash(const std::string &password, const std::string &stored)
 {
     try
