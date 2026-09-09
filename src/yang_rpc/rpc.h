@@ -30,11 +30,14 @@
 namespace impl
 {
 
+/**
+ * @brief Implementation of the YANG_RPC service RPC.
+ *
+ */
 class Rpc
 {
   public:
     Rpc(sysrepo::Session sess) : sr_sess(sess) { encodef = std::make_shared<Encode>(sr_sess); }
-    ~Rpc() {}
 
     grpc::Status run(const yang_rpc::RpcRequest *req, yang_rpc::RpcResponse *response);
 

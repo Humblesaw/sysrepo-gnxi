@@ -21,16 +21,12 @@
  * limitations under the License.
  */
 
-#include <cstdlib>
 #include <string>
 
 #include <libyang/libyang.h>
 #include <sysrepo.h>
 
 #include "log.h"
-
-static const char *display_data_log_env = "GNMI_DISPLAY_DATA_LOG";
-static bool display_data_log = true;
 
 static void sysrepo_log_cb(sr_log_level_t level, const char *message)
 {
@@ -87,39 +83,4 @@ void slog::set_level(int lvl)
     ly_log_level(LY_LLERR);
     sr_log_set_cb(sysrepo_log_cb);
     ly_set_log_clb(libyang_log_cb);
-}
-
-void slog::get_log_env(void)
-{
-    const char *var = std::getenv(display_data_log_env);
-
-    if (var)
-    {
-        std::string value(var);
-        if (value == "Y" || value == "YES" || value == "y" || value == "yes")
-        {
-            display_data_log = true;
-        }
-        else if (value == "N" || value == "NO" || value == "n" || value == "no")
-        {
-            display_data_log = false;
-        }
-        else
-        {
-            SLOG_WARN("Unrecognized value for ", display_data_log_env, ":", value);
-        }
-    }
-    SLOG_DEBUG("Logging of GNMI data is ", (display_data_log ? "ENABLED" : "DISABLED"));
-}
-
-const char *slog::obfs_data(std::string &data)
-{
-    if (display_data_log)
-    {
-        return data.c_str();
-    }
-    else
-    {
-        return "&*%#";
-    }
 }

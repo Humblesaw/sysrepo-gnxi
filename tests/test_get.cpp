@@ -842,6 +842,20 @@ TEST_CASE("Get request with unsupported encoding type", "[get-neg]")
     CHECK_THAT(status.error_message(), Equals("BYTES"));
 }
 
+TEST_CASE("Get request with simple JSON encoding", "[get-neg]")
+{
+    grpc::ClientContext ctx;
+    gnmi::GetRequest request;
+    gnmi::GetResponse response;
+
+    request.set_encoding(gnmi::Encoding::JSON);
+    xpath_to_path("/gnmi-server-test:test-state", request.add_path());
+
+    auto status = gnmi_client->Get(&ctx, request, &response);
+    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
+    CHECK_THAT(status.error_message(), Equals("JSON"));
+}
+
 TEST_CASE("Get request with unsupported use of models", "[get-neg]")
 {
     grpc::ClientContext ctx;

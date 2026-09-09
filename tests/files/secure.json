@@ -52,6 +52,10 @@
           {
             "module": "gnmi-server-test",
             "access": "ro"
+          },
+          {
+            "module": "sysrepo",
+            "access": "rw"
           }
         ]
       },

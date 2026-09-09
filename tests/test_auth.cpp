@@ -206,6 +206,14 @@ TEST_CASE("mTLS: denied Get RPC", "[auth]")
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
 
+TEST_CASE("mTLS: internal sysrepo module is private", "[auth]")
+{
+    auto ch = make_mtls_channel(mtls_addr);
+    // bob has an explicit rw ACL entry for sysrepo, access must still be denied
+    auto status = do_get(ch, "/sysrepo:sysrepo-modules", "bob", "bobpass");
+    CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
+}
+
 TEST_CASE("mTLS: authorized Set RPC (rw)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);

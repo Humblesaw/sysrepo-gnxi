@@ -68,6 +68,11 @@ class Auth
      */
     Auth(bool insecure, sysrepo::Connection conn, const TlsMaterial &tls = {});
 
+    Auth(const Auth &) = delete;
+    Auth &operator=(const Auth &) = delete;
+    Auth(Auth &&) = delete;
+    Auth &operator=(Auth &&) = delete;
+
     /**
      * @brief Get the gRPC server credentials.
      *

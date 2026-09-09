@@ -31,6 +31,10 @@
 namespace impl
 {
 
+/**
+ * @brief Implementation of the gNMI Get RPC.
+ *
+ */
 class Get
 {
   public:

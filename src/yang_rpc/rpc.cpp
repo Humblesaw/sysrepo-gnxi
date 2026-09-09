@@ -35,6 +35,11 @@ namespace impl
 
 grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse *response)
 {
+    if (auto status = gnmi_check_encoding(request->encoding()); !status.ok())
+    {
+        return status;
+    }
+
     try
     {
         // an invoked RPC/action must be identified by its path

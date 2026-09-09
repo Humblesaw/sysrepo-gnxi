@@ -634,3 +634,27 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: unsupported extension rejecte
     CHECK_THAT(r.status.error_message(), Contains("extension not supported"));
     check_error_response(r);
 }
+
+TEST_CASE_METHOD(CommitFixture, "Commit extension: rollback on server shutdown", "[commit]")
+{
+    set_initial_config(test_xpath, "true");
+
+    // commit with a rollback duration far in the future, unconfirmed
+    auto r =
+        send_commit_with_rollback("commit-shutdown-1", 3600, std::make_pair(test_xpath, "false"));
+    CHECK(r.status.ok());
+
+    verify_commit_in_progress();
+
+    // the unconfirmed commit is applied before the shutdown
+    check_value(sysrepo::Datastore::Running, test_xpath, "false");
+
+    // destroy the server while it is waiting for the confirm - the
+    // pending commit must be rolled back and the server restarted
+    server.restart();
+
+    check_value(sysrepo::Datastore::Running, test_xpath, "true");
+
+    // no commit in progress on the restarted server
+    verify_no_commit_in_progress();
+}

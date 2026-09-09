@@ -92,7 +92,7 @@ grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const g
     /* Get time since epoch in milliseconds */
     notification->set_timestamp(get_time_nanosec());
 
-    if (prefix.elem_size() > 0 || prefix.target().compare(""))
+    if (prefix.elem_size() > 0 || !prefix.target().empty())
     {
         std::string str;
         try
@@ -138,16 +138,9 @@ grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const g
 /* Verify request fields are correct */
 static inline grpc::Status verifyGetRequest(const gnmi::GetRequest *request)
 {
-    switch (request->encoding())
-    {
-    case gnmi::JSON:
-    case gnmi::JSON_IETF:
-        break;
-
-    default:
-        SLOG_WARN("Unsupported Encoding ", Encoding_Name(request->encoding()));
-        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, Encoding_Name(request->encoding()));
-    }
+    auto status = gnmi_check_encoding(request->encoding());
+    if (!status.ok())
+        return status;
 
     if (!GetRequest_DataType_IsValid(request->type()))
     {
@@ -188,25 +181,18 @@ grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
                ", GetRequest Encoding ", gnmi::Encoding_Name(req->encoding()));
 
     // authorize
-    try
+    std::vector<gnmi::Path> paths;
+    for (const auto &p : req->path())
     {
-        std::vector<gnmi::Path> paths;
-        for (auto &p : req->path())
-        {
-            paths.push_back(p);
-        }
-        auth_.authorize(context, sr_sess,
-                        req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
-                        Auth::Access::ReadOnly);
+        paths.push_back(p);
     }
-    catch (const grpc::Status &auth_status)
-    {
-        return auth_status;
-    }
+    auth_.authorize(context, sr_sess,
+                    req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
+                    Auth::Access::ReadOnly);
 
     /* Run through all paths */
     notificationList = response->mutable_notification();
-    for (auto path : req->path())
+    for (const auto &path : req->path())
     {
         notification = notificationList->Add();
 

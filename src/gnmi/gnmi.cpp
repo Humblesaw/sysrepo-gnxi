@@ -27,8 +27,7 @@
 #include "set.h"
 #include "subscribe.h"
 #include "utils/log.h"
-
-static std::atomic<bool> shutting_down;
+#include "utils/utils.h"
 
 // cache server contexts for TryCancel on shutting down
 static std::set<grpc::ServerContext *> server_contexts;
@@ -55,8 +54,8 @@ class ServerContextHolder
 void GNMIService::TryCancelAll(void)
 {
     const std::lock_guard<std::mutex> lock(server_context_mutex);
-    // forbid any new subscriptions by indicating we are shutting down
-    shutting_down.store(true);
+    // forbid any new RPCs by indicating we are shutting down
+    rpc_shutting_down.store(true);
     for (auto ctx : server_contexts)
     {
         ctx->TryCancel();
@@ -67,15 +66,33 @@ void GNMIService::TryCancelAll(void)
 grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetRequest *request,
                               gnmi::SetResponse *response)
 {
-    impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Running), commit_state, auth_);
-    return rpc.run(context, request, response);
+    if (rpc_shutting_down.load())
+    {
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
+    }
+
+    return rpc_catch_exceptions(
+        [&]
+        {
+            impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Running), commit_state, *auth_);
+            return rpc.run(context, request, response);
+        });
 }
 
 grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetRequest *request,
                               gnmi::GetResponse *response)
 {
-    impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running), auth_);
-    return rpc.run(context, request, response);
+    if (rpc_shutting_down.load())
+    {
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
+    }
+
+    return rpc_catch_exceptions(
+        [&]
+        {
+            impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running), *auth_);
+            return rpc.run(context, request, response);
+        });
 }
 
 grpc::Status GNMIService::Subscribe(
@@ -86,12 +103,16 @@ grpc::Status GNMIService::Subscribe(
 
     // If we are shutting down don't start any new subscriptions
     // as TryCancelAll will not be called after this.
-    if (shutting_down.load())
+    if (rpc_shutting_down.load())
     {
         SLOG_DEBUG("Subscribe is not possible as server is shutting down");
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, std::string("Server is shutting down"));
     }
 
-    impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running), auth_);
-    return rpc.run(context, stream);
+    return rpc_catch_exceptions(
+        [&]
+        {
+            impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running), *auth_);
+            return rpc.run(context, stream);
+        });
 }

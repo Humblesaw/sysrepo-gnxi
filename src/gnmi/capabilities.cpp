@@ -34,43 +34,44 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
     (void)context;
     std::string gnmi_version;
 
+    if (rpc_shutting_down.load())
+    {
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
+    }
+
     if (request->extension_size() > 0)
     {
         SLOG_ERROR("Extensions not implemented");
         return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Extensions not implemented");
     }
 
-    try
-    {
-        auto sess = sr_con.sessionStart();
-
-        for (auto module : sess.getContext().modules())
+    return rpc_catch_exceptions(
+        [&]() -> grpc::Status
         {
-            if (module.implemented() && !isPrivateModule(module.name()))
+            auto sess = sr_con.sessionStart();
+
+            for (auto module : sess.getContext().modules())
             {
-                auto model = response->add_supported_models();
-                model->set_name(module.name());
-                model->set_organization(module.org().value_or(""));
-                model->set_version(module.revision().value_or(""));
+                if (module.implemented() && !isPrivateModule(module.name()))
+                {
+                    auto model = response->add_supported_models();
+                    model->set_name(module.name());
+                    model->set_organization(module.org().value_or(""));
+                    model->set_version(module.revision().value_or(""));
+                }
             }
-        }
 
-        gnmi_version =
-            response->GetDescriptor()->file()->options().GetExtension(gnmi::gnmi_service);
-        response->set_gnmi_version(gnmi_version);
+            gnmi_version =
+                response->GetDescriptor()->file()->options().GetExtension(gnmi::gnmi_service);
+            response->set_gnmi_version(gnmi_version);
 
-        // Encoding used in TypedValue for responses
-        // response->add_supported_encodings(gnmi::Encoding::JSON);
-        // response->add_supported_encodings(gnmi::Encoding::BYTES);
-        // response->add_supported_encodings(gnmi::Encoding::PROTO);
-        // response->add_supported_encodings(gnmi::Encoding::ASCII);
-        response->add_supported_encodings(gnmi::Encoding::JSON_IETF);
-    }
-    catch (const std::exception &exc)
-    {
-        SLOG_ERROR(exc.what());
-        return grpc::Status(grpc::StatusCode::INTERNAL, "Fail getting schemas");
-    }
+            // Encoding used in TypedValue for responses
+            // response->add_supported_encodings(gnmi::Encoding::JSON);
+            // response->add_supported_encodings(gnmi::Encoding::BYTES);
+            // response->add_supported_encodings(gnmi::Encoding::PROTO);
+            // response->add_supported_encodings(gnmi::Encoding::ASCII);
+            response->add_supported_encodings(gnmi::Encoding::JSON_IETF);
 
-    return grpc::Status::OK;
+            return grpc::Status::OK;
+        });
 }

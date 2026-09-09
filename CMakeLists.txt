@@ -236,6 +236,7 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/modules/"
 
 # helper scripts and files
 install(PROGRAMS scripts/setup.sh
+                 scripts/remove.sh
         DESTINATION ${GNXI_SCRIPTS_DIR}
 )
 install(FILES example_config/minimal-configuration.json
@@ -252,6 +253,25 @@ if(SYSREPO_SETUP)
         message(FATAL_ERROR "Unable to find sysrepocfg, set SYSREPOCFG_EXECUTABLE manually.")
     endif()
 
+    if(NOT MODULES_OWNER)
+        execute_process(COMMAND id -un RESULT_VARIABLE RET
+        OUTPUT_VARIABLE MODULES_OWNER OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE ERROR_STR OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(RET)
+            message(WARNING "Learning server module user failed (${ERROR_STR}), the current user will be used.")
+        endif()
+    endif()
+    set(MODULES_OWNER "${MODULES_OWNER}" CACHE STRING "System user that will become the owner of server modules, empty means the current user")
+    if(NOT MODULES_GROUP AND MODULES_OWNER)
+        execute_process(COMMAND id -gn ${MODULES_OWNER} RESULT_VARIABLE RET
+        OUTPUT_VARIABLE MODULES_GROUP OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE ERROR_STR OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(RET)
+            message(WARNING "Learning server module group failed (${ERROR_STR}), the current user group will be used.")
+        endif()
+    endif()
+    set(MODULES_GROUP "${MODULES_GROUP}" CACHE STRING "System group that the server modules will belong to, empty means the current user group")
+
     # install the modules into sysrepo using the installed setup.sh,
     # the module directory is passed via environment variables (like netopeer2)
     install(CODE "
@@ -260,6 +280,8 @@ if(SYSREPO_SETUP)
         set(ENV{SYSREPOCTL_EXECUTABLE} \"${SYSREPOCTL_EXECUTABLE}\")
         set(ENV{SYSREPOCFG_EXECUTABLE} \"${SYSREPOCFG_EXECUTABLE}\")
         set(ENV{GNXI_CONFIG_FILE} \"${GNXI_SCRIPTS_DIR}/minimal-configuration.json\")
+        set(ENV{GNXI_MODULE_OWNER} \"${MODULES_OWNER}\")
+        set(ENV{GNXI_MODULE_GROUP} \"${MODULES_GROUP}\")
         execute_process(COMMAND \"\$ENV{DESTDIR}${GNXI_SCRIPTS_DIR}/setup.sh\"
             RESULT_VARIABLE CMD_RES
             OUTPUT_VARIABLE CMD_OUT
@@ -275,6 +297,13 @@ if(SYSREPO_SETUP)
 else()
     message(WARNING "Server will refuse to start if the YANG modules are not installed!")
 endif()
+
+# uninstall the YANG modules from sysrepo using the installed remove.sh
+add_custom_target(uninstall
+    "${GNXI_SCRIPTS_DIR}/remove.sh"
+    COMMAND "${CMAKE_COMMAND}" -P "${CMAKE_MODULE_PATH}/uninstall.cmake"
+    COMMENT "Removing sysrepo-gnxi YANG modules from sysrepo and installed files"
+)
 
 # FORMAT
 ########

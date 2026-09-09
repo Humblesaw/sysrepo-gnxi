@@ -308,240 +308,234 @@ static void install_test_modules(sysrepo::Connection &sr_conn)
     sr_conn.installModules(modules, {files_dir, modules_dir});
 }
 
-class SetupServer
+// the single server subprocess manager of this test binary
+SetupServer server;
+
+SetupServer::~SetupServer()
 {
-  public:
-    /**
-     * @brief Launch the server subprocess for this test binary.
-     *
-     * @param[in] test_name Name of the test (for per-binary paths).
-     * @param[in] debug Wait for the user before starting the server.
-     * @param[in] secure Launch the secure (mTLS) server instead of the
-     *                   insecure one.
-     */
-    SetupServer(const std::string &test_name, bool debug = false, bool secure = false)
-        : debug_(debug), secure_(secure)
+    stop(server_pid_);
+    // the log is kept
+}
+
+void SetupServer::launch(const std::string &test_name, bool debug, bool secure)
+{
+    debug_ = debug;
+    secure_ = secure;
+
+    if (secure_)
     {
-        if (secure_)
-        {
-            // the secure server reads its whole configuration (including
-            // TLS) from sysrepo, so it must be written to the repository
-            // before the launch
-            log_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-mtls.log");
-            std::filesystem::remove(log_);
-            mtls_addr = std::string(HOST) + ":" + std::to_string(PORT);
+        // the secure server reads its whole configuration (including
+        // TLS) from sysrepo, so it must be written to the repository
+        // before the launch
+        sock_ = "";
+        server_log_ =
+            (std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-mtls.log")).string();
+        std::filesystem::remove(server_log_);
+        mtls_addr = std::string(HOST) + ":" + std::to_string(PORT);
 
-            apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "secure.json", "");
-            server_pid_ = run_server({"-l", "4"}, log_.string(), "mTLS");
-        }
-        else
-        {
-            // insecure server - per-binary paths so tests can run in parallel
-            sock_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + ".sock");
-            log_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-insecure.log");
-            std::filesystem::remove(sock_);
-            std::filesystem::remove(log_);
-            insecure_addr = "unix:" + sock_.string();
+        apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "secure.json", "");
+        server_args_ = {"-l", "4"};
+        server_label_ = "mTLS";
+        server_pid_ = run_server(server_args_, server_log_);
+    }
+    else
+    {
+        // insecure server - per-binary paths so tests can run in parallel
+        sock_base_ = std::filesystem::path(TESTS_WORKING_DIR) / (test_name + ".sock");
+        sock_ = sock_base_;
+        server_log_ =
+            (std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-insecure.log")).string();
+        std::filesystem::remove(sock_);
+        std::filesystem::remove(server_log_);
+        insecure_addr = "unix:" + sock_.string();
 
-            apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json",
-                         sock_.string());
-            server_pid_ = run_server({"-f", "-l", "4"}, log_.string(), "Insecure");
+        apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json",
+                     sock_.string());
+        server_args_ = {"-f", "-l", "4"};
+        server_label_ = "Insecure";
+        server_pid_ = run_server(server_args_, server_log_);
+    }
+}
+
+void SetupServer::wait_ready()
+{
+    if (secure_)
+    {
+        wait_for_tcp(HOST, PORT);
+    }
+    else
+    {
+        wait_for_unix(sock_.string());
+    }
+}
+
+void SetupServer::restart()
+{
+    if (server_pid_ <= 0 || secure_)
+    {
+        throw std::runtime_error("restart() requires a running insecure server");
+    }
+
+    stop(server_pid_);
+    server_pid_ = -1;
+
+    // use a fresh socket path for the restarted server: a gRPC channel to
+    // the same path would keep reusing its (now stale) connection to the
+    // old server
+    sock_ = sock_base_;
+    sock_ += "-" + std::to_string(++restart_count_);
+    insecure_addr = "unix:" + sock_.string();
+
+    // point the server configuration at the new socket
+    apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json",
+                 sock_.string());
+
+    server_pid_ = run_server(server_args_, server_log_);
+    wait_for_unix(sock_.string());
+
+    // fresh client channel to the restarted server
+    auto channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
+    channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
+    gnmi_client = gnmi::gNMI::NewStub(channel);
+#ifdef GNXI_SERVICE_ENABLED
+    gnxi_client = yang_rpc::YANG_RPC::NewStub(channel);
+#endif
+}
+
+void SetupServer::stop(pid_t pid)
+{
+    if (pid > 0)
+    {
+        kill(pid, SIGTERM);
+        int status;
+        waitpid(pid, &status, 0);
+    }
+}
+
+pid_t SetupServer::run_server(const std::vector<std::string> &args, const std::string &log_path)
+{
+    int pipefd[2] = {-1, -1};
+    if (debug_)
+    {
+        if (pipe(pipefd) < 0)
+        {
+            throw std::runtime_error("pipe failed");
         }
     }
 
-    /**
-     * @brief Wait for the launched server to become ready.
-     *
-     * @throws std::runtime_error if the server does not start listening
-     *         within the timeout.
-     */
-    void wait_ready()
+    pid_t pid = fork();
+    if (pid < 0)
     {
-        if (secure_)
-        {
-            wait_for_tcp(HOST, PORT);
-        }
-        else
-        {
-            wait_for_unix(sock_.string());
-        }
+        throw std::runtime_error("fork failed");
     }
 
-    ~SetupServer()
+    if (pid == 0)
     {
-        stop(server_pid_);
-        // the log is kept
-    }
-
-  private:
-    pid_t server_pid_ = -1;
-    std::filesystem::path sock_;
-    std::filesystem::path log_;
-    static constexpr const char *HOST = "127.0.0.1";
-    static constexpr uint16_t PORT = 50052;
-    bool debug_;
-    bool secure_;
-
-    /**
-     * @brief Stop process by killing it and waiting for it.
-     *
-     * @param[in] pid Id of a process to kill.
-     */
-    static void stop(pid_t pid)
-    {
-        if (pid > 0)
-        {
-            kill(pid, SIGTERM);
-            int status;
-            waitpid(pid, &status, 0);
-        }
-    }
-
-    /**
-     * @brief Create a separate process and run server on it.
-     *
-     * @param[in] args Arguments for the server.
-     * @param[in] log_path Log path for server's stdout/stderr.
-     * @param[in] label Custom server label.
-     * @return New process id.
-     */
-    pid_t run_server(const std::vector<std::string> &args, const std::string &log_path,
-                     const char *label)
-    {
-        int pipefd[2] = {-1, -1};
+        // child
         if (debug_)
         {
-            if (pipe(pipefd) < 0)
-            {
-                throw std::runtime_error("pipe failed");
-            }
-        }
-
-        pid_t pid = fork();
-        if (pid < 0)
-        {
-            throw std::runtime_error("fork failed");
-        }
-
-        if (pid == 0)
-        {
-            // child
-            if (debug_)
-            {
-                close(pipefd[1]);
-                // wait for parent's signal before exec
-                char buf = 0;
-                if (read(pipefd[0], &buf, 1) != 1)
-                {
-                    _exit(127);
-                }
-                close(pipefd[0]);
-            }
-
-            int fd = open(log_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
-            if (fd < 0)
+            close(pipefd[1]);
+            // wait for parent's signal before exec
+            char buf = 0;
+            if (read(pipefd[0], &buf, 1) != 1)
             {
                 _exit(127);
             }
-            dup2(fd, 1);
-            dup2(fd, 2);
-            close(fd);
+            close(pipefd[0]);
+        }
 
-            std::vector<const char *> argv;
-            argv.push_back(SERVER_BINARY);
-            for (const auto &a : args)
-            {
-                argv.push_back(a.c_str());
-            }
-            argv.push_back(nullptr);
-
-            execv(argv[0], const_cast<char *const *>(argv.data()));
+        int fd = open(log_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        if (fd < 0)
+        {
             _exit(127);
         }
+        dup2(fd, 1);
+        dup2(fd, 2);
+        close(fd);
 
-        // parent
-        if (debug_)
+        std::vector<const char *> argv;
+        argv.push_back(SERVER_BINARY);
+        for (const auto &a : args)
         {
-            close(pipefd[0]);
-            fprintf(stderr, "%s server PID: %d\n", label, pid);
-            fprintf(stderr, "Attach gdb: gdb -p %d\n", pid);
-            fprintf(stderr, "Press Enter to continue...\n");
-            getc(stdin);
-            char buf = 0;
-            if (write(pipefd[1], &buf, 1) != 1)
-            {
-                perror("write");
-                stop(pid);
-                throw std::runtime_error("failed to signal child");
-            }
-            close(pipefd[1]);
+            argv.push_back(a.c_str());
         }
+        argv.push_back(nullptr);
 
-        return pid;
+        execv(argv[0], const_cast<char *const *>(argv.data()));
+        _exit(127);
     }
 
-    /**
-     * @brief Wait for server to start listening on the unix socket.
-     *
-     * @param[in] sock_path Socket to check.
-     */
-    static void wait_for_unix(const std::string &sock_path)
+    // parent
+    if (debug_)
     {
-        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-        while (std::chrono::steady_clock::now() < deadline)
+        close(pipefd[0]);
+        fprintf(stderr, "%s server PID: %d\n", server_label_.c_str(), pid);
+        fprintf(stderr, "Attach gdb: gdb -p %d\n", pid);
+        fprintf(stderr, "Press Enter to continue...\n");
+        getc(stdin);
+        char buf = 0;
+        if (write(pipefd[1], &buf, 1) != 1)
         {
-            int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-            if (sock >= 0)
-            {
-                struct sockaddr_un addr = {};
-                addr.sun_family = AF_UNIX;
-                strncpy(addr.sun_path, sock_path.c_str(), sizeof(addr.sun_path) - 1);
-                if (connect(sock, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0)
-                {
-                    close(sock);
-                    return;
-                }
-                close(sock);
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            perror("write");
+            stop(pid);
+            throw std::runtime_error("failed to signal child");
         }
-        throw std::runtime_error("Insecure server (unix socket) did not become ready within 10s");
+        close(pipefd[1]);
     }
 
-    /**
-     * @brief Wait for server to start listening on specific port on host.
-     *
-     * @param[in] host Host address.
-     * @param[in] port Host port.
-     */
-    static void wait_for_tcp(const std::string &host, uint16_t port)
+    return pid;
+}
+
+void SetupServer::wait_for_unix(const std::string &sock_path)
+{
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < deadline)
     {
-        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-        while (std::chrono::steady_clock::now() < deadline)
+        int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (sock >= 0)
         {
-            // poll TCP connect to make sure the port is actually accepting
-            int sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (sock >= 0)
+            struct sockaddr_un addr = {};
+            addr.sun_family = AF_UNIX;
+            strncpy(addr.sun_path, sock_path.c_str(), sizeof(addr.sun_path) - 1);
+            if (connect(sock, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) == 0)
             {
-                struct sockaddr_in sin = {};
-                sin.sin_family = AF_INET;
-                sin.sin_port = htons(port);
-                if (inet_pton(AF_INET, host.c_str(), &sin.sin_addr) != 1)
-                {
-                    throw std::runtime_error("invalid binding address for mTLS server");
-                }
-                if (connect(sock, reinterpret_cast<struct sockaddr *>(&sin), sizeof(sin)) == 0)
-                {
-                    close(sock);
-                    return;
-                }
                 close(sock);
+                return;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            close(sock);
         }
-        throw std::runtime_error("mTLS server did not become ready within 10s");
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-};
+    throw std::runtime_error("Insecure server (unix socket) did not become ready within 10s");
+}
+
+void SetupServer::wait_for_tcp(const std::string &host, uint16_t port)
+{
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        // poll TCP connect to make sure the port is actually accepting
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock >= 0)
+        {
+            struct sockaddr_in sin = {};
+            sin.sin_family = AF_INET;
+            sin.sin_port = htons(port);
+            if (inet_pton(AF_INET, host.c_str(), &sin.sin_addr) != 1)
+            {
+                throw std::runtime_error("invalid binding address for mTLS server");
+            }
+            if (connect(sock, reinterpret_cast<struct sockaddr *>(&sin), sizeof(sin)) == 0)
+            {
+                close(sock);
+                return;
+            }
+            close(sock);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    throw std::runtime_error("mTLS server did not become ready within 10s");
+}
 
 class SetupSysrepo
 {
@@ -665,11 +659,11 @@ int main(int argc, char *argv[])
 
 #ifdef AUTH_MTLS_ENABLED
         // this binary tests the secure (mTLS) server
-        SetupServer _setup_server(test_name, debug, true);
-        _setup_server.wait_ready();
+        server.launch(test_name, debug, true);
+        server.wait_ready();
 #else
-        SetupServer _setup_server(test_name, debug, false);
-        _setup_server.wait_ready();
+        server.launch(test_name, debug, false);
+        server.wait_ready();
 
         auto main_channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
         main_channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));

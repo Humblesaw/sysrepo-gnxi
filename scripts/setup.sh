@@ -19,6 +19,14 @@
 #   GNXI_CONFIG_FILE        path to the minimal configuration JSON file
 #   SYSREPOCFG_EXECUTABLE   path to the sysrepocfg binary
 #
+# The following environment variables are optional and define the owner and
+# group of the module data files (empty means the current user). They matter
+# when the script is run under sudo (e.g. `sudo make install`) so that the
+# server can still access the modules when run as the regular user:
+#
+#   GNXI_MODULE_OWNER       owner of the module data files
+#   GNXI_MODULE_GROUP       group of the module data files
+#
 # If the install is staged into a temporary location by the packaging
 # tooling CMake exports DESTDIR and the script prepends it to the paths.
 
@@ -36,15 +44,24 @@ if [ ! -d "$MODDIR" ]; then
     exit 1
 fi
 
+# additional sysrepoctl arguments for setting the module data file owner/group
+OWNARGS=""
+if [ -n "${GNXI_MODULE_OWNER:-}" ]; then
+    OWNARGS=" -o ${GNXI_MODULE_OWNER}"
+fi
+if [ -n "${GNXI_MODULE_GROUP:-}" ]; then
+    OWNARGS="${OWNARGS} -g ${GNXI_MODULE_GROUP}"
+fi
+
 # install a module into sysrepo, features to enable are passed as extra arguments
 install_module() {
     local file=$1
     shift
 
     echo -n "  $file..."
-    if ! "$SYSREPOCTL" -i "$MODDIR/$file" -s "$MODDIR" "$@" >/dev/null 2>&1; then
+    if ! "$SYSREPOCTL" -i "$MODDIR/$file" -s "$MODDIR" "$@" $OWNARGS >/dev/null 2>&1; then
         echo " FAILED"
-        "$SYSREPOCTL" -i "$MODDIR/$file" -s "$MODDIR" "$@" || exit 1
+        "$SYSREPOCTL" -i "$MODDIR/$file" -s "$MODDIR" "$@" $OWNARGS || exit 1
     fi
     echo " ok"
 }
@@ -75,6 +92,9 @@ echo "Setting permissions on private modules..."
 # private modules whose data files must be readable/writable only by their owner
 for mod in sysrepo-gnxi-server sysrepo-gnxi-users; do
     "$SYSREPOCTL" -c "$mod" -p 600 >/dev/null 2>&1 || true
+    if [ -n "$OWNARGS" ]; then
+        "$SYSREPOCTL" -c "$mod" $OWNARGS >/dev/null 2>&1 || true
+    fi
 done
 
 # import the minimal configuration so that the server is runnable right

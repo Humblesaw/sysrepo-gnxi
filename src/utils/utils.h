@@ -23,12 +23,16 @@
 
 #pragma once
 
+#include <atomic>
 #include <cassert>
 #include <chrono>
+#include <grpc/status.h>
 #include <proto/gnmi.grpc.pb.h>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+
+#include "utils/log.h"
 
 /* Get current time since epoch in nanosec */
 inline uint64_t get_time_nanosec()
@@ -81,7 +85,7 @@ inline std::string gnmi_to_xpath(const gnmi::Path &path)
             throw std::invalid_argument("Relative paths not allowed");
 
         str += node.name();
-        for (auto key : node.key())
+        for (const auto &key : node.key())
         {
             // YANG 1.1 uses XPath 1.0 and it doesn't support escaping quotes:
             // >   	Literal	   ::=   	'"' [^"]* '"'
@@ -102,7 +106,7 @@ inline std::string gnmi_to_xpath(const gnmi::Path &path)
 
 // Parse XPath-like string in gnmi::Path
 // Assumes that the path is well-formed (i.e. hasn't come from the client)
-inline void xpath_to_gnmi(std::string xpath, gnmi::Path &path)
+inline void xpath_to_gnmi(const std::string &xpath, gnmi::Path &path)
 {
     if (!xpath.compare("/"))
         return;
@@ -171,12 +175,12 @@ inline bool gnmi_path_equals(const gnmi::Path &path1, const gnmi::Path &path2)
             return false;
         if (path1.elem(i).key_size() != path2.elem(i).key_size())
             return false;
-        for (auto key_val1 : path1.elem(i).key())
+        for (const auto &key_val1 : path1.elem(i).key())
         {
             bool found = false;
-            for (auto key_val2 : path2.elem(i).key())
+            for (const auto &key_val2 : path2.elem(i).key())
             {
-                if (key_val2.first == key_val1.first && key_val2.second == key_val2.second)
+                if (key_val2.first == key_val1.first && key_val2.second == key_val1.second)
                 {
                     found = true;
                     break;
@@ -193,10 +197,11 @@ inline bool gnmi_path_equals(const gnmi::Path &path1, const gnmi::Path &path2)
 
 /**
  * @brief Check whether a YANG module name belongs to a private module
- *        that must never be accessible via gNMI RPCs.
+ * that must never be accessible via gNMI RPCs.
  *
  * The set of private modules is hardcoded. It includes all modules that
- * store server configuration, TLS credentials or user database data.
+ * store server configuration, TLS credentials or user database data,
+ * and the internal "sysrepo" module (datastore internals).
  *
  * @param[in] name Module name to check.
  * @return True if the module is private, false otherwise.
@@ -204,9 +209,69 @@ inline bool gnmi_path_equals(const gnmi::Path &path1, const gnmi::Path &path2)
 inline bool isPrivateModule(const std::string &name)
 {
     static const std::unordered_set<std::string> private_modules = {
-        "sysrepo-gnxi-server", "sysrepo-gnxi-users",         "ietf-keystore",
-        "ietf-truststore",     "ietf-crypto-types",          "ietf-tls-server",
-        "ietf-tls-common",     "iana-tls-cipher-suite-algs",
+        "sysrepo",         "sysrepo-gnxi-server", "sysrepo-gnxi-users",
+        "ietf-keystore",   "ietf-truststore",     "ietf-crypto-types",
+        "ietf-tls-server", "ietf-tls-common",     "iana-tls-cipher-suite-algs",
     };
     return private_modules.contains(name);
+}
+
+/**
+ * @brief One-way server shutdown flag shared by all gRPC services.
+ *
+ * Set when the server starts shutting down and never cleared again -
+ * restarting the services within the same process is not supported. New
+ * RPCs are rejected with UNAVAILABLE once it is set.
+ */
+inline std::atomic<bool> rpc_shutting_down{false};
+
+/**
+ * @brief Central exception handler for gRPC service methods.
+ *
+ * Wraps an RPC handler invocation so that no exception can escape into
+ * the gRPC runtime: grpc::Status exceptions are returned as-is,
+ * std::exception becomes INTERNAL. Local try-catch blocks are then only
+ * needed where exceptions are mapped to more specific status codes or
+ * where cleanup is required.
+ *
+ * @param[in] handler Callable performing the actual RPC handling.
+ * @return The status returned by the handler or its exception's status.
+ */
+template <typename Handler> grpc::Status rpc_catch_exceptions(Handler &&handler)
+{
+    try
+    {
+        return handler();
+    }
+    catch (const grpc::Status &status)
+    {
+        return status;
+    }
+    catch (const std::exception &exc)
+    {
+        SLOG_ERROR("Unexpected error in RPC handling: ", exc.what());
+        return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
+    }
+    catch (...)
+    {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "unknown error");
+    }
+}
+
+/**
+ * @brief Check that the gNMI encoding of a request is supported.
+ *
+ * @param[in] encoding Encoding requested by the client.
+ * @return grpc::Status::OK when supported, UNIMPLEMENTED naming the
+ * encoding otherwise.
+ */
+inline grpc::Status gnmi_check_encoding(gnmi::Encoding encoding)
+{
+    if (encoding != gnmi::JSON_IETF)
+    {
+        auto name = gnmi::Encoding_Name(encoding);
+        SLOG_WARN("Unsupported Encoding ", name);
+        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, name);
+    }
+    return grpc::Status::OK;
 }

@@ -28,6 +28,11 @@
 
 #include "utils/log.h"
 
+/**
+ * @brief The YANG_RPC service: entry point for invoking YANG RPCs and
+ * actions over gRPC.
+ *
+ */
 class YANG_RPCService final : public yang_rpc::YANG_RPC::Service
 {
   public:

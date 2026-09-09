@@ -131,6 +131,13 @@ void Auth::authenticate(sysrepo::Session &sess, const std::string &username,
 void Auth::authorize(sysrepo::Session &sess, const std::string &username,
                      const std::unordered_set<std::string> &modules, Access permission) const
 {
+    // an empty set of modules means the operation matches no schema nodes
+    // (e.g. a non-existent path), so there is nothing to authorize
+    if (modules.empty())
+    {
+        return;
+    }
+
     std::unordered_set<std::string> modules_authorized;
 
     try
