@@ -1,67 +1,58 @@
-FROM fedora:44 AS base
+FROM fedora:44
 
+# build tools and third-party dependencies
 # dnf returns 1 when an error was handled by dnf (but still successful)
-RUN dnf upgrade --refresh || (( $?==0 | $?==1 ))
-RUN dnf group install -y c-development development-tools || (( $?==0 | $?==1 ))
+RUN set -e; \
+    dnf upgrade --refresh || (( $?==0 | $?==1 )); \
+    dnf group install -y c-development development-tools || (( $?==0 | $?==1 )); \
+    dnf install -y cmake pcre2-devel systemd-devel grpc-devel protobuf-compiler protobuf-devel openssl-devel || (( $?==0 | $?==1 )); \
+    dnf clean all; \
+    echo "/usr/local/lib64" > /etc/ld.so.conf.d/local.conf
 
-# install libyang (libyang has to create pkg-config file for libyang-cpp)
-RUN dnf install -y cmake pcre2-devel || (( $?==0 | $?==1 ))
-RUN echo "/usr/local/lib64" > /etc/ld.so.conf.d/local.conf
+# install libyang
 WORKDIR /root
-RUN git clone https://github.com/CESNET/libyang.git
-WORKDIR /root/libyang
-RUN git checkout devel
-RUN mkdir build
+RUN git clone --depth 1 https://github.com/CESNET/libyang.git \
+    && cd libyang \
+    && git fetch --depth 1 origin 4a6b09b75a93be875cb1418f0dc47e2168b91a30 \
+    && git checkout 4a6b09b75a93be875cb1418f0dc47e2168b91a30
 WORKDIR /root/libyang/build
 RUN cmake ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # install sysrepo
-RUN dnf install -y systemd-devel || (( $?==0 | $?==1 ))
 WORKDIR /root
-RUN git clone https://github.com/sysrepo/sysrepo.git
-WORKDIR /root/sysrepo
-RUN git checkout devel
-RUN mkdir build
+RUN git clone --depth 1 https://github.com/sysrepo/sysrepo.git \
+    && cd sysrepo \
+    && git fetch --depth 1 origin 571033486ccedadf020fa06b535172261fab1a81 \
+    && git checkout 571033486ccedadf020fa06b535172261fab1a81
 WORKDIR /root/sysrepo/build
 RUN cmake ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # install libyang-cpp
 WORKDIR /root
-RUN git clone https://github.com/CESNET/libyang-cpp.git
-WORKDIR /root/libyang-cpp
-RUN git checkout master
-RUN mkdir build
+RUN git clone --depth 1 --branch v11 https://github.com/CESNET/libyang-cpp.git
 WORKDIR /root/libyang-cpp/build
 RUN cmake -DBUILD_TESTING=OFF ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # install sysrepo-cpp
 WORKDIR /root
-RUN git clone https://github.com/sysrepo/sysrepo-cpp.git
-WORKDIR /root/sysrepo-cpp
-RUN git checkout master
-RUN mkdir build
+RUN git clone --depth 1 --branch v10 https://github.com/sysrepo/sysrepo-cpp.git
 WORKDIR /root/sysrepo-cpp/build
 RUN cmake -DBUILD_TESTING=OFF ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # refresh
 RUN ldconfig
 
-# third-party dependencies
-RUN dnf install -y grpc-devel protobuf-compiler protobuf-devel openssl-devel || (( $?==0 | $?==1 ))
-
 # install sysrepo-gnxi
 COPY . /root/sysrepo-gnxi
-WORKDIR /root/sysrepo-gnxi
-RUN mkdir build
 WORKDIR /root/sysrepo-gnxi/build
 RUN cmake -DENABLE_TESTS=ON -DENABLE_YANG_RPC=ON ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN ctest --output-on-failure

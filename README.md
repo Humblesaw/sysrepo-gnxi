@@ -51,10 +51,10 @@ Secure mode follows the gNMI specification and requires both the server and clie
 - grpc (cpp) >= 1.30.2
 - OpenSSL >= 3
 - crypt(3)
-- libyang-cpp (master branch)
-- sysrepo-cpp (master branch)
-  - libyang (devel branch)
-  - sysrepo (devel branch)
+- libyang >= 6.2.8
+- libyang-cpp >= 11
+- sysrepo >= 5.2.17
+- sysrepo-cpp >= 10
 
 ## Build & Install
 

@@ -1,19 +1,21 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(sysrepo-gnxi)
-
 set(SYSREPO-GNXI_MAJOR_VERSION 0)
 set(SYSREPO-GNXI_MINOR_VERSION 1)
 set(SYSREPO-GNXI_MICRO_VERSION 0)
 
-set(SYSREPO-GNXI_VERSION ${SYSREPO-GNXI_MAJOR_VERSION}.${SYSREPO-GNXI_MINOR_VERSION}.${SYSREPO-GNXI_MICRO_VERSION})
+project(sysrepo-gnxi
+        VERSION ${SYSREPO-GNXI_MAJOR_VERSION}.${SYSREPO-GNXI_MINOR_VERSION}.${SYSREPO-GNXI_MICRO_VERSION}
+        LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(GNUInstallDirs)
 
-# debug build by default
-set(CMAKE_BUILD_TYPE Debug)
+# debug build by default, override with -DCMAKE_BUILD_TYPE=<type>
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
 
 # custom cmake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMakeModules")
@@ -34,16 +36,29 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(PkgConfig) # official cmake module
 
 # IMPORTED_TARGET creates PkgConfig::<PREFIX>
-pkg_check_modules(SYSREPOC REQUIRED sysrepo IMPORTED_TARGET)
-pkg_check_modules(LIBYANGC REQUIRED libyang IMPORTED_TARGET)
-pkg_check_modules(SYSREPO REQUIRED sysrepo-cpp IMPORTED_TARGET)
-pkg_check_modules(LIBYANG REQUIRED libyang-cpp IMPORTED_TARGET)
+pkg_check_modules(SYSREPOC REQUIRED sysrepo>=5.2.17 IMPORTED_TARGET)
+pkg_check_modules(LIBYANGC REQUIRED libyang>=6.2.8 IMPORTED_TARGET)
+pkg_check_modules(SYSREPO REQUIRED sysrepo-cpp>=10 IMPORTED_TARGET)
+pkg_check_modules(LIBYANG REQUIRED libyang-cpp>=11 IMPORTED_TARGET)
 
 # for password hashing
 find_package(OpenSSL 3 REQUIRED)
 pkg_check_modules(LIBCRYPT REQUIRED libcrypt IMPORTED_TARGET)
 
 add_subdirectory(proto) # compile and link proto files
+
+# dependencies shared by all sysrepo-gnxi targets
+# (gRPC/protobuf come transitively via the gnmi library)
+add_library(gnxi_deps INTERFACE)
+target_link_libraries(gnxi_deps INTERFACE
+    gnmi
+    PkgConfig::SYSREPO
+    PkgConfig::SYSREPOC
+    PkgConfig::LIBYANG
+    PkgConfig::LIBYANGC
+    PkgConfig::LIBCRYPT
+    OpenSSL::Crypto
+)
 
 # COMPILER & LINKER
 ###################
@@ -100,16 +115,7 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/src # include "src" tree for <utils/> <security/>
 )
 
-# link main executable with sysrepo libraries (gRPC/protobuf come transitively
-# via the gnmi library)
-target_link_libraries(${PROJECT_NAME} gnmi
-                      PkgConfig::SYSREPO
-                      PkgConfig::SYSREPOC
-                      PkgConfig::LIBYANG
-                      PkgConfig::LIBYANGC
-                      PkgConfig::LIBCRYPT
-                      OpenSSL::Crypto
-)
+target_link_libraries(${PROJECT_NAME} gnxi_deps)
 
 # user database management utility
 set(USERS_CLI sysrepo-gnxi-users)
@@ -121,14 +127,7 @@ target_include_directories(${USERS_CLI}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(${USERS_CLI}
-                      PkgConfig::SYSREPO
-                      PkgConfig::SYSREPOC
-                      PkgConfig::LIBYANG
-                      PkgConfig::LIBYANGC
-                      PkgConfig::LIBCRYPT
-                      OpenSSL::Crypto
-)
+target_link_libraries(${USERS_CLI} gnxi_deps)
 
 # TESTS
 #######
@@ -184,14 +183,7 @@ if (ENABLE_TESTS)
                 ${CMAKE_CURRENT_SOURCE_DIR}/src
         )
 
-        target_link_libraries(${GNXI_TEST_NAME} gnmi
-            PkgConfig::SYSREPO
-            PkgConfig::SYSREPOC
-            PkgConfig::LIBYANG
-            PkgConfig::LIBYANGC
-            PkgConfig::LIBCRYPT
-            OpenSSL::Crypto
-        )
+        target_link_libraries(${GNXI_TEST_NAME} gnxi_deps)
     endforeach()
 endif()
 

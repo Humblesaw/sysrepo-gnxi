@@ -1,65 +1,53 @@
-FROM archlinux:latest AS base
+FROM archlinux:latest
 
-RUN pacman -Syu --noconfirm
-RUN pacman -S --noconfirm base-devel git
+# build tools and third-party dependencies
+RUN pacman -Syu --noconfirm base-devel git cmake pcre2 pkgconf systemd-libs grpc protobuf openssl \
+    && pacman -Scc --noconfirm
 
-# install libyang (libyang has to create pkg-config file for libyang-cpp)
-RUN pacman -S --noconfirm cmake pcre2 pkgconf
+# install libyang
 WORKDIR /root
-RUN git clone https://github.com/CESNET/libyang.git
-WORKDIR /root/libyang
-RUN git checkout devel
-RUN mkdir build
+RUN git clone --depth 1 https://github.com/CESNET/libyang.git \
+    && cd libyang \
+    && git fetch --depth 1 origin 4a6b09b75a93be875cb1418f0dc47e2168b91a30 \
+    && git checkout 4a6b09b75a93be875cb1418f0dc47e2168b91a30
 WORKDIR /root/libyang/build
 RUN cmake -DCMAKE_INSTALL_PREFIX=/usr ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # install sysrepo
-RUN pacman -S --noconfirm systemd-libs
 WORKDIR /root
-RUN git clone https://github.com/sysrepo/sysrepo.git
-WORKDIR /root/sysrepo
-RUN git checkout devel
-RUN mkdir build
+RUN git clone --depth 1 https://github.com/sysrepo/sysrepo.git \
+    && cd sysrepo \
+    && git fetch --depth 1 origin 571033486ccedadf020fa06b535172261fab1a81 \
+    && git checkout 571033486ccedadf020fa06b535172261fab1a81
 WORKDIR /root/sysrepo/build
 RUN cmake -DCMAKE_INSTALL_PREFIX=/usr ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # install libyang-cpp
 WORKDIR /root
-RUN git clone https://github.com/CESNET/libyang-cpp.git
-WORKDIR /root/libyang-cpp
-RUN git checkout master
-RUN mkdir build
+RUN git clone --depth 1 --branch v11 https://github.com/CESNET/libyang-cpp.git
 WORKDIR /root/libyang-cpp/build
 RUN cmake -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # install sysrepo-cpp
 WORKDIR /root
-RUN git clone https://github.com/sysrepo/sysrepo-cpp.git
-WORKDIR /root/sysrepo-cpp
-RUN git checkout master
-RUN mkdir build
+RUN git clone --depth 1 --branch v10 https://github.com/sysrepo/sysrepo-cpp.git
 WORKDIR /root/sysrepo-cpp/build
 RUN cmake -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN make install
 
 # refresh
 RUN ldconfig
 
-# third-party dependencies
-RUN pacman -S --noconfirm grpc protobuf openssl
-
 # install sysrepo-gnxi
 COPY . /root/sysrepo-gnxi
-WORKDIR /root/sysrepo-gnxi
-RUN mkdir build
 WORKDIR /root/sysrepo-gnxi/build
 RUN cmake -DENABLE_TESTS=ON -DENABLE_YANG_RPC=ON ..
-RUN make -j4
+RUN make -j"$(nproc)"
 RUN ctest --output-on-failure
