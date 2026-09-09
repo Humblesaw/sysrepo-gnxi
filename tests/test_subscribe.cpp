@@ -1806,7 +1806,6 @@ TEST_CASE("Subscribe (stream) with updates_only", "[subs-neg]")
 {
     grpc::ClientContext ctx;
     gnmi::SubscribeRequest request;
-    gnmi::SubscribeRequest poll_request;
     gnmi::SubscribeResponse response;
     auto list = request.mutable_subscribe();
     auto sub = list->add_subscription();
@@ -1815,14 +1814,11 @@ TEST_CASE("Subscribe (stream) with updates_only", "[subs-neg]")
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     list->set_updates_only(true);
     xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
-    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
+    sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
+    sub->set_sample_interval(std::chrono::nanoseconds(std::chrono::seconds(1)).count());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
-    CHECK(success == true);
-
-    poll_request.mutable_poll();
-    success = rw->Write(poll_request);
     CHECK(success == true);
 
     success = rw->Read(&response);
@@ -1831,4 +1827,92 @@ TEST_CASE("Subscribe (stream) with updates_only", "[subs-neg]")
     auto status = rw->Finish();
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
     CHECK_THAT(status.error_message(), Equals("updates-only not supported"));
+}
+
+TEST_CASE("Subscribe (stream) with TARGET_DEFINED subscription mode", "[subs-neg]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    sub->set_mode(gnmi::SubscriptionMode::TARGET_DEFINED);
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
+    CHECK_THAT(status.error_message(), Equals("TARGET_DEFINED subscription mode not supported"));
+}
+
+TEST_CASE("Subscribe (stream-sample) with zero sample interval", "[subs]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
+    // gNMI spec: 0 means the lowest interval possible for the target,
+    // the server clamps it to its minimum - so updates must keep coming
+    sub->set_sample_interval(0);
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    // the initial data
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(response.extension_size() == 0);
+    CHECK(!response.sync_response());
+    CHECK(response.update().delete__size() == 0);
+    CHECK(response.update().timestamp() > 0);
+    CHECK(!response.update().has_prefix());
+    REQUIRE(response.update().update_size() == 1);
+    CHECK(response.update().update().Get(0).val().value_case() ==
+          gnmi::TypedValue::ValueCase::kJsonIetfVal);
+
+    // the initial synchronization
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(!response.has_update());
+    CHECK(response.sync_response());
+
+    // a sampled update must arrive without any interval configured by the client
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(response.extension_size() == 0);
+    CHECK(response.update().delete__size() == 0);
+    CHECK(response.update().timestamp() > 0);
+    CHECK(!response.update().has_prefix());
+    REQUIRE(response.update().update_size() == 1);
+    CHECK(response.update().update().Get(0).val().value_case() ==
+          gnmi::TypedValue::ValueCase::kJsonIetfVal);
+    auto path = path_to_xpath(response.update().update().Get(0).path());
+    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+
+    // And then cancel
+    ctx.TryCancel();
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
 }

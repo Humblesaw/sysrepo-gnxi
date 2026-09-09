@@ -35,6 +35,10 @@ namespace impl
 class SrModuleOnChangeParams;
 class Scheduler;
 
+/**
+ * @brief Implementation of the gNMI Subscribe RPC.
+ *
+ */
 class Subscribe
 {
   public:
@@ -54,7 +58,8 @@ class Subscribe
                  Scheduler &scheduler);
     void triggerSampleUpdate(
         grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> &sub,
-        grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
+        grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
+        gnmi::Encoding encoding);
     grpc::Status BuildSubscribeNotification(gnmi::Notification *notification,
                                             const gnmi::SubscriptionList &request,
                                             bool *sample = nullptr);

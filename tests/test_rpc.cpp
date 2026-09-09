@@ -38,9 +38,11 @@ TEST_CASE("Rpc rpc", "[rpc]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.ok());
@@ -52,9 +54,11 @@ TEST_CASE("Rpc action", "[rpc]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:action-test/action-test", request.mutable_path());
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     request.mutable_input()->set_json_ietf_val("{\"foo\": \"bar\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.ok());
@@ -68,6 +72,7 @@ TEST_CASE("Rpc (no path)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     request.mutable_path();
@@ -82,6 +87,7 @@ TEST_CASE("Rpc (no value)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
@@ -96,6 +102,7 @@ TEST_CASE("Rpc (unsupported encoding)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
@@ -111,6 +118,7 @@ TEST_CASE("Rpc (unsupported input type)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
@@ -125,6 +133,7 @@ TEST_CASE("Rpc (nonexistent path)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:nonexistent", request.mutable_path());
@@ -139,6 +148,7 @@ TEST_CASE("Rpc (malformed value)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
@@ -153,6 +163,7 @@ TEST_CASE("Rpc (callback error)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
@@ -168,6 +179,7 @@ TEST_CASE("Rpc (no subscriber)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:no-subscriber", request.mutable_path());
@@ -182,6 +194,7 @@ TEST_CASE("Rpc (timeout)", "[rpc-neg]")
 {
     grpc::ClientContext ctx;
     yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());

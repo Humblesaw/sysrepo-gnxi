@@ -20,6 +20,8 @@
  * limitations under the License.
  */
 
+#include <cassert>
+
 #include <libyang-cpp/Context.hpp>
 #include <libyang-cpp/Module.hpp>
 #include <sysrepo-cpp/Connection.hpp>
@@ -36,6 +38,8 @@ void UpdateTransaction::merge(std::optional<libyang::DataNode> &tree,
 {
     if (node.has_value())
     {
+        // the node must be top-level, mergeWithSiblings only works on sibling lists
+        assert(!node->parent());
         if (tree.has_value())
         {
             tree.value().mergeWithSiblings(node.value());
@@ -55,24 +59,25 @@ void UpdateTransaction::push(std::optional<libyang::DataNode> &tree)
     }
 }
 
-std::unordered_set<std::string> collect_xpath_mods(libyang::Context ly_ctx, const char *xpath)
+std::unordered_set<std::string> collect_xpath_mods(const libyang::Context &ly_ctx,
+                                                   const char *xpath)
 {
     std::unordered_set<std::string> ly_mod_set;
     std::optional<libyang::SchemaNode> parent = std::nullopt;
     libyang::Set<libyang::SchemaNode> set = ly_ctx.findXPath(std::string(xpath));
 
-    for (auto iter = set.begin(); !(iter == set.end()); ++iter)
+    for (const auto &schema_node : set)
     {
         /* get module of the first schema node */
-        parent = *iter;
+        parent = schema_node;
         while (parent->parent() != std::nullopt)
         {
             parent = parent->parent();
         }
         auto ly_mod = parent->module();
 
-        /* skip import-only modules, and the internal SR_YANG_MOD */
-        if (!ly_mod.implemented() || ly_mod.name() == SR_YANG_MOD)
+        // skip the internal SR_YANG_MOD
+        if (ly_mod.name() == SR_YANG_MOD)
             continue;
 
         /* add a module to the set */
@@ -94,7 +99,7 @@ DataSubscribe::DataSubscribe(sysrepo::Session sess) : data_sess(sess) {}
 void DataSubscribe::data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath,
                                           uint32_t priority, sysrepo::SubscribeOptions opts)
 {
-    for (auto mod : collect_xpath_mods(data_sess.getContext(), xpath))
+    for (const auto &mod : collect_xpath_mods(data_sess.getContext(), xpath))
     {
         if (sub)
         {

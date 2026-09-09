@@ -290,12 +290,10 @@ static Auth::TlsMaterial loadTlsConfig(sysrepo::Session &sess)
     return tls;
 }
 
-void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs, Auth &auth)
+void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs,
+               std::shared_ptr<Auth> auth)
 {
-    // Get log environment variable
-    slog::get_log_env();
-
-    std::shared_ptr<grpc::ServerCredentials> cred = auth.credentials();
+    std::shared_ptr<grpc::ServerCredentials> cred = auth->credentials();
     GNMIService gnmi(sr_conn, auth); // gNMI Service
 
     grpc::ServerBuilder builder;
@@ -398,7 +396,7 @@ int main(int argc, char *argv[])
             // session terminates
         }
 
-        Auth auth(insecure, sr_conn, tls);
+        auto auth = std::make_shared<Auth>(insecure, sr_conn, tls);
 
         RunServer(sr_conn, bind_addrs, auth);
     }

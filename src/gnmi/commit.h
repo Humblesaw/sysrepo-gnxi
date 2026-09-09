@@ -33,6 +33,10 @@
 namespace impl
 {
 
+/**
+ * @brief State of the gNMI Commit from Commit confirmed extension.
+ *
+ */
 class Commit
 {
   public:

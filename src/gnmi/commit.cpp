@@ -49,6 +49,11 @@ Commit::~Commit()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         timer_thread_exit_ = true;
+        // restore configuration on teardown
+        if (wait_confirm_)
+        {
+            restore_config_no_lock_();
+        }
     }
     cv_.notify_one();
     timer_thread_.join();
@@ -217,21 +222,21 @@ void Commit::check_confirm_loop_()
     SLOG_DEBUG("Commit confirm timer thread started");
 
     std::unique_lock<std::mutex> lock(mutex_);
-    while (not timer_thread_exit_)
+    while (!timer_thread_exit_)
     {
         // unconditionally block until notified
         // in case of spurious wakeup - we recheck below
         cv_.wait(lock);
 
         // wait for confirm, cancel, rollback timeout or shutdown
-        while (wait_confirm_ and not timer_thread_exit_)
+        while (wait_confirm_ && !timer_thread_exit_)
         {
             auto timeout = std::chrono::steady_clock::now() + std::chrono::seconds(rollback_secs_);
 
             // wait for confirm / cancel, timer reset, rollback timeout or server shutdown
             // in case of spurious wakeup - we recheck the predicate
-            cv_.wait_until(lock, timeout, [this]
-                           { return not wait_confirm_ || timer_reset_ || timer_thread_exit_; });
+            cv_.wait_until(lock, timeout,
+                           [this] { return !wait_confirm_ || timer_reset_ || timer_thread_exit_; });
 
             // timer reset
             if (timer_reset_)
@@ -241,7 +246,7 @@ void Commit::check_confirm_loop_()
             }
 
             // timer expired
-            if (wait_confirm_ and not timer_thread_exit_)
+            if (wait_confirm_ && !timer_thread_exit_)
             {
                 restore_config_no_lock_();
                 break;

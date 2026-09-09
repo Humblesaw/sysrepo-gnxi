@@ -27,7 +27,7 @@
 #include <tuple>
 
 std::tuple<grpc::Status, std::optional<libyang::DataNode>>
-Encode::decode(std::string xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose)
+Encode::decode(const std::string &xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose)
 {
     switch (reqval.value_case())
     {
@@ -116,9 +116,16 @@ grpc::Status Encode::encode(gnmi::Encoding encoding, libyang::DataNode node, gnm
 {
     switch (encoding)
     {
-    case gnmi::JSON:
     case gnmi::JSON_IETF:
-        val->set_json_ietf_val(json_encode(node));
+        try
+        {
+            val->set_json_ietf_val(json_encode(node));
+        }
+        catch (const std::exception &exc)
+        {
+            SLOG_ERROR("Failed to encode data into JSON_IETF: ", exc.what());
+            return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
+        }
         break;
     default:
         SLOG_WARN("Unsupported Encoding ", Encoding_Name(encoding));
