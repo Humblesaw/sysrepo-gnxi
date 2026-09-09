@@ -23,11 +23,13 @@ A C++ server based on [gNMI specification](https://github.com/openconfig/referen
 
 **Supported encoding:**
 
-* [X] JSON encoding (if you ask for `JSON` you will have `JSON_IETF`)
+* [ ] JSON encoding
 * [ ] Bytes encoding
 * [ ] Proto encoding
 * [ ] ASCII encoding
 * [X] JSON IETF encoding
+
+JSON encoding is not supported due to the nature of the data. Libyang and sysrepo libraries expect to deal with structured tree data as specified in RFC 7951.
 
 **Supported encryption & authentication/authorization**
 
@@ -99,3 +101,10 @@ To correctly populate the users which are stored in sysrepo you can use the `sys
 ## Clients
 
 Client application is not part of the project. You can use OpenConfig's [gnmic](https://gnmic.openconfig.net/).
+
+## Deviations from the gNMI specification
+
+- Only the `JSON_IETF` encoding and the Set `Commit` extension are supported; path `origin` must be empty or `rfc7951`.
+- Get: `use_models` unsupported; `STATE` returns operational data including configuration.
+- Set: `union_replace` unsupported.
+- Subscribe: `updates_only` unsupported; `TARGET_DEFINED` behaves as `ON_CHANGE` (and reports configuration changes only); `SAMPLE` intervals below 200 ms rejected; `suppress_redundant`, `heartbeat_interval`, `qos`, `allow_aggregation` ignored.

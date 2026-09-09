@@ -24,7 +24,6 @@
 #pragma once
 
 #include <iostream>
-#include <string>
 #include <utility>
 
 #define SLOG_FATAL(...) slog::log(0, "[FATAL] ", __VA_ARGS__)
@@ -62,19 +61,8 @@ template <class... Args> void log(int lvl, Args &&...args)
     if (lvl <= slog::lvl)
     {
         // avoid expensive copy of c++ structures by forwarding
-        (std::clog << ... << std::forward<Args>(args)) << "\n";
+        (std::cerr << ... << std::forward<Args>(args)) << "\n";
     }
 }
-
-/*
- * Used to get log environment variables
- */
-void get_log_env(void);
-
-/*
- * Returns the data as a char* if displaying of data in logs is enabled
- * else it "obfuscates" the data
- */
-const char *obfs_data(std::string &data);
 
 } // namespace slog

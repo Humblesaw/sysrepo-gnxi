@@ -24,7 +24,6 @@
 #include <string>
 #include <sysrepo-cpp/Session.hpp>
 
-#include <libyang/tree_data.h>
 #include <utils/log.h>
 #include <utils/sysrepo.h>
 
@@ -44,7 +43,7 @@ std::string stripJSONObjectValue(const std::string &object)
     if (object.front() != '{' || object.back() != '}')
     {
         SLOG_ERROR("Unexpected input: JSON object does not have { or }");
-        throw;
+        throw std::invalid_argument("JSON object does not have { or }");
     }
 
     /* strip the JSON object brackets */
@@ -80,7 +79,7 @@ std::string stripJSONObjectValue(const std::string &object)
     if (!index_start)
     {
         SLOG_ERROR("Unexpected input: JSON object does not have a :");
-        throw;
+        throw std::invalid_argument("JSON object does not have a :");
     }
 
     return result.substr(index_start + 1);
@@ -90,8 +89,8 @@ std::string stripJSONObjectValue(const std::string &object)
  * Parse a message encoded in JSON IETF and set fields in sysrepo.
  * @param data Input data encoded in JSON
  */
-std::optional<libyang::DataNode> Encode::json_decode(std::string xpath, std::string data,
-                                                     EncodePurpose purpose)
+std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
+                                                     const std::string &data, EncodePurpose purpose)
 {
     /* get request */
     // TODO "/*" is a bad sign that this is a set/get request for all data, rewrite it
@@ -106,11 +105,13 @@ std::optional<libyang::DataNode> Encode::json_decode(std::string xpath, std::str
         }
         catch (const std::exception &exc)
         {
-            SLOG_ERROR("Failed to parse data:", slog::obfs_data(data), ". Exception: ", exc.what());
-            // Don't leave the error lying around on the context otherwise sysrepo may pick it up on
-            // an unrelated operation
+            SLOG_ERROR("Failed to parse data. Exception: ", exc.what());
+            // The failed parse above left its errors on the libyang context shared with
+            // sysrepo, which would later report them as errors of an unrelated operation.
+            // Nothing else can use the context between the parse and here, so this
+            // clears only the errors caused by the parse itself.
             auto ctx = sr_sess.getContext();
-            const_cast<libyang::Context *>(&ctx)->cleanAllErrors();
+            ctx.cleanAllErrors();
             throw std::invalid_argument(exc.what());
         }
     }
@@ -145,12 +146,11 @@ std::optional<libyang::DataNode> Encode::json_decode(std::string xpath, std::str
     }
     catch (const std::exception &exc)
     {
-        SLOG_ERROR("Failed to parse data. xpath: ", xpath, ", data:", slog::obfs_data(data),
-                   ". Exception: ", exc.what());
+        SLOG_ERROR("Failed to parse data. xpath: ", xpath, ". Exception: ", exc.what());
         // Don't leave the error lying around on the context otherwise sysrepo may pick it up on
         // an unrelated operation
         auto ctx = sr_sess.getContext();
-        const_cast<libyang::Context *>(&ctx)->cleanAllErrors();
+        ctx.cleanAllErrors();
         throw;
     }
 
@@ -168,10 +168,14 @@ std::string Encode::json_encode(libyang::DataNode node)
 
     if (node.schema().nodeType() == libyang::NodeType::Leaf)
     {
-        data = stripJSONObjectValue(
+        auto printed =
             node.printStr(libyang::DataFormat::JSON,
-                          libyang::PrintFlags::Shrink | libyang::PrintFlags::JsonNoNestedPrefix)
-                .value());
+                          libyang::PrintFlags::Shrink | libyang::PrintFlags::JsonNoNestedPrefix);
+        if (!printed.has_value())
+        {
+            throw std::runtime_error("Failed to print the leaf data node in JSON.");
+        }
+        data = stripJSONObjectValue(printed.value());
     }
     else
     {
@@ -181,14 +185,15 @@ std::string Encode::json_encode(libyang::DataNode node)
         // according to gNMI rules
         if (node.child().has_value())
         {
-            for (auto it : node.child()->childrenDfs())
+            auto printed =
+                node.child()->printStr(libyang::DataFormat::JSON,
+                                       libyang::PrintFlags::Siblings | libyang::PrintFlags::Shrink |
+                                           libyang::PrintFlags::JsonNoNestedPrefix);
+            if (!printed.has_value())
             {
-                data = it.printStr(libyang::DataFormat::JSON,
-                                   libyang::PrintFlags::Siblings | libyang::PrintFlags::Shrink |
-                                       libyang::PrintFlags::JsonNoNestedPrefix)
-                           .value();
-                break;
+                throw std::runtime_error("Failed to print the data node in JSON.");
             }
+            data = printed.value();
         }
     }
 

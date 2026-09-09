@@ -82,11 +82,11 @@ class Encode
     };
 
     std::tuple<grpc::Status, std::optional<libyang::DataNode>>
-    decode(std::string xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
+    decode(const std::string &xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
     grpc::Status encode(gnmi::Encoding encoding, libyang::DataNode node, gnmi::TypedValue *val);
 
     /* JSON encoding */
-    std::optional<libyang::DataNode> json_decode(std::string xpath, std::string data,
+    std::optional<libyang::DataNode> json_decode(const std::string &xpath, const std::string &data,
                                                  EncodePurpose purpose);
     std::string json_encode(libyang::DataNode node);
 

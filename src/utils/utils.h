@@ -81,7 +81,7 @@ inline std::string gnmi_to_xpath(const gnmi::Path &path)
             throw std::invalid_argument("Relative paths not allowed");
 
         str += node.name();
-        for (auto key : node.key())
+        for (const auto &key : node.key())
         {
             // YANG 1.1 uses XPath 1.0 and it doesn't support escaping quotes:
             // >   	Literal	   ::=   	'"' [^"]* '"'
@@ -102,7 +102,7 @@ inline std::string gnmi_to_xpath(const gnmi::Path &path)
 
 // Parse XPath-like string in gnmi::Path
 // Assumes that the path is well-formed (i.e. hasn't come from the client)
-inline void xpath_to_gnmi(std::string xpath, gnmi::Path &path)
+inline void xpath_to_gnmi(const std::string &xpath, gnmi::Path &path)
 {
     if (!xpath.compare("/"))
         return;
@@ -171,12 +171,12 @@ inline bool gnmi_path_equals(const gnmi::Path &path1, const gnmi::Path &path2)
             return false;
         if (path1.elem(i).key_size() != path2.elem(i).key_size())
             return false;
-        for (auto key_val1 : path1.elem(i).key())
+        for (const auto &key_val1 : path1.elem(i).key())
         {
             bool found = false;
-            for (auto key_val2 : path2.elem(i).key())
+            for (const auto &key_val2 : path2.elem(i).key())
             {
-                if (key_val2.first == key_val1.first && key_val2.second == key_val2.second)
+                if (key_val2.first == key_val1.first && key_val2.second == key_val1.second)
                 {
                     found = true;
                     break;

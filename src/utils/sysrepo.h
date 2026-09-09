@@ -35,23 +35,30 @@
 
 /*
  * Resolve an XPath against the schema context and return every distinct
- * implemented YANG module the XPath touches (skips import-only modules and
- * the internal "sysrepo" module). A top-level wildcard XPath ("/ *")
- * yields all implemented modules of the context.
+ * YANG module the XPath touches (skips the internal "sysrepo" module).
+ * A top-level wildcard XPath ("/ *") yields all implemented modules of
+ * the context.
  *
  * Throws on unresolvable/malformed XPath (libyang::Error).
  */
-std::unordered_set<std::string> collect_xpath_mods(libyang::Context ly_ctx, const char *xpath);
+std::unordered_set<std::string> collect_xpath_mods(const libyang::Context &ly_ctx,
+                                                   const char *xpath);
 
 class UpdateTransaction
 {
   public:
     std::optional<libyang::DataNode> final_tree;
 
-    /** Merge a top-level node into a tree */
+    /**
+     * Merge a top-level node into a tree. The node's following siblings are
+     * merged as well, previous siblings are not.
+     */
     void merge(std::optional<libyang::DataNode> &tree, std::optional<libyang::DataNode> &node);
 
-    /** Push a node and all its siblings into the final transaction tree */
+    /**
+     * Push a node into the final transaction tree. The node's following
+     * siblings are pushed as well, previous siblings are not.
+     */
     void push(std::optional<libyang::DataNode> &tree);
 };
 

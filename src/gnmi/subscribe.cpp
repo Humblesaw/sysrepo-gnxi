@@ -71,7 +71,7 @@ Subscribe::BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *upd
             return grpc::Status::OK;
         }
 
-        for (libyang::DataNode n : sr_trees->findXPath(fullpath.c_str()))
+        for (libyang::DataNode n : sr_trees->findXPath(fullpath))
         {
             update = updateList->Add();
             xpath_to_gnmi(n.path(), *update->mutable_path());
@@ -293,13 +293,16 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
 
 void Subscribe::triggerSampleUpdate(
     grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> &sub,
-    grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream)
+    grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
+    gnmi::Encoding encoding)
 {
     gnmi::SubscribeResponse response;
     gnmi::SubscriptionList updateList;
 
     // Add the subscription entry to the subscription list
     updateList.add_subscription()->CopyFrom(*sub);
+    // Propagate the encoding of the original subscription list
+    updateList.set_encoding(encoding);
     // gnmi::Path *prefix = new gnmi::Path();
     // prefix->set_origin("rfc7951");
     // updateList.set_allocated_prefix(prefix);
@@ -488,13 +491,14 @@ struct Task
 Task sampleSubscription(
     Scheduler &scheduler, std::chrono::nanoseconds duration, Subscribe *subscribe,
     grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> sub,
-    grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream)
+    grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
+    gnmi::Encoding encoding)
 {
     while (true)
     {
         // suspend, the scheduler will resume you after the time duration
         co_await async_sleep{scheduler, duration};
-        subscribe->triggerSampleUpdate(context, sub, stream);
+        subscribe->triggerSampleUpdate(context, sub, stream, encoding);
     }
 }
 
@@ -510,7 +514,7 @@ void Subscribe::streamWorker(
         {
         case gnmi::SAMPLE:
             sampleSubscription(scheduler, std::chrono::nanoseconds{sub->sample_interval()}, this,
-                               context, sub, stream);
+                               context, sub, stream, request.subscribe().encoding());
             break;
         default:
             break;
@@ -586,7 +590,7 @@ grpc::Status Subscribe::registerStreamOnChange(
     try
     {
         if (request.subscribe().prefix().elem_size() > 0 ||
-            request.subscribe().prefix().target().compare(""))
+            !request.subscribe().prefix().target().empty())
         {
             fullpath = gnmi_to_xpath(request.subscribe().prefix());
         }

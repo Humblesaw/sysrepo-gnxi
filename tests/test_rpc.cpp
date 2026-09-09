@@ -41,6 +41,7 @@ TEST_CASE("Rpc rpc", "[rpc]")
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path());
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.ok());
@@ -55,6 +56,7 @@ TEST_CASE("Rpc action", "[rpc]")
     yang_rpc::RpcResponse response;
 
     xpath_to_path("/gnmi-server-test:action-test/action-test", request.mutable_path());
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
     request.mutable_input()->set_json_ietf_val("{\"foo\": \"bar\"}");
     auto status = gnxi_client->Rpc(&ctx, request, &response);
     CHECK(status.ok());

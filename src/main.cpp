@@ -292,9 +292,6 @@ static Auth::TlsMaterial loadTlsConfig(sysrepo::Session &sess)
 
 void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs, Auth &auth)
 {
-    // Get log environment variable
-    slog::get_log_env();
-
     std::shared_ptr<grpc::ServerCredentials> cred = auth.credentials();
     GNMIService gnmi(sr_conn, auth); // gNMI Service
 

@@ -36,6 +36,12 @@
 namespace impl
 {
 
+enum class UpdateOp
+{
+    Merge,
+    Replace
+};
+
 class Set
 {
   public:
@@ -50,16 +56,19 @@ class Set
                      gnmi::SetResponse *response);
 
   private:
-    grpc::Status handleUpdate(gnmi::Update in, gnmi::UpdateResult *out, std::string prefix_str,
-                              const gnmi::Path &prefix, std::string op);
+    grpc::Status handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
+                              const std::string &prefix_str, const gnmi::Path &prefix, UpdateOp op);
 
-  private:
     sysrepo::Session sr_sess;             // sysrepo running datastore session
     std::shared_ptr<Encode> encodef;      // support for json ietf encoding
     std::shared_ptr<Commit> commit_state; // commit confirm state
     const Auth &auth_;                    // authentication/authorization data
-    std::optional<libyang::DataNode> deleteTree, purgeTree, replaceTree, updateTree;
-    UpdateTransaction xact;
+
+    std::optional<libyang::DataNode> deleteTree;  // delete tree
+    std::optional<libyang::DataNode> purgeTree;   // purge tree
+    std::optional<libyang::DataNode> replaceTree; // replace tree
+    std::optional<libyang::DataNode> updateTree;  // update tree
+    UpdateTransaction xact;                       // transaction tree
 };
 
 } // namespace impl
