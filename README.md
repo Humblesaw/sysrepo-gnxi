@@ -110,12 +110,16 @@ To run the server in secure mode, you have to edit the server configuration usin
 To correctly populate the users which are stored in sysrepo you can use the `sysrepo-gnxi-users` utility.
 
 ```
-# create a user with an ACL granting read-write access to the interfaces module
-sysrepo-gnxi-users add --name alice --password 'secret' --rw interfaces
-# grant additional read-only access later
-sysrepo-gnxi-users edit --name alice --ro ietf-system
+# create a user with an ACL
+sysrepo-gnxi-users add --name alice --password secret --permissions interfaces:rw,ietf-interfaces:ro
+
+# grant additional read-only access and remove access later
+sysrepo-gnxi-users edit --name alice --permissions ietf-system:ro,interfaces:no
+
 # review stored users and ACLs
-sysrepocfg -X -x /sysrepo-gnxi-users:users -f json
+sysrepo-gnxi-users show
+sysrepo-gnxi-users show --name alice
+
 # remove the user
 sysrepo-gnxi-users remove --name alice
 ```
