@@ -246,8 +246,8 @@ TEST_CASE_METHOD(UsersFixture, "Users: add duplicate user fails", "[users]")
 
 TEST_CASE_METHOD(UsersFixture, "Users: add with ACL", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512", "--rw",
-                     "gnmi-server-test", "--ro", "ietf-interfaces"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512",
+                     "--permissions", "gnmi-server-test:rw,ietf-interfaces:ro"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -304,9 +304,9 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit password with default algorithm", "[
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit ACL", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512", "--rw",
-                     "mod-a"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--ro", "mod-b,mod-c"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512",
+                     "--permissions", "mod-a:rw"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-b:ro,mod-c:ro"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -327,11 +327,11 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit with nothing to edit fails", "[users
     REQUIRE(run_bin({"edit", "--name", "alice"}) != 0);
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: edit --rm single module", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: edit permissions remove a single module", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw",
-                     "mod-a,mod-b,mod-c"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-b"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
+                     "mod-a:rw,mod-b:rw,mod-c:rw"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-b:no"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -339,11 +339,11 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit --rm single module", "[users]")
     CHECK(!user.findPath("acl[module='mod-b']").has_value());
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: edit --rm multiple modules", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: edit permissions remove multiple modules", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw", "mod-a,mod-b", "--ro",
-                     "mod-c"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-a,mod-c"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
+                     "mod-a:rw,mod-b:rw,mod-c:ro"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-a:no,mod-c:no"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -351,11 +351,12 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit --rm multiple modules", "[users]")
     CHECK(user.findPath("acl[module='mod-b']").has_value());
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: edit --rm then --ro (order matters)", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: edit permissions order matters", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw", "mod-a"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
+                     "mod-a:rw"}) == 0);
     // remove mod-a, then add it back as ro - the remove runs first
-    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-a", "--ro", "mod-a"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-a:no,mod-a:ro"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -367,20 +368,21 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit --rm then --ro (order matters)", "[u
     CHECK(access->asTerm().valueStr() == "ro");
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: edit --rm nonexistent module is a no-op", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: edit removing a nonexistent module is a no-op", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rw", "mod-a"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--rm", "mod-zzz"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
+                     "mod-a:rw"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-zzz:no"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
     REQUIRE(user.findXPath("acl").size() == 1);
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: --rm in add mode is a no-op", "[users]")
+TEST_CASE_METHOD(UsersFixture, "Users: 'no' permission in add mode is a no-op", "[users]")
 {
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--rm", "mod-b", "--rw",
-                     "mod-b"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
+                     "mod-b:no,mod-b:rw"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -409,7 +411,33 @@ TEST_CASE_METHOD(UsersFixture, "Users: remove nonexistent user fails", "[users]"
     CHECK(db_empty());
 }
 
+// show
+
+TEST_CASE_METHOD(UsersFixture, "Users: show nonexistent user fails", "[users]")
+{
+    REQUIRE(run_bin({"show", "--name", "ghost"}) != 0);
+}
+
+TEST_CASE_METHOD(UsersFixture, "Users: show rejects irrelevant options", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"show", "--password", "pass"}) != 0);
+    REQUIRE(run_bin({"show", "--permissions", "mod-a:rw"}) != 0);
+}
+
 // error handling
+
+TEST_CASE_METHOD(UsersFixture, "Users: invalid permission entries fail", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
+                     "mod-a:bogus"}) != 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions", "mod-a:"}) !=
+            0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions", "mod-a"}) !=
+            0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions", ":rw"}) != 0);
+    CHECK(db_empty());
+}
 
 TEST_CASE_METHOD(UsersFixture, "Users: missing --name fails", "[users]")
 {
