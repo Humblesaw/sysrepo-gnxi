@@ -37,11 +37,12 @@ namespace impl
 
 Commit::Commit(sysrepo::Session sess) : sr_sess_(sess)
 {
-    timer_thread_exit_ = false;
+    // the timer thread is started on demand - only while a confirmed commit
+    // is waiting for its confirm/cancel/rollback timeout
+    timer_thread_exit_ = true;
     wait_confirm_ = false;
     timer_reset_ = false;
     rollback_secs_ = 0;
-    timer_thread_ = std::thread(&Commit::check_confirm_loop_, this);
 }
 
 Commit::~Commit()
@@ -56,7 +57,7 @@ Commit::~Commit()
         }
     }
     cv_.notify_one();
-    timer_thread_.join();
+    join_timer_thread_();
 }
 
 bool Commit::get_wait_confirm()
@@ -67,8 +68,11 @@ bool Commit::get_wait_confirm()
 
 void Commit::clear()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    clear_no_lock_();
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        clear_no_lock_();
+    }
+    join_timer_thread_();
 }
 
 grpc::Status Commit::request_setup(const std::string &commit_id, int64_t rollback_secs,
@@ -100,52 +104,64 @@ grpc::Status Commit::request_setup(const std::string &commit_id, int64_t rollbac
 
 void Commit::request_finish()
 {
-    // notify the timer thread to start the rollback countdown
-    cv_.notify_one();
+    // join a stale timer thread from a previous countdown (if any)
+    join_timer_thread_();
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    timer_thread_exit_ = false;
+    // start the rollback countdown in a dedicated timer thread; the thread
+    // exits as soon as the commit is confirmed/cancelled/rolled back
+    timer_thread_ = std::thread(&Commit::check_confirm_loop_, this);
 }
 
 grpc::Status Commit::confirm(const std::string &commit_id, const std::string &username)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!wait_confirm_)
     {
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "not waiting for confirm");
-    }
-    if (commit_id_ != commit_id)
-    {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
-    }
-    if (commit_username_ != username)
-    {
-        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                            "only the original user can confirm this commit");
-    }
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!wait_confirm_)
+        {
+            return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "not waiting for confirm");
+        }
+        if (commit_id_ != commit_id)
+        {
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
+        }
+        if (commit_username_ != username)
+        {
+            return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                                "only the original user can confirm this commit");
+        }
 
-    // clear the internal state
-    clear_no_lock_();
+        // clear the internal state
+        clear_no_lock_();
+    }
+    join_timer_thread_();
     return grpc::Status::OK;
 }
 
 grpc::Status Commit::cancel(const std::string &commit_id, const std::string &username)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!wait_confirm_)
     {
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "not waiting for confirm");
-    }
-    if (commit_id_ != commit_id)
-    {
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
-    }
-    if (commit_username_ != username)
-    {
-        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                            "only the original user can cancel this commit");
-    }
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!wait_confirm_)
+        {
+            return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "not waiting for confirm");
+        }
+        if (commit_id_ != commit_id)
+        {
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
+        }
+        if (commit_username_ != username)
+        {
+            return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                                "only the original user can cancel this commit");
+        }
 
-    // per spec, cancel MUST rollback the configuration to the state prior to the
-    // SetRequest that initiated the confirmed commit
-    restore_config_no_lock_();
+        // per spec, cancel MUST rollback the configuration to the state prior to the
+        // SetRequest that initiated the confirmed commit
+        restore_config_no_lock_();
+    }
+    join_timer_thread_();
     return grpc::Status::OK;
 }
 
@@ -217,40 +233,52 @@ void Commit::restore_config_no_lock_()
     clear_no_lock_();
 }
 
+void Commit::join_timer_thread_()
+{
+    // claim the thread under the lock (so two callers cannot both join it),
+    // but join without holding the lock - the thread needs it to finish
+    std::thread t;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (timer_thread_.joinable())
+        {
+            t = std::move(timer_thread_);
+        }
+    }
+    if (t.joinable())
+    {
+        t.join();
+    }
+}
+
 void Commit::check_confirm_loop_()
 {
     SLOG_DEBUG("Commit confirm timer thread started");
 
     std::unique_lock<std::mutex> lock(mutex_);
-    while (!timer_thread_exit_)
+    // wait for confirm, cancel, rollback timeout or shutdown
+    // the thread only exists while a commit is pending
+    while (wait_confirm_ && !timer_thread_exit_)
     {
-        // unconditionally block until notified
-        // in case of spurious wakeup - we recheck below
-        cv_.wait(lock);
+        auto timeout = std::chrono::steady_clock::now() + std::chrono::seconds(rollback_secs_);
 
-        // wait for confirm, cancel, rollback timeout or shutdown
-        while (wait_confirm_ && !timer_thread_exit_)
+        // wait for confirm / cancel, timer reset, rollback timeout or server shutdown
+        // in case of spurious wakeup - we recheck the predicate
+        cv_.wait_until(lock, timeout,
+                       [this] { return !wait_confirm_ || timer_reset_ || timer_thread_exit_; });
+
+        // timer reset
+        if (timer_reset_)
         {
-            auto timeout = std::chrono::steady_clock::now() + std::chrono::seconds(rollback_secs_);
+            timer_reset_ = false;
+            continue;
+        }
 
-            // wait for confirm / cancel, timer reset, rollback timeout or server shutdown
-            // in case of spurious wakeup - we recheck the predicate
-            cv_.wait_until(lock, timeout,
-                           [this] { return !wait_confirm_ || timer_reset_ || timer_thread_exit_; });
-
-            // timer reset
-            if (timer_reset_)
-            {
-                timer_reset_ = false;
-                continue;
-            }
-
-            // timer expired
-            if (wait_confirm_ && !timer_thread_exit_)
-            {
-                restore_config_no_lock_();
-                break;
-            }
+        // timer expired
+        if (wait_confirm_ && !timer_thread_exit_)
+        {
+            restore_config_no_lock_();
+            break;
         }
     }
 

@@ -71,7 +71,7 @@ class Commit
                                const std::string &username);
 
     /**
-     * @brief Finishes the commit: gnmi's CommitRequest. Starts the rollback timer.
+     * @brief Finishes the commit: gnmi's CommitRequest. Starts the rollback timer thread.
      *
      */
     void request_finish();
@@ -105,7 +105,8 @@ class Commit
   private:
     // locking
     std::mutex mutex_;
-    // timer
+    // timer - the thread runs only while a confirmed commit awaits resolution
+    // (confirm/cancel/rollback timeout), it is not kept idling otherwise
     bool timer_thread_exit_;
     std::thread timer_thread_;
     std::condition_variable cv_;
@@ -135,6 +136,12 @@ class Commit
      *
      */
     void restore_config_no_lock_();
+
+    /**
+     * @brief Join the timer thread if there is one. Caller must not hold the mutex.
+     *
+     */
+    void join_timer_thread_();
 
     /**
      * @brief Loop to check timeout for rollback.
