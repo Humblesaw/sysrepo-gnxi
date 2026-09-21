@@ -27,6 +27,7 @@
 #include <cassert>
 #include <chrono>
 #include <grpc/status.h>
+#include <grpcpp/server_context.h>
 #include <proto/gnmi.grpc.pb.h>
 #include <stdexcept>
 #include <string>
@@ -55,14 +56,14 @@ inline void gnmi_check_origin(const gnmi::Path &prefix, const gnmi::Path &path)
     {
         if (prefix.origin().compare("rfc7951"))
         {
-            throw std::invalid_argument("prefix must contain origin of \"rfc7951\" rather than\"" +
-                                        prefix.origin() + "\"");
+            throw std::runtime_error("prefix must contain origin of \"rfc7951\" rather than\"" +
+                                     prefix.origin() + "\"");
         }
     }
     else if (path.origin().compare("rfc7951"))
     {
-        throw std::invalid_argument("path must contain origin of \"rfc7951\" rather than \"" +
-                                    path.origin() + "\"");
+        throw std::runtime_error("path must contain origin of \"rfc7951\" rather than \"" +
+                                 path.origin() + "\"");
     }
 }
 
@@ -82,7 +83,7 @@ inline std::string gnmi_to_xpath(const gnmi::Path &path)
         str += "/";
 
         if (node.name().compare("..") == 0)
-            throw std::invalid_argument("Relative paths not allowed");
+            throw std::runtime_error("relative paths not allowed (elem '" + node.name() + "')");
 
         str += node.name();
         for (const auto &key : node.key())
@@ -94,7 +95,10 @@ inline std::string gnmi_to_xpath(const gnmi::Path &path)
             // reject values with both double quotes and single quote.
             if ((key.second.find('\"') != std::string::npos) &&
                 (key.second.find('\'') != std::string::npos))
-                throw std::invalid_argument("Double quotes AND single quote in values not allowed");
+                throw std::runtime_error(
+                    "double quotes and single quotes not allowed at the same time"
+                    " in key '" +
+                    key.first + "' value");
             // Use " as delimiter unless it's present then use ' as delimiter
             auto delim = (key.second.find('\"') != std::string::npos) ? '\'' : '\"';
             str += "[" + key.first + "=" + delim + key.second + delim + "]";
@@ -226,6 +230,22 @@ inline bool isPrivateModule(const std::string &name)
 inline std::atomic<bool> rpc_shutting_down{false};
 
 /**
+ * @brief Describe the calling user and peer of an RPC for audit logging.
+ *
+ * @param[in] context Server context of the RPC.
+ * @param[in] username Authenticated username (empty when unavailable/insecure).
+ * @return "user '<name>' from <peer>", with '<insecure>' when there is no user.
+ */
+inline std::string rpc_user_desc(grpc::ServerContext *context, const std::string &username)
+{
+    std::string desc = "user '";
+    desc += username.empty() ? "<insecure>" : username;
+    desc += "' from ";
+    desc += context->peer();
+    return desc;
+}
+
+/**
  * @brief Central exception handler for gRPC service methods.
  *
  * Wraps an RPC handler invocation so that no exception can escape into
@@ -234,10 +254,12 @@ inline std::atomic<bool> rpc_shutting_down{false};
  * needed where exceptions are mapped to more specific status codes or
  * where cleanup is required.
  *
+ * @param[in] rpc_name Name of the RPC being handled (used in log messages).
  * @param[in] handler Callable performing the actual RPC handling.
  * @return The status returned by the handler or its exception's status.
  */
-template <typename Handler> grpc::Status rpc_catch_exceptions(Handler &&handler)
+template <typename Handler>
+grpc::Status rpc_catch_exceptions(const char *rpc_name, Handler &&handler)
 {
     try
     {
@@ -249,11 +271,12 @@ template <typename Handler> grpc::Status rpc_catch_exceptions(Handler &&handler)
     }
     catch (const std::exception &exc)
     {
-        SLOG_ERROR("Unexpected error in RPC handling: ", exc.what());
+        SLOG_ERROR("Unexpected error in ", rpc_name, " RPC handling: ", exc.what());
         return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
     }
     catch (...)
     {
+        SLOG_ERROR("Unexpected unknown error in ", rpc_name, " RPC handling");
         return grpc::Status(grpc::StatusCode::INTERNAL, "unknown error");
     }
 }

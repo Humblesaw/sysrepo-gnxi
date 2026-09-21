@@ -71,12 +71,28 @@ grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetReque
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
     }
 
-    return rpc_catch_exceptions(
+    slog::RequestScope req_scope("Set: " + rpc_user_desc(context, auth_->username(context)));
+    SLOG_INFO("Set RPC: ", request->replace_size(), " replace, ", request->delete__size(),
+              " delete, ", request->update_size(), " update");
+
+    const auto status = rpc_catch_exceptions(
+        "Set",
         [&]
         {
             impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Running), commit_state, *auth_);
             return rpc.run(context, request, response);
         });
+
+    if (!status.ok())
+    {
+        SLOG_WARN("Set RPC failed: code ", static_cast<int>(status.error_code()), ": ",
+                  status.error_message());
+    }
+    else
+    {
+        SLOG_INFO("Set RPC succeeded");
+    }
+    return status;
 }
 
 grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetRequest *request,
@@ -87,12 +103,27 @@ grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetReque
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
     }
 
-    return rpc_catch_exceptions(
+    slog::RequestScope req_scope("Get: " + rpc_user_desc(context, auth_->username(context)));
+    SLOG_INFO("Get RPC: ", request->path_size(), " paths");
+
+    const auto status = rpc_catch_exceptions(
+        "Get",
         [&]
         {
             impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running), *auth_);
             return rpc.run(context, request, response);
         });
+
+    if (!status.ok())
+    {
+        SLOG_WARN("Get RPC failed: code ", static_cast<int>(status.error_code()), ": ",
+                  status.error_message());
+    }
+    else
+    {
+        SLOG_INFO("Get RPC succeeded, ", response->notification_size(), " notifications");
+    }
+    return status;
 }
 
 grpc::Status GNMIService::Subscribe(
@@ -109,10 +140,25 @@ grpc::Status GNMIService::Subscribe(
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, std::string("Server is shutting down"));
     }
 
-    return rpc_catch_exceptions(
+    slog::RequestScope req_scope("Subscribe: " + rpc_user_desc(context, auth_->username(context)));
+    SLOG_INFO("Subscribe RPC: stream opened");
+
+    const auto status = rpc_catch_exceptions(
+        "Subscribe",
         [&]
         {
             impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running), *auth_);
             return rpc.run(context, stream);
         });
+
+    if (!status.ok())
+    {
+        SLOG_WARN("Subscribe RPC failed: code ", static_cast<int>(status.error_code()), ": ",
+                  status.error_message());
+    }
+    else
+    {
+        SLOG_INFO("Subscribe RPC: stream closed");
+    }
+    return status;
 }

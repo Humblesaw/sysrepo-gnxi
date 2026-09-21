@@ -27,17 +27,37 @@
 grpc::Status YANG_RPCService::Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
                                   yang_rpc::RpcResponse *response)
 {
-    (void)context;
-
     if (rpc_shutting_down.load())
     {
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
     }
 
-    return rpc_catch_exceptions(
-        [&]
+    // no Auth is wired into this service, read the username straight from
+    // the auth context (empty when the server runs in insecure mode)
+    std::string username;
+    if (auto auth_ctx = context->auth_context())
+    {
+        const auto vals = auth_ctx->FindPropertyValues("username");
+        if (!vals.empty())
         {
-            impl::Rpc rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
-            return rpc.run(request, response);
-        });
+            username.assign(vals[0].data(), vals[0].length());
+        }
+    }
+    slog::RequestScope req_scope("Rpc: " + rpc_user_desc(context, username));
+    SLOG_INFO("Rpc RPC");
+
+    const auto status =
+        rpc_catch_exceptions("Rpc",
+                             [&]
+                             {
+                                 impl::Rpc rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
+                                 return rpc.run(request, response);
+                             });
+
+    if (!status.ok())
+    {
+        SLOG_WARN("Rpc RPC failed: code ", static_cast<int>(status.error_code()), ": ",
+                  status.error_message());
+    }
+    return status;
 }

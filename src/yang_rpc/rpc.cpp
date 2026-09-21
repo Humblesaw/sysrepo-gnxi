@@ -57,7 +57,7 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
         {
             if (isPrivateModule(mod))
             {
-                SLOG_WARN("RPC access denied to private module '", mod, "'");
+                SLOG_ERROR("RPC access denied to private module '", mod, "'");
                 return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                                     "Access to module '" + mod + "' is forbidden.");
             }
@@ -70,6 +70,7 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
             return status;
         }
 
+        SLOG_INFO("Invoking RPC '", xpath, "'");
         auto output_node = sr_sess.sendRPC(input_node.value());
 
         response->set_timestamp(get_time_nanosec());
@@ -80,7 +81,7 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
                                      response->mutable_output());
             if (!status.ok())
             {
-                SLOG_WARN("Rpc output value error: ", status.error_message());
+                SLOG_ERROR("Rpc output value error: ", status.error_message());
                 return status;
             }
         }
@@ -94,31 +95,32 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
     }
     catch (sysrepo::ErrorWithCode &e)
     {
-        SLOG_WARN("RPC error: ", e.what());
         switch (e.code())
         {
-        // TODO - unautorized is never executed -> server does not set file permissions for now!
+        // unreachable, sysrepo's access checks are keyed to the process owner and
+        // the server owns all module data (MODULES_OWNER), per-user authorization is
+        // enforced by our own ACL layer above
         case sysrepo::ErrorCode::Unauthorized:
+            SLOG_ERROR("RPC error: ", e.what());
             return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, e.what());
         case sysrepo::ErrorCode::InvalidArgument:
+            SLOG_WARN("RPC error: ", e.what());
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
         case sysrepo::ErrorCode::NotFound:
+            SLOG_WARN("RPC error: ", e.what());
             return grpc::Status(grpc::StatusCode::NOT_FOUND, e.what());
         case sysrepo::ErrorCode::Timeout:
+            SLOG_WARN("RPC error: ", e.what());
             return grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, e.what());
         default:
+            SLOG_ERROR("RPC error: ", e.what());
             return grpc::Status(grpc::StatusCode::ABORTED, e.what());
         }
     }
-    catch (grpc::Status &e)
-    {
-        SLOG_WARN("RPC error: ", e.error_message());
-        return e;
-    }
-    catch (std::exception &e)
+    catch (const std::runtime_error &e)
     {
         SLOG_WARN("RPC error: ", e.what());
-        return grpc::Status(grpc::StatusCode::ABORTED, e.what());
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, e.what());
     }
 }
 

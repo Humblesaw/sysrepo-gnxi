@@ -89,16 +89,17 @@ Subscribe::BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *upd
             }
         }
     }
-    catch (std::invalid_argument &exc)
-    {
-        updateList->Clear();
-        return grpc::Status(grpc::StatusCode::NOT_FOUND, exc.what());
-    }
     catch (sysrepo::ErrorWithCode &exc)
     {
         updateList->Clear();
-        SLOG_ERROR("Fail getting items from sysrepo: ", exc.code());
+        SLOG_ERROR("Failed getting items from sysrepo: ", exc.what());
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+    }
+    catch (const std::runtime_error &exc)
+    {
+        SLOG_DEBUG("Path not found or not evaluable: \"", fullpath, "\": ", exc.what());
+        updateList->Clear();
+        return grpc::Status(grpc::StatusCode::NOT_FOUND, exc.what());
     }
 
     return grpc::Status::OK;
@@ -173,14 +174,14 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
             status = BuildSubsUpdate(updateList, request.prefix(), gnmi_to_xpath(sub.path()),
                                      request.encoding());
         }
-        catch (std::invalid_argument &exc)
+        catch (const std::runtime_error &exc)
         {
-            SLOG_ERROR(exc.what());
+            SLOG_WARN("Invalid subscription: ", exc.what());
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
         if (!status.ok())
         {
-            SLOG_ERROR("Fail building update for ", gnmi_to_xpath(sub.path()));
+            SLOG_WARN("Failed building update for ", gnmi_to_xpath(sub.path()));
             return status;
         }
     }
@@ -284,12 +285,12 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
     }
     catch (sysrepo::ErrorWithCode &exc)
     {
-        SLOG_ERROR("Fail processing module changes from sysrepo: ", exc.what());
+        SLOG_ERROR("Failed processing module changes from sysrepo: ", exc.what());
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
     }
-    catch (std::invalid_argument &exc)
+    catch (const std::runtime_error &exc)
     {
-        SLOG_ERROR(exc.what());
+        SLOG_WARN("Invalid subscription: ", exc.what());
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
     }
 
@@ -613,9 +614,9 @@ grpc::Status Subscribe::registerStreamOnChange(
         }
         fullpath += gnmi_to_xpath(sub.path());
     }
-    catch (std::invalid_argument &exc)
+    catch (const std::runtime_error &exc)
     {
-        SLOG_ERROR(exc.what());
+        SLOG_WARN("Invalid subscription prefix or path: ", exc.what());
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
     }
 
@@ -758,6 +759,9 @@ grpc::Status Subscribe::handleStream(
                                             " not implemented"));
         }
     }
+
+    SLOG_INFO("STREAM subscription established, ", request.subscribe().subscription_size(),
+              " paths");
 
     // Send to the worker thread
     scheduler.schedule_change(
@@ -908,7 +912,7 @@ Subscribe::run(grpc::ServerContext *context,
 
     if (request.extension_size() > 0)
     {
-        SLOG_ERROR("Extensions not implemented");
+        SLOG_WARN("Extensions not implemented");
         return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Extensions not implemented");
     }
 
@@ -964,7 +968,7 @@ Subscribe::run(grpc::ServerContext *context,
     case gnmi::SubscriptionList_Mode_POLL:
         return handlePoll(request, stream);
     default:
-        SLOG_ERROR("Unknown subscription mode");
+        SLOG_WARN("Unknown subscription mode");
         return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unknown subscription mode");
     }
 }

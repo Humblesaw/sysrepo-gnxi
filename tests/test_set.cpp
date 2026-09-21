@@ -1153,7 +1153,7 @@ TEST_CASE("Set request (no path)", "[set-neg]")
     update->mutable_val();
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Update no path or value"));
+    CHECK_THAT(status.error_message(), Equals("Update is missing path or value"));
 
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() == 0);
@@ -1173,7 +1173,9 @@ TEST_CASE("Set request (incorrect prefix)", "[set-neg]")
     update->mutable_val()->set_json_ietf_val("{\"gnmi-server-test-wine:enabled\":true}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Can't parse value fragment data: LY_EVALID"));
+    CHECK_THAT(status.error_message(),
+               Equals("failed to parse data for \"/gnmi-server-test:test/things[name=\"A\"]\": "
+                      "Can't parse value fragment data: LY_EVALID"));
 
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() == 0);
@@ -1201,7 +1203,8 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Can't parse data: LY_EVALID"));
+    CHECK_THAT(status.error_message(),
+               Equals("failed to parse data for \"/*\": Can't parse data: LY_EVALID"));
 
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() == 0);
@@ -1267,7 +1270,8 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Can't parse data: LY_EVALID"));
+    CHECK_THAT(status.error_message(),
+               Equals("failed to parse data for \"/*\": Can't parse data: LY_EVALID"));
 
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() == 0);
@@ -1332,7 +1336,10 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Can't parse value fragment data: LY_EVALID"));
+    CHECK_THAT(status.error_message(),
+               Equals("failed to parse data for "
+                      "\"/gnmi-server-test:test/things[name=\"B\"]/enabled\": "
+                      "Can't parse value fragment data: LY_EVALID"));
 
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() == 0);
@@ -1389,7 +1396,8 @@ TEST_CASE("Top-level Set request (update, no namespace)", "[set-neg]")
         "{\"test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Can't parse data: LY_EVALID"));
+    CHECK_THAT(status.error_message(),
+               Equals("failed to parse data for \"/*\": Can't parse data: LY_EVALID"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled"),
@@ -1407,7 +1415,9 @@ TEST_CASE("Set request (update with wildcards)", "[set-neg]")
     update->mutable_val()->set_json_ietf_val("true");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Can't parse value fragment data: LY_EVALID"));
+    CHECK_THAT(status.error_message(),
+               Equals("failed to parse data for \"/gnmi-server-test:test/*/enabled\": "
+                      "Can't parse value fragment data: LY_EVALID"));
 }
 
 TEST_CASE("Set request (application error string)", "[set-neg]")

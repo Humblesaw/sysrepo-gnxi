@@ -37,7 +37,6 @@ class YANG_RPCService final : public yang_rpc::YANG_RPC::Service
 {
   public:
     YANG_RPCService(sysrepo::Connection conn) : sr_con(conn) {}
-    ~YANG_RPCService() { SLOG_INFO("Quitting GNXI Server"); }
 
     grpc::Status Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
                      yang_rpc::RpcResponse *response);

@@ -20,28 +20,82 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <iostream>
+#include <mutex>
 #include <string>
+#include <unistd.h>
 
 #include <libyang/libyang.h>
 #include <sysrepo.h>
 
 #include "log.h"
 
+static thread_local std::string request_ctx;
+
+slog::RequestScope::RequestScope(std::string ctx)
+{
+    request_ctx = std::move(ctx);
+}
+
+slog::RequestScope::~RequestScope()
+{
+    request_ctx.clear();
+}
+
+static const char *level_label(int lvl)
+{
+    switch (lvl)
+    {
+    case 0:
+        return "[FATAL]";
+    case 1:
+        return "[ERROR]";
+    case 2:
+        return "[WARN ]";
+    case 3:
+        return "[INFO ]";
+    default:
+        return "[DEBUG]";
+    }
+}
+
+void slog::emit(int lvl, const std::string &msg)
+{
+    // sysrepo/libyang callbacks may fire from any thread, so the whole
+    // line is written under a mutex to keep concurrent output intact
+    static std::mutex mtx;
+
+    // split into the whole-second part (for put_time/strftime semantics,
+    // which have no sub-second fields) and the sub-second millisecond part
+    const auto now = std::chrono::system_clock::now();
+    const auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    const std::time_t tt = std::chrono::system_clock::to_time_t(now);
+    std::tm tm;
+    // gmtime_r fills the caller-provided tm (UTC) and is thread-safe
+    gmtime_r(&tt, &tm);
+
+    std::lock_guard<std::mutex> lock(mtx);
+    // UTC ISO-8601 with milliseconds ("2026-09-22T08:57:39.803Z")
+    std::cerr << std::put_time(&tm, "%FT%T") << '.' << std::setw(3) << std::setfill('0')
+              << ms.count() << "Z " << level_label(lvl) << " [" << gettid() << "] ";
+    if (!request_ctx.empty())
+    {
+        std::cerr << "[" << request_ctx << "] ";
+    }
+    std::cerr << msg << "\n";
+}
+
 static void sysrepo_log_cb(sr_log_level_t level, const char *message)
 {
     switch (level)
     {
     case SR_LL_ERR:
-        SLOG_ERROR("[", gettid(), "] ", message);
-        break;
     case SR_LL_WRN:
-        SLOG_WARN("[", gettid(), "] ", message);
-        break;
-    case SR_LL_INF:
-        /* Log at info at debug level to avoid sending sysrepo logs to the OSS. */
-    case SR_LL_DBG:
-        SLOG_DEBUG("[", gettid(), "] ", message);
+        SLOG_DEBUG("sysrepo: ", message);
         break;
     default:
         break;
@@ -61,15 +115,8 @@ static void libyang_log_cb(LY_LOG_LEVEL level, const char *message, const char *
     switch (level)
     {
     case LY_LLERR:
-        SLOG_ERROR(message, path_message);
-        break;
     case LY_LLWRN:
-        SLOG_WARN(message, path_message);
-        break;
-    case LY_LLVRB:
-        /* Log at info at debug level to avoid sending libyang logs to the OSS. */
-    case LY_LLDBG:
-        SLOG_DEBUG(message, path_message);
+        SLOG_DEBUG("libyang: ", message, path_message);
         break;
     default:
         break;
@@ -78,9 +125,10 @@ static void libyang_log_cb(LY_LOG_LEVEL level, const char *message, const char *
 
 void slog::set_level(int lvl)
 {
-    slog::lvl = lvl;
-    // libyang log level should be ERROR only
-    ly_log_level(LY_LLERR);
+    slog::lvl.store(lvl);
+
+    ly_log_level(LY_LLWRN);
+    sr_log_set_cb_level(SR_LL_WRN);
     sr_log_set_cb(sysrepo_log_cb);
     ly_set_log_clb(libyang_log_cb);
 }

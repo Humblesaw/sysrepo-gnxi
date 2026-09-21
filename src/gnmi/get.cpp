@@ -58,16 +58,17 @@ grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update
             }
         }
     }
-    catch (std::invalid_argument &exc)
-    {
-        updateList->Clear();
-        return grpc::Status(grpc::StatusCode::NOT_FOUND, exc.what());
-    }
     catch (sysrepo::ErrorWithCode &exc)
     {
-        SLOG_ERROR("Fail getting items from sysrepo: ", exc.what());
+        SLOG_ERROR("Failed getting items from sysrepo: ", exc.what());
         updateList->Clear();
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+    }
+    catch (const std::runtime_error &exc)
+    {
+        SLOG_DEBUG("Path not found or not evaluable: \"", fullpath, "\": ", exc.what());
+        updateList->Clear();
+        return grpc::Status(grpc::StatusCode::NOT_FOUND, exc.what());
     }
 
     return grpc::Status::OK;
@@ -99,8 +100,9 @@ grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const g
         {
             str = gnmi_to_xpath(prefix);
         }
-        catch (std::invalid_argument &exc)
+        catch (const std::runtime_error &exc)
         {
+            SLOG_DEBUG("Invalid Get prefix: ", exc.what());
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
         SLOG_DEBUG("prefix is ", str);
@@ -121,8 +123,9 @@ grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const g
         gnmi_check_origin(prefix, path);
         fullpath += gnmi_to_xpath(path);
     }
-    catch (std::invalid_argument &exc)
+    catch (const std::runtime_error &exc)
     {
+        SLOG_DEBUG("Invalid Get path: ", exc.what());
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
     }
     SLOG_DEBUG("GetRequest Path ", fullpath);
@@ -200,7 +203,7 @@ grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
             BuildGetNotification(notification, req->prefix(), path, req->encoding(), req->type());
         if (!status.ok())
         {
-            SLOG_ERROR("Fail building get notification: ", status.error_message());
+            SLOG_WARN("Failed building get notification: ", status.error_message());
             return status;
         }
     }
