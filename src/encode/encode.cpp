@@ -81,16 +81,8 @@ Encode::decode(const std::string &xpath, const gnmi::TypedValue &reqval, EncodeP
             return std::make_tuple(grpc::Status::OK,
                                    json_decode(xpath, reqval.json_ietf_val(), purpose));
         }
-        catch (std::runtime_error &err)
+        catch (const std::runtime_error &err)
         {
-            // wrong input field must reply an error to gnmi client
-            SLOG_ERROR("Run-time error:", err.what());
-            return std::make_tuple(grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, err.what()),
-                                   std::nullopt);
-        }
-        catch (std::invalid_argument &err)
-        {
-            SLOG_ERROR("Invalid argument:", err.what());
             return std::make_tuple(grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, err.what()),
                                    std::nullopt);
         }

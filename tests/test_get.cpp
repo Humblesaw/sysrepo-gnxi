@@ -900,7 +900,7 @@ TEST_CASE("Get request with relative path", "[get-neg]")
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(), Equals("Relative paths not allowed"));
+    CHECK_THAT(status.error_message(), Equals("relative paths not allowed (elem '..')"));
 }
 
 // Double-quotes now supported.

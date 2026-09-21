@@ -185,8 +185,8 @@ void Auth::authorize(sysrepo::Session &sess, const std::string &username,
                 // insufficient permissions
                 else
                 {
-                    SLOG_WARN("Authorization failed (insufficient permissions): User " + username +
-                              " has been denied " + acc + " access to " + mod + ".");
+                    SLOG_ERROR("Authorization failed (insufficient permissions): User " + username +
+                               " has been denied " + acc + " access to " + mod + ".");
                     throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                                        "User " + username + " has been denied " + acc +
                                            " access to " + mod + ".");
@@ -215,8 +215,8 @@ void Auth::authorize(sysrepo::Session &sess, const std::string &username,
         {
             if (!modules_authorized.contains(mod))
             {
-                SLOG_WARN("Authorization failed (module not in ACL): User '", username,
-                          "' lacks an ACL entry for module '", mod, "'.");
+                SLOG_ERROR("Authorization failed (module not in ACL): User '", username,
+                           "' lacks an ACL entry for module '", mod, "'.");
                 throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                                    "User " + username + " lacks an ACL entry for module '" + mod +
                                        "'.");
@@ -249,7 +249,7 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
             xpaths.push_back(xpaths_prefix + gnmi_to_xpath(path));
         }
     }
-    catch (const std::invalid_argument &exc)
+    catch (const std::runtime_error &exc)
     {
         SLOG_DEBUG("Prefix or path could not be parsed: ", exc.what());
         throw grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
@@ -273,8 +273,8 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
         {
             if (isPrivateModule(mod))
             {
-                SLOG_WARN("Authorization failed (private module): User ", name,
-                          " attempted access to private module '", mod, "'.");
+                SLOG_ERROR("Authorization failed (private module): User ", name,
+                           " attempted access to private module '", mod, "'.");
                 throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                                    "Access to module '" + mod + "' is forbidden.");
             }
@@ -321,10 +321,12 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
     }
     catch (const std::exception &exc)
     {
-        SLOG_DEBUG("Authentication failed for user '", username, "': ", exc.what());
+        SLOG_ERROR("Authentication failed for user '", username, "': ", exc.what());
         cleanse();
         return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "Invalid username/password");
     }
+
+    SLOG_INFO("Authentication succeeded for user '", username, "'");
 
     // store username for per-RPC authorization
     context->AddProperty("username", username);

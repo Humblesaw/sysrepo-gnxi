@@ -46,7 +46,7 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
 {
     // Parse request
     if (!in.has_path() || !in.has_val())
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Update no path or value");
+        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Update is missing path or value");
 
     std::string fullpath;
     gnmi_check_origin(prefix, in.path());
@@ -169,8 +169,10 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
         // We should have found a path, and wildcards don't make sense
         if (set.empty())
         {
-            SLOG_ERROR("Empty result searching for ", fullpath);
-            throw std::invalid_argument("Invalid set returned for xpath \"" + fullpath + "\"");
+            SLOG_ERROR("Decoded fragment contains no node matching ", fullpath,
+                       " - internal inconsistency (the data was already schema-validated)");
+            throw std::runtime_error("internal error: no node found for xpath \"" + fullpath +
+                                     "\"");
         }
 
         for (auto edit_node : set)
@@ -310,9 +312,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         {
             prefix = gnmi_to_xpath(request->prefix());
         }
-        catch (std::invalid_argument &exc)
+        catch (const std::runtime_error &exc)
         {
-            SLOG_ERROR(exc.what());
+            SLOG_WARN("Invalid Set prefix: ", exc.what());
             commit_state->clear();
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
@@ -339,9 +341,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 fullpath = prefix + gnmi_to_xpath(delpath);
                 del_paths.insert(fullpath);
             }
-            catch (std::invalid_argument &exc)
+            catch (const std::runtime_error &exc)
             {
-                SLOG_ERROR(exc.what());
+                SLOG_WARN("Invalid delete path: ", exc.what());
                 commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
@@ -364,7 +366,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 // than it has to be
                 auto del_root = sr_sess.getData(fullpath, 0);
                 if (!del_root.has_value())
-                    throw std::invalid_argument("xpath \"" + fullpath + "\" not found");
+                    throw std::runtime_error("xpath \"" + fullpath + "\" not found");
 
                 if (fullpath.compare("/*") == 0)
                 {
@@ -383,7 +385,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                     // node
                     auto set = del_root->findXPath(fullpath);
                     if (set.empty())
-                        throw std::invalid_argument("xpath \"" + fullpath + "\" not found");
+                        throw std::runtime_error("xpath \"" + fullpath + "\" not found");
 
                     for (auto n : set)
                     {
@@ -410,15 +412,21 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 // already existing) data only.
                 xact.merge(deleteTree, del_root);
             }
-            catch (const std::invalid_argument &exc)
+            catch (const sysrepo::Error &exc)
             {
-                SLOG_ERROR(exc.what());
+                SLOG_WARN("Failed to delete \"", fullpath, "\": ", exc.what());
+                commit_state->clear();
+                return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+            }
+            catch (const std::runtime_error &exc)
+            {
+                SLOG_DEBUG(exc.what());
                 // gNMI spec §3.4.6: In the case that a path specifies an element within the data
                 // tree that does not exist, these deletes MUST be silently accepted.
             }
             catch (const std::exception &exc)
             {
-                SLOG_ERROR(exc.what());
+                SLOG_WARN("Failed to delete \"", fullpath, "\": ", exc.what());
                 commit_state->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
@@ -433,7 +441,6 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             auto status = handleUpdate(repl, &res, prefix, request->prefix(), UpdateOp::Replace);
             if (!status.ok())
             {
-                SLOG_ERROR("Fail building set notification: ", status.error_message());
                 commit_state->clear();
                 return status;
             }
@@ -441,21 +448,21 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             res.set_op(gnmi::UpdateResult::REPLACE);
             results.push_back(res);
         }
-        catch (const std::invalid_argument &exc)
-        {
-            SLOG_ERROR(exc.what());
-            commit_state->clear();
-            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
-        }
         catch (const sysrepo::Error &exc)
         {
-            SLOG_ERROR(exc.what());
+            SLOG_ERROR("Replace failed: ", exc.what());
             commit_state->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
+        catch (const std::runtime_error &exc)
+        {
+            SLOG_WARN("Replace failed: ", exc.what());
+            commit_state->clear();
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+        }
         catch (const std::exception &exc)
         { // Any other exception
-            SLOG_ERROR(exc.what());
+            SLOG_ERROR("Replace failed: ", exc.what());
             commit_state->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
@@ -477,7 +484,6 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             auto status = handleUpdate(upd, &res, prefix, request->prefix(), UpdateOp::Merge);
             if (!status.ok())
             {
-                SLOG_ERROR("Fail building set notification: ", status.error_message());
                 commit_state->clear();
                 return status;
             }
@@ -485,21 +491,21 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             res.set_op(gnmi::UpdateResult::UPDATE);
             results.push_back(res);
         }
-        catch (const std::invalid_argument &exc)
-        {
-            SLOG_ERROR(exc.what());
-            commit_state->clear();
-            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
-        }
         catch (const sysrepo::Error &exc)
         {
-            SLOG_ERROR(exc.what());
+            SLOG_ERROR("Update failed: ", exc.what());
             commit_state->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
+        catch (const std::runtime_error &exc)
+        {
+            SLOG_WARN("Update failed: ", exc.what());
+            commit_state->clear();
+            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+        }
         catch (const std::exception &exc)
         { // Any other exception
-            SLOG_ERROR(exc.what());
+            SLOG_ERROR("Update failed: ", exc.what());
             commit_state->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }

@@ -42,8 +42,8 @@ std::string stripJSONObjectValue(const std::string &object)
     /* not a valid JSON object */
     if (object.front() != '{' || object.back() != '}')
     {
-        SLOG_ERROR("Unexpected input: JSON object does not have { or }");
-        throw std::invalid_argument("JSON object does not have { or }");
+        SLOG_WARN("Unexpected input: JSON object does not have { or }");
+        throw std::runtime_error("JSON object does not have { or }");
     }
 
     /* strip the JSON object brackets */
@@ -78,8 +78,8 @@ std::string stripJSONObjectValue(const std::string &object)
     /* not a valid JSON object */
     if (!index_start)
     {
-        SLOG_ERROR("Unexpected input: JSON object does not have a :");
-        throw std::invalid_argument("JSON object does not have a :");
+        SLOG_WARN("Unexpected input: JSON object does not have a :");
+        throw std::runtime_error("JSON object does not have a :");
     }
 
     return result.substr(index_start + 1);
@@ -105,14 +105,15 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
         }
         catch (const std::exception &exc)
         {
-            SLOG_ERROR("Failed to parse data. Exception: ", exc.what());
+            SLOG_WARN("Failed to parse JSON_IETF data for \"", xpath, "\": ", exc.what());
+            SLOG_DEBUG("Input data: ", data);
             // The failed parse above left its errors on the libyang context shared with
             // sysrepo, which would later report them as errors of an unrelated operation.
             // Nothing else can use the context between the parse and here, so this
             // clears only the errors caused by the parse itself.
             auto ctx = sr_sess.getContext();
             ctx.cleanAllErrors();
-            throw std::invalid_argument(exc.what());
+            throw std::runtime_error("failed to parse data for \"" + xpath + "\": " + exc.what());
         }
     }
 
@@ -146,12 +147,13 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
     }
     catch (const std::exception &exc)
     {
-        SLOG_ERROR("Failed to parse data. xpath: ", xpath, ". Exception: ", exc.what());
+        SLOG_WARN("Failed to parse JSON_IETF data for \"", xpath, "\": ", exc.what());
+        SLOG_DEBUG("Input data: ", data);
         // Don't leave the error lying around on the context otherwise sysrepo may pick it up on
         // an unrelated operation
         auto ctx = sr_sess.getContext();
         ctx.cleanAllErrors();
-        throw;
+        throw std::runtime_error("failed to parse data for \"" + xpath + "\": " + exc.what());
     }
 
     return std::nullopt;

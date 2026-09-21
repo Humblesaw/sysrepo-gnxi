@@ -21,8 +21,11 @@
  * limitations under the License.
  */
 
+#include <charconv>
 #include <chrono>
 #include <csignal>
+#include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <getopt.h>
 #include <stdexcept>
@@ -68,7 +71,7 @@ void SetupSignalHandler(void)
     // Set up the signal handler
     if (pipe(g_state.pipefd) < 0)
     {
-        std::cerr << "Failed to create signal handler pipe " << strerror(errno) << std::endl;
+        SLOG_FATAL("Failed to create signal handler pipe: ", strerror(errno));
         exit(1);
     }
 
@@ -310,7 +313,7 @@ void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bin
 
     if (g_state.server == nullptr)
     {
-        SLOG_ERROR("Failed to build gRPC server");
+        SLOG_FATAL("Failed to build gRPC server");
         exit(1);
     }
 
@@ -321,7 +324,7 @@ void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bin
 
     wait_for_terminate();
 
-    SLOG_INFO("GNMI Server exited");
+    SLOG_INFO("Server exited");
 }
 
 const char *USAGE = R"(Usage:
@@ -334,8 +337,8 @@ Options:
   -l,--log-level LOG_LEVEL  Logging level
     0 = log fatal messages
     1 = log error messages and all above
-    2 = (default) log warning messages and all above
-    3 = log informational messages and all above
+    2 = log warning messages and all above
+    3 = (default) log informational messages and all above
     4 = log debug messages and all above
 
 Server configuration is read from sysrepo.
@@ -360,8 +363,17 @@ int main(int argc, char *argv[])
             insecure = true;
             break;
         case 'l': // log level
-            slog::set_level(std::atoi(optarg));
+        {
+            int level = 0;
+            const auto [ptr, ec] = std::from_chars(optarg, optarg + std::strlen(optarg), level);
+            if (ec != std::errc() || *ptr != '\0' || level < 0 || level > 4)
+            {
+                std::cerr << "Invalid log level '" << optarg << "', expected 0-4\n" << USAGE;
+                exit(1);
+            }
+            slog::set_level(level);
             break;
+        }
         case '?': // help
         case 'h':
             std::cout << USAGE;
@@ -402,7 +414,7 @@ int main(int argc, char *argv[])
     }
     catch (const std::exception &exc)
     {
-        SLOG_FATAL("GNMI server aborted: ", exc.what());
+        SLOG_FATAL("Server aborted: ", exc.what());
         exit(1);
     }
 

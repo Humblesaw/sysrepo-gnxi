@@ -81,14 +81,17 @@ grpc::Status Commit::request_setup(const std::string &commit_id, int64_t rollbac
     std::lock_guard<std::mutex> lock(mutex_);
     if (wait_confirm_)
     {
+        SLOG_WARN("Commit request denied: commit '", commit_id_, "' already in progress");
         return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "commit already in progress");
     }
     if (commit_id.empty())
     {
+        SLOG_WARN("Commit request denied: commit id required");
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id required");
     }
     if (rollback_secs <= 0)
     {
+        SLOG_WARN("Commit request denied: rollback_duration must be greater than 0");
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                             "rollback_duration must be greater than 0");
     }
@@ -99,6 +102,8 @@ grpc::Status Commit::request_setup(const std::string &commit_id, int64_t rollbac
     commit_id_ = commit_id;
     commit_username_ = username;
     rollback_secs_ = rollback_secs;
+    SLOG_INFO("Commit requested: id '", commit_id, "', user '",
+              username.empty() ? "<insecure>" : username, "', rollback in ", rollback_secs, " s");
     return grpc::Status::OK;
 }
 
@@ -120,17 +125,22 @@ grpc::Status Commit::confirm(const std::string &commit_id, const std::string &us
         std::lock_guard<std::mutex> lock(mutex_);
         if (!wait_confirm_)
         {
+            SLOG_WARN("Commit confirm denied: not waiting for confirm");
             return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "not waiting for confirm");
         }
         if (commit_id_ != commit_id)
         {
+            SLOG_WARN("Commit confirm denied: commit id mismatch");
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
         }
         if (commit_username_ != username)
         {
+            SLOG_ERROR("Commit confirm denied: only the original user can confirm this commit");
             return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                                 "only the original user can confirm this commit");
         }
+        SLOG_INFO("Commit confirmed: id '", commit_id, "', user '",
+                  username.empty() ? "<insecure>" : username, "'");
 
         // clear the internal state
         clear_no_lock_();
@@ -145,17 +155,22 @@ grpc::Status Commit::cancel(const std::string &commit_id, const std::string &use
         std::lock_guard<std::mutex> lock(mutex_);
         if (!wait_confirm_)
         {
+            SLOG_WARN("Commit cancel denied: not waiting for confirm");
             return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "not waiting for confirm");
         }
         if (commit_id_ != commit_id)
         {
+            SLOG_WARN("Commit cancel denied: commit id mismatch");
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
         }
         if (commit_username_ != username)
         {
+            SLOG_ERROR("Commit cancel denied: only the original user can cancel this commit");
             return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                                 "only the original user can cancel this commit");
         }
+        SLOG_INFO("Commit cancelled: id '", commit_id, "', user '",
+                  username.empty() ? "<insecure>" : username, "'");
 
         // per spec, cancel MUST rollback the configuration to the state prior to the
         // SetRequest that initiated the confirmed commit
@@ -171,25 +186,32 @@ grpc::Status Commit::set_rollback_duration(const std::string &commit_id, int64_t
     std::lock_guard<std::mutex> lock(mutex_);
     if (!wait_confirm_)
     {
+        SLOG_WARN("Commit set rollback duration denied: not waiting for confirm");
         return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, "not waiting for confirm");
     }
     if (commit_id_ != commit_id)
     {
+        SLOG_WARN("Commit set rollback duration denied: commit id mismatch");
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "commit id mismatch");
     }
     if (commit_username_ != username)
     {
+        SLOG_ERROR(
+            "Commit set rollback duration denied: only the original user can perform this action");
         return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                             "only the original user can set rollback duration for this commit");
     }
     if (rollback_secs <= 0)
     {
+        SLOG_WARN("Commit set rollback duration denied: rollback_duration must be greater than 0");
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                             "rollback_duration must be greater than 0");
     }
 
     timer_reset_ = true;
     rollback_secs_ = rollback_secs;
+    SLOG_INFO("Commit rollback duration set: id '", commit_id, "', user '",
+              username.empty() ? "<insecure>" : username, "', rollback in ", rollback_secs, " s");
 
     // reset the confirm loop
     cv_.notify_one();
@@ -211,7 +233,8 @@ void Commit::clear_no_lock_()
 
 void Commit::restore_config_no_lock_()
 {
-    SLOG_DEBUG("Restoring config");
+    SLOG_INFO("Rolling back configuration of commit '", commit_id_, "' originally made by user '",
+              commit_username_.empty() ? "<insecure>" : commit_username_, "'");
     if (cfg_snapshot_.has_value())
     {
         // restore config
@@ -277,6 +300,8 @@ void Commit::check_confirm_loop_()
         // timer expired
         if (wait_confirm_ && !timer_thread_exit_)
         {
+            SLOG_INFO("Commit '", commit_id_, "' not confirmed in ", rollback_secs_,
+                      " s, rolling back");
             restore_config_no_lock_();
             break;
         }

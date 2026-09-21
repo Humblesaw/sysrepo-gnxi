@@ -30,7 +30,6 @@
 
 #include "commit.h"
 #include "security/auth.h"
-#include "utils/log.h"
 
 /**
  * @brief The gNMI service: entry points for the Capabilities, Get, Set
@@ -52,7 +51,6 @@ class GNMIService final : public gnmi::gNMI::Service
     {
         commit_state = std::make_shared<impl::Commit>(conn.sessionStart());
     }
-    ~GNMIService() { SLOG_INFO("Quitting GNMI Server"); }
 
     /**
      * @brief Report the server capabilities (supported models/encodings).
