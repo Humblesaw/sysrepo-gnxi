@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 set(SYSREPO-GNXI_MAJOR_VERSION 0)
-set(SYSREPO-GNXI_MINOR_VERSION 1)
+set(SYSREPO-GNXI_MINOR_VERSION 9)
 set(SYSREPO-GNXI_MICRO_VERSION 0)
 
 project(sysrepo-gnxi
