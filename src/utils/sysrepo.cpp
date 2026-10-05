@@ -95,13 +95,25 @@ void DataSubscribe::data_change_subscribe(sysrepo::ModuleChangeCb cb, const char
 {
     for (const auto &mod : collect_xpath_mods(data_sess.getContext(), xpath))
     {
-        if (sub)
+        try
         {
-            sub->onModuleChange(mod, cb, xpath, priority, opts);
+            if (sub)
+            {
+                sub->onModuleChange(mod, cb, xpath, priority, opts);
+            }
+            else
+            {
+                sub = data_sess.onModuleChange(mod, cb, xpath, priority, opts);
+            }
         }
-        else
+        catch (sysrepo::ErrorWithCode &err)
         {
-            sub = data_sess.onModuleChange(mod, cb, xpath, priority, opts);
+            // data of internal modules (e.g. "sysrepo") cannot be subscribed to
+            if (err.code() == sysrepo::ErrorCode::Unsupported)
+            {
+                continue;
+            }
+            throw;
         }
     }
 }

@@ -68,6 +68,7 @@ install_module() {
 
 echo "Installing YANG modules..."
 
+install_module "openconfig-extensions.yang"
 install_module "iana-crypt-hash@2014-08-06.yang"
 install_module "iana-tls-cipher-suite-algs@2024-03-16.yang"
 install_module "ietf-crypto-types@2024-10-10.yang" \

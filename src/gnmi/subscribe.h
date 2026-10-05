@@ -59,21 +59,21 @@ class Subscribe
     void triggerSampleUpdate(
         grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> &sub,
         grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
-        gnmi::Encoding encoding);
+        gnmi::Encoding encoding, const gnmi::Path &prefix);
     grpc::Status BuildSubscribeNotification(gnmi::Notification *notification,
                                             const gnmi::SubscriptionList &request,
                                             bool *sample = nullptr);
     grpc::Status BuildSubscribeNotificationForChanges(gnmi::Notification *notification,
                                                       const gnmi::SubscriptionList &request,
-                                                      std::string &xpath, sysrepo::Session session);
+                                                      std::string &xpath, std::string origin,
+                                                      sysrepo::Session session);
     // To synchronize write access to the stream
     void Write(grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
                gnmi::SubscribeResponse response);
 
   private:
     grpc::Status BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                                 const gnmi::Path &prefix, std::string fullpath,
-                                 gnmi::Encoding encoding);
+                                 std::string fullpath, gnmi::Encoding encoding, std::string origin);
     grpc::Status registerStreamOnChange(
         gnmi::SubscribeRequest &request, gnmi::Subscription sub,
         grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,

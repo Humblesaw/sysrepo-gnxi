@@ -246,7 +246,7 @@ TEST_CASE("Subscribe (once) with prefix", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", list->mutable_prefix());
+    xpath_to_path("/gnmi-server-test:test-state", list->mutable_prefix(), "");
     xpath_to_path("/things[name='A']", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -1580,6 +1580,165 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
     }
 }
 
+TEST_CASE("Subscribe (once) with origin in both prefix and path", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    list->mutable_prefix()->set_origin("rfc7951");
+    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
+    CHECK_THAT(status.error_message(),
+               Equals("origin must not be specified in both prefix and path (gNMI spec 2.7)"));
+}
+
+TEST_CASE("Subscribe (stream sample) with prefix", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+    std::chrono::seconds interval(1);
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", list->mutable_prefix(), "");
+    xpath_to_path("/counter", sub->mutable_path());
+    sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
+    sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    // data of the initial state, resolved from prefix + path
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(response.extension_size() == 0);
+    CHECK(!response.sync_response());
+    CHECK(response.update().delete__size() == 0);
+    CHECK(response.update().timestamp() > 0);
+    REQUIRE(response.update().update_size() == 1);
+    auto update = response.update().update().Get(0);
+    CHECK(update.val().value_case() == gnmi::TypedValue::ValueCase::kJsonIetfVal);
+    // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
+    CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
+    CHECK_THAT(update.path().origin(), Equals("rfc7951"));
+    CHECK_THAT(path_to_xpath(update.path()),
+               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+    CHECK(!response.update().atomic());
+
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(!response.has_update());
+    CHECK(response.sync_response());
+
+    // wait for one periodic update after the initial data
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    REQUIRE(response.update().update_size() == 1);
+    update = response.update().update().Get(0);
+    CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
+    CHECK_THAT(path_to_xpath(update.path()),
+               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+
+    // and then cancel
+    ctx.TryCancel();
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
+    CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
+}
+
+TEST_CASE("Subscribe (stream on-change) with prefix", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", list->mutable_prefix(), "");
+    xpath_to_path("/counter", sub->mutable_path());
+    sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    // initial data, delivered when the subscription is registered
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(response.update().delete__size() == 0);
+    REQUIRE(response.update().update_size() == 1);
+    auto update = response.update().update().Get(0);
+    // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
+    CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
+    CHECK_THAT(update.path().origin(), Equals("rfc7951"));
+    CHECK_THAT(path_to_xpath(update.path()),
+               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!response.has_update());
+    CHECK(response.sync_response());
+
+    // changing the value triggers a notification
+    sr_sess->switchDatastore(sysrepo::Datastore::Operational);
+    sr_sess->setItem("/gnmi-server-test:test-state/things[name='A']/counter", "5");
+    sr_sess->applyChanges();
+
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(response.update().delete__size() == 1);
+    CHECK_THAT(path_to_xpath(response.update().delete_().Get(0)),
+               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+    REQUIRE(response.update().update_size() == 1);
+    update = response.update().update().Get(0);
+    CHECK_THAT(update.val().json_ietf_val(),
+               Equals("\"5\",\"@counter\":{\"yang:operation\":\"replace\",\"yang:orig-default\":"
+                      "false,\"yang:orig-value\":\"1\"}"));
+    CHECK_THAT(path_to_xpath(update.path()),
+               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+
+    // and then cancel
+    ctx.TryCancel();
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
+    CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
+
+    // restore the initial value
+    sr_sess->setItem("/gnmi-server-test:test-state/things[name='A']/counter", "1");
+    sr_sess->applyChanges();
+}
+
 TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
 {
     grpc::ClientContext ctx;
@@ -1915,4 +2074,202 @@ TEST_CASE("Subscribe (stream-sample) with zero sample interval", "[subs]")
 
     auto status = rw->Finish();
     CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
+}
+
+// origin tests
+
+TEST_CASE("Subscribe (once) with default origin", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/test-state/things[name='A']", sub->mutable_path(), "");
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+    success = rw->Read(&response);
+    CHECK(success == true);
+
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(response.extension_size() == 0);
+    CHECK(!response.sync_response());
+    CHECK(response.update().delete__size() == 0);
+    CHECK(response.update().timestamp() > 0);
+    CHECK(!response.update().has_prefix());
+    REQUIRE(response.update().update_size() == 1);
+    auto update = response.update().update().Get(0);
+    CHECK(update.val().value_case() == gnmi::TypedValue::ValueCase::kJsonIetfVal);
+    CHECK_THAT(update.val().json_ietf_val(), Equals("{\"name\":\"A\",\"counter\":\"1\"}"));
+    CHECK_THAT(update.path().origin(), Equals("openconfig"));
+    CHECK_THAT(path_to_xpath(update.path()), Equals("/test-state/things[name='A']"));
+    CHECK(!response.update().atomic());
+
+    success = rw->Read(&response);
+    CHECK(success == true);
+    CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+    CHECK(response.extension_size() == 0);
+    CHECK(!response.has_update());
+    CHECK(response.sync_response());
+
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    success = rw->WritesDone();
+    CHECK(success == true);
+    auto status = rw->Finish();
+    CHECK(status.ok());
+}
+
+TEST_CASE("Subscribe (once) with unsupported origin", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path(), "frob");
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
+    CHECK_THAT(status.error_message(), Equals("unsupported origin \"frob\""));
+}
+
+TEST_CASE("Subscribe (once) with ambiguous bare element name", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/test2", sub->mutable_path(), "");
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
+    CHECK_THAT(status.error_message(), Contains("ambiguous path element \"test2\""));
+}
+
+TEST_CASE("Subscribe (once) to a module under a different origin", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/gnmi-server-test-wine:wines", sub->mutable_path(), "");
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
+    CHECK_THAT(status.error_message(),
+               Equals("module \"gnmi-server-test-wine\" is under origin \"rfc7951\" and cannot "
+                      "be addressed under origin \"openconfig\""));
+}
+
+TEST_CASE("Subscribe (stream on-change) root path excludes other origins", "[subs-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SubscribeRequest request;
+    gnmi::SubscribeResponse response;
+    auto list = request.mutable_subscribe();
+    auto sub = list->add_subscription();
+
+    sr_sess->switchDatastore(sysrepo::Datastore::Operational);
+    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
+                     "98");
+    sr_sess->applyChanges();
+
+    list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
+    list->set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/", sub->mutable_path(), "");
+    sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
+
+    auto rw = gnmi_client->Subscribe(&ctx);
+    auto success = rw->Write(request);
+    CHECK(success == true);
+
+    // read the initial data notifications until the synchronization response,
+    // collecting the paths of all updates and deletes
+    bool sawTestState = false;
+    bool sawWines = false;
+    bool synced = false;
+    while (rw->Read(&response))
+    {
+        CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
+        if (response.sync_response())
+        {
+            synced = true;
+            break;
+        }
+        for (const auto &update : response.update().update())
+        {
+            CHECK_THAT(update.path().origin(), Equals("openconfig"));
+            auto path = path_to_xpath(update.path());
+            if (path.rfind("/test-state", 0) == 0)
+            {
+                sawTestState = true;
+            }
+            if (path.rfind("/wines", 0) == 0)
+            {
+                sawWines = true;
+            }
+        }
+        for (const auto &del : response.update().delete_())
+        {
+            auto path = path_to_xpath(del);
+            if (path.rfind("/wines", 0) == 0)
+            {
+                sawWines = true;
+            }
+        }
+    }
+    CHECK(synced);
+    CHECK(sawTestState);
+    CHECK(!sawWines);
+
+    // cancel
+    ctx.TryCancel();
+    success = rw->Read(&response);
+    CHECK(success == false);
+
+    auto status = rw->Finish();
+    CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
+
+    // clean up
+    sr_sess->deleteItem("/gnmi-server-test-wine:wines");
+    sr_sess->applyChanges();
 }

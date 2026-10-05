@@ -28,6 +28,7 @@
 #include <sysrepo-cpp/utils/exception.hpp>
 #include <sysrepo.h>
 #include <utils/log.h>
+#include <utils/path.h>
 #include <utils/sysrepo.h>
 #include <utils/utils.h>
 
@@ -42,25 +43,20 @@ static const char *update_op_str(UpdateOp op)
 }
 
 grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
-                               const std::string &prefix_str, const gnmi::Path &prefix, UpdateOp op)
+                               const gnmi::Path &prefix, UpdateOp op)
 {
     // Parse request
     if (!in.has_path() || !in.has_val())
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Update is missing path or value");
 
-    std::string fullpath;
-    gnmi_check_origin(prefix, in.path());
-    if (prefix.elem_size() > 0)
-    {
-        fullpath += prefix_str;
-    }
-    fullpath += gnmi_to_xpath(in.path());
+    auto origin = gnxi::resolveOrigin(prefix, in.path());
+    std::string fullpath = gnxi::gnmiToXPath(sr_sess.getContext(), prefix, in.path());
     SLOG_DEBUG("Update (", update_op_str(op), ") ", fullpath);
 
     auto ly_ctx = sr_sess.getContext();
     auto ietf_nc_mod = ly_ctx.getModuleImplemented("ietf-netconf").value();
 
-    if (fullpath.compare("/*") != 0 && op == UpdateOp::Replace)
+    if (fullpath != gnxi::ROOT_XPATH && op == UpdateOp::Replace)
     {
         // Replacing a list or leaf-list means we should delete all previous entries
 
@@ -104,8 +100,19 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
     if (!status.ok())
         return status;
 
-    if (fullpath.compare("/*") == 0)
+    if (fullpath == gnxi::ROOT_XPATH)
     {
+        // root updates may span modules - all of them must belong to the origin
+        for (auto n = top_level; n.has_value(); n = n->nextSibling())
+        {
+            if (!gnxi::dataNodeInOrigin(*n, origin))
+            {
+                throw grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                                   "update data under origin \"" + origin +
+                                       "\" must not contain data of other origins");
+            }
+        }
+
         if (op == UpdateOp::Replace)
         {
             // The gNMI semantics are that a replace at the top-level should cause all data node
@@ -117,6 +124,12 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
             for (auto n = std::optional<libyang::DataNode>(del_root); n.has_value();
                  n = n->nextSibling())
             {
+                // data of other origins is not part of this replace
+                if (!gnxi::dataNodeInOrigin(*n, origin))
+                {
+                    continue;
+                }
+
                 // Default flags are unreliable since getData() retrieves only a subset of the
                 // datastore
                 // if (getRawNode(*n)->flags & LYD_DEFAULT)
@@ -200,7 +213,6 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
 grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *request,
                       gnmi::SetResponse *response)
 {
-    std::string prefix;
     std::vector<gnmi::UpdateResult> results;
 
     // scan for extensions, allow only the Commit extension; reject all others
@@ -305,20 +317,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         return auth_status;
     }
 
-    /* Prefix for gNMI path */
+    /* Echo the request prefix in the response */
     if (request->has_prefix())
     {
-        try
-        {
-            prefix = gnmi_to_xpath(request->prefix());
-        }
-        catch (const std::runtime_error &exc)
-        {
-            SLOG_WARN("Invalid Set prefix: ", exc.what());
-            commit_state->clear();
-            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
-        }
-        SLOG_DEBUG("prefix is ", prefix);
         response->mutable_prefix()->CopyFrom(request->prefix());
     }
 
@@ -331,21 +332,27 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         // sort the paths to delete in order from parent to child (so that operations are
         // successfuly merged)
         std::set<std::string, std::less<std::string>> del_paths;
+        // origins of root deletes - only data of these origins is removed by them
+        std::set<std::string> del_root_origins;
         for (const auto &delpath : request->delete_())
         {
             // Parse request and config sysrepo
             std::string fullpath;
             try
             {
-                gnmi_check_origin(request->prefix(), delpath);
-                fullpath = prefix + gnmi_to_xpath(delpath);
+                auto origin = gnxi::resolveOrigin(request->prefix(), delpath);
+                fullpath = gnxi::gnmiToXPath(ly_ctx, request->prefix(), delpath);
                 del_paths.insert(fullpath);
+                if (fullpath == gnxi::ROOT_XPATH)
+                {
+                    del_root_origins.insert(origin);
+                }
             }
-            catch (const std::runtime_error &exc)
+            catch (const grpc::Status &status)
             {
-                SLOG_WARN("Invalid delete path: ", exc.what());
+                SLOG_WARN("Invalid delete path: ", status.error_message());
                 commit_state->clear();
-                return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+                return status;
             }
 
             // Fill in Response
@@ -368,11 +375,26 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 if (!del_root.has_value())
                     throw std::runtime_error("xpath \"" + fullpath + "\" not found");
 
-                if (fullpath.compare("/*") == 0)
+                if (fullpath == gnxi::ROOT_XPATH)
                 {
                     // Walk all siblings and add delete node to them
                     for (auto n : del_root->siblings())
                     {
+                        // only data of the origins the root delete was issued under
+                        bool in_origin = false;
+                        for (const auto &origin : del_root_origins)
+                        {
+                            if (gnxi::dataNodeInOrigin(n, origin))
+                            {
+                                in_origin = true;
+                                break;
+                            }
+                        }
+                        if (!in_origin)
+                        {
+                            continue;
+                        }
+
                         n.newMeta(ietf_nc_mod, "ietf-netconf:operation", "remove");
 
                         SLOG_DEBUG(" 1. Delete path: ", n.path());
@@ -404,11 +426,12 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 }
                 // mergeWithSiblings() links "del_root" together with ALL of its
                 // following siblings into the delete tree - this is intentional:
-                // in the "/*" case every top-level sibling has been marked for
-                // removal above (so the whole chain belongs in the delete tree),
-                // and in the specific-path case the getData() snapshot only
-                // contains the top-level ancestors of the matched nodes, so the
-                // siblings merged along are ancestors of marked (or otherwise
+                // in the "/*" case the top-level siblings of the deleted origins
+                // have been marked for removal above, siblings of other origins
+                // are merged along as no-ops (they represent already existing
+                // data only), and in the specific-path case the getData() snapshot
+                // only contains the top-level ancestors of the matched nodes, so
+                // the siblings merged along are ancestors of marked (or otherwise
                 // already existing) data only.
                 xact.merge(deleteTree, del_root);
             }
@@ -438,7 +461,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         gnmi::UpdateResult res;
         try
         {
-            auto status = handleUpdate(repl, &res, prefix, request->prefix(), UpdateOp::Replace);
+            auto status = handleUpdate(repl, &res, request->prefix(), UpdateOp::Replace);
             if (!status.ok())
             {
                 commit_state->clear();
@@ -447,6 +470,12 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
 
             res.set_op(gnmi::UpdateResult::REPLACE);
             results.push_back(res);
+        }
+        catch (const grpc::Status &status)
+        {
+            SLOG_WARN("Replace failed: ", status.error_message());
+            commit_state->clear();
+            return status;
         }
         catch (const sysrepo::Error &exc)
         {
@@ -481,7 +510,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         gnmi::UpdateResult res;
         try
         {
-            auto status = handleUpdate(upd, &res, prefix, request->prefix(), UpdateOp::Merge);
+            auto status = handleUpdate(upd, &res, request->prefix(), UpdateOp::Merge);
             if (!status.ok())
             {
                 commit_state->clear();
@@ -490,6 +519,12 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
 
             res.set_op(gnmi::UpdateResult::UPDATE);
             results.push_back(res);
+        }
+        catch (const grpc::Status &status)
+        {
+            SLOG_WARN("Update failed: ", status.error_message());
+            commit_state->clear();
+            return status;
         }
         catch (const sysrepo::Error &exc)
         {

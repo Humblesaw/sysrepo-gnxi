@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <fstream>
 #include <grpcpp/grpcpp.h>
+#include <map>
 #include <netinet/in.h>
 #include <optional>
 #include <stdexcept>
@@ -54,9 +55,12 @@ std::unique_ptr<yang_rpc::YANG_RPC::Stub> gnxi_client;
 std::optional<sysrepo::Session> sr_sess;
 
 // Parse XPath-like string in gnmi::Path
-void xpath_to_path(std::string xpath, gnmi::Path *path)
+void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin)
 {
-    path->set_origin("rfc7951");
+    if (!origin.empty())
+    {
+        path->set_origin(origin);
+    }
 
     if (!xpath.compare("/"))
         return;
@@ -115,14 +119,17 @@ std::string path_to_xpath(const gnmi::Path &path)
     if (path.elem_size() <= 0)
         return "/";
 
-    if (path.origin().compare("rfc7951"))
+    if (path.origin().compare("rfc7951") && path.origin().compare("openconfig") &&
+        path.origin().compare(""))
         return "bad-origin:" + path.origin();
 
     // iterate over the list of PathElem of a gNMI path
     for (auto &node : path.elem())
     {
         str += "/" + node.name();
-        for (auto key : node.key())
+        // the protobuf map has no defined iteration order, so the keys are
+        // rendered sorted to make the result deterministic
+        for (auto key : std::map<std::string, std::string>(node.key().begin(), node.key().end()))
             str += "[" + key.first + "='" + key.second + "']";
     }
 
@@ -289,8 +296,10 @@ static void install_test_modules(sysrepo::Connection &sr_conn)
     };
 
     std::vector<sysrepo::ModuleInstallation> modules = {
+        make_inst(modules_dir, "openconfig-extensions.yang"),
         make_inst(files_dir, "gnmi-server-test.yang"),
         make_inst(files_dir, "gnmi-server-test-wine.yang"),
+        make_inst(files_dir, "sysrepo-gnxi-test-clash.yang"),
         make_inst(modules_dir, "iana-crypt-hash@2014-08-06.yang"),
         make_inst(modules_dir, "iana-tls-cipher-suite-algs@2024-03-16.yang"),
         make_inst(modules_dir, "ietf-crypto-types@2024-10-10.yang",

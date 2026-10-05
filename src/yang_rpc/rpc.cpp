@@ -27,6 +27,7 @@
 #include "rpc.h"
 #include <sysrepo-cpp/utils/exception.hpp>
 #include <utils/log.h>
+#include <utils/path.h>
 #include <utils/sysrepo.h>
 #include <utils/utils.h>
 
@@ -49,7 +50,9 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "no path provided");
         }
 
-        auto xpath = gnmi_to_xpath(request->path());
+        // the yang_rpc path is always standalone, no prefix can be given
+        const gnmi::Path no_prefix;
+        auto xpath = gnxi::gnmiToXPath(sr_sess.getContext(), no_prefix, request->path());
 
         // reject any access to private modules
         auto mods = collect_xpath_mods(sr_sess.getContext(), xpath.c_str());

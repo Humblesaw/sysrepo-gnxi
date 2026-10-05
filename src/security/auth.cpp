@@ -28,6 +28,7 @@
 #include <proto/gnmi.grpc.pb.h>
 
 #include "utils/log.h"
+#include "utils/path.h"
 #include "utils/sysrepo.h"
 #include "utils/utils.h"
 
@@ -235,25 +236,21 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
         return;
     }
 
-    std::string xpaths_prefix;
     std::vector<std::string> xpaths;
 
     try
     {
-        if (prefix.has_value())
-        {
-            xpaths_prefix = gnmi_to_xpath(prefix.value());
-        }
+        const gnmi::Path empty_prefix;
+        const gnmi::Path &path_prefix = prefix.value_or(empty_prefix);
         for (auto &path : paths)
         {
-            xpaths.push_back(xpaths_prefix + gnmi_to_xpath(path));
+            xpaths.push_back(gnxi::gnmiToXPath(sess.getContext(), path_prefix, path));
         }
     }
-    catch (const std::runtime_error &exc)
+    catch (const grpc::Status &status)
     {
-        SLOG_DEBUG("Prefix or path could not be parsed: ", exc.what());
-        throw grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
-                           "Prefix or path could not be parsed: ", exc.what());
+        SLOG_DEBUG("Prefix or path could not be parsed: ", status.error_message());
+        throw;
     }
 
     // get username (otherwise we cannot authorize)

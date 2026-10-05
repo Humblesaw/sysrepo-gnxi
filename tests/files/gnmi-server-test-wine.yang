@@ -3,6 +3,10 @@ module gnmi-server-test-wine {
   namespace "https://graphiant.com/gnmi-server-test-wine";
   prefix test;
 
+  import openconfig-extensions {
+    prefix oc-ext;
+  }
+
   description
     "gNMI Server Test module
         Copyright (c) 2025 Graphiant, Inc.
@@ -19,6 +23,9 @@ module gnmi-server-test-wine {
         See the License for the specific language governing permissions and
         limitations under the License.
     ";
+
+  // bind this module to the rfc7951 origin only
+  oc-ext:origin rfc7951;
 
   revision 2022-04-27 {
     description

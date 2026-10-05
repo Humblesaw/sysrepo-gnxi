@@ -83,6 +83,7 @@ set(GNXI_SRC src/encode/encode.cpp
              src/security/crypto.cpp
              src/security/hash.cpp
              src/utils/log.cpp
+             src/utils/path.cpp
              src/utils/sysrepo.cpp
 )
 
@@ -98,6 +99,7 @@ set(GNXI_HEADERS src/encode/encode.h
                  src/security/crypto.h
                  src/security/hash.h
                  src/utils/log.h
+                 src/utils/path.h
                  src/utils/sysrepo.h
                  src/utils/utils.h
 )

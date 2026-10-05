@@ -39,6 +39,7 @@
 #include <sysrepo-cpp/Changes.hpp>
 #include <sysrepo-cpp/utils/exception.hpp>
 #include <utils/log.h>
+#include <utils/path.h>
 #include <utils/utils.h>
 
 #include "security/auth.h"
@@ -54,15 +55,9 @@ constexpr auto MIN_SAMPLE_INTERVAL = std::chrono::milliseconds(200);
 
 grpc::Status
 Subscribe::BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                           const gnmi::Path &prefix, std::string fullpath, gnmi::Encoding encoding)
+                           std::string fullpath, gnmi::Encoding encoding, std::string origin)
 {
     gnmi::Update *update;
-
-    if (prefix.elem_size() > 0)
-    {
-        std::string str = gnmi_to_xpath(prefix);
-        fullpath = str + fullpath;
-    }
 
     SessionDsSwitcher ds_switch(sr_sess, sysrepo::Datastore::Operational);
 
@@ -79,8 +74,14 @@ Subscribe::BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *upd
 
         for (libyang::DataNode n : sr_trees->findXPath(fullpath))
         {
+            // root and wildcard paths may span modules of other origins
+            if (!gnxi::dataNodeInOrigin(n, origin))
+            {
+                continue;
+            }
             update = updateList->Add();
-            xpath_to_gnmi(n.path(), *update->mutable_path());
+            gnxi::dataNodeToGnmiPath(n, gnxi::formatForOrigin(origin), *update->mutable_path());
+            update->mutable_path()->set_origin(origin);
             grpc::Status status = encodef->encode(encoding, n, update->mutable_val());
             if (!status.ok())
             {
@@ -131,16 +132,6 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
     /* Get time since epoch in milliseconds */
     notification->set_timestamp(get_time_nanosec());
 
-    // gNMI spec §2.2.2.1:
-    // When set in the prefix in a request, GetRequest, SetRequest or
-    // SubscribeRequest, the field MUST be reflected in the prefix of the
-    // corresponding GetResponse, SetResponse or SubscribeResponse by a
-    // server.
-    if (request.has_prefix())
-    {
-        notification->mutable_prefix()->set_target(request.prefix().target());
-    }
-
     if (sample)
     {
         *sample = false;
@@ -157,7 +148,7 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
         if (request.mode() == gnmi::SubscriptionList_Mode_STREAM &&
             sub.mode() == gnmi::SubscriptionMode::ON_CHANGE)
         {
-            SLOG_DEBUG("On-change, getting initial data later: ", gnmi_to_xpath(sub.path()));
+            SLOG_DEBUG("On-change, getting initial data later: ", sub.path().ShortDebugString());
             continue;
         }
         if (sample)
@@ -166,24 +157,36 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
         }
 
         // Fetch all found counters value for a requested path
-        std::string str;
+        std::string origin;
         try
         {
-            gnmi_check_origin(request.prefix(), sub.path());
-
-            status = BuildSubsUpdate(updateList, request.prefix(), gnmi_to_xpath(sub.path()),
-                                     request.encoding());
+            origin = gnxi::resolveOrigin(request.prefix(), sub.path());
+            auto fullpath = gnxi::gnmiToXPath(sr_sess.getContext(), request.prefix(), sub.path());
+            status = BuildSubsUpdate(updateList, fullpath, request.encoding(), origin);
         }
-        catch (const std::runtime_error &exc)
+        catch (const grpc::Status &path_status)
         {
-            SLOG_WARN("Invalid subscription: ", exc.what());
-            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+            SLOG_WARN("Invalid subscription: ", path_status.error_message());
+            return path_status;
         }
         if (!status.ok())
         {
-            SLOG_WARN("Failed building update for ", gnmi_to_xpath(sub.path()));
+            SLOG_WARN("Failed building update for ", sub.path().ShortDebugString());
             return status;
         }
+    }
+
+    // gNMI spec §2.2.2.1: the target set in the prefix of a request MUST be
+    // reflected in the prefix of the corresponding response, and MUST NOT be
+    // set when the request does not set it
+    if (!request.prefix().target().empty())
+    {
+        notification->mutable_prefix()->set_target(request.prefix().target());
+    }
+    // the origin of the request prefix is echoed in the response prefix
+    if (!request.prefix().origin().empty())
+    {
+        notification->mutable_prefix()->set_origin(request.prefix().origin());
     }
 
     notification->set_atomic(false);
@@ -196,16 +199,18 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
  * @param notification the notification that is constructed by this function.
  * @param request the SubscriptionList from SubscribeRequest to answer to.
  * @param xpath The xpath that the registration is firing for
+ * @param origin The (normalized) origin the subscription was made under
  * @param session The sysrepo session for the update
  */
 grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification *notification,
                                                              const gnmi::SubscriptionList &request,
-                                                             std::string &xpath,
+                                                             std::string &xpath, std::string origin,
                                                              sysrepo::Session session)
 {
     auto updateList = notification->mutable_update();
     auto deleteList = notification->mutable_delete_();
     grpc::Status status;
+    auto format = gnxi::formatForOrigin(origin);
 
     /* Check if only updates should be sent */
     if (request.updates_only())
@@ -217,13 +222,18 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
     /* Get time since epoch in milliseconds */
     notification->set_timestamp(get_time_nanosec());
 
-    // gNMI spec §2.2.2.1:
-    // When set in the prefix in a request, GetRequest, SetRequest or
-    // SubscribeRequest, the field MUST be reflected in the prefix of the
-    // corresponding GetResponse, SetResponse or SubscribeResponse by a
-    // server.
-    if (request.has_prefix())
+    // gNMI spec §2.2.2.1: the target set in the prefix of a request MUST be
+    // reflected in the prefix of the corresponding response, and MUST NOT be
+    // set when the request does not set it
+    if (!request.prefix().target().empty())
+    {
         notification->mutable_prefix()->set_target(request.prefix().target());
+    }
+    // the origin of the request prefix is echoed in the response prefix
+    if (!request.prefix().origin().empty())
+    {
+        notification->mutable_prefix()->set_origin(origin);
+    }
 
     /* Fill Update RepeatedPtrField in Notification message
      * Update field contains only data elements that have changed values. */
@@ -249,6 +259,12 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
             }
             last_change = std::make_pair(change.node.path(), change.operation);
 
+            // the subscription (module) may span data of other origins
+            if (!gnxi::dataNodeInOrigin(change.node, origin))
+            {
+                continue;
+            }
+
             auto val =
                 change.node.printStr(libyang::DataFormat::JSON, libyang::PrintFlags::Siblings)
                     .value();
@@ -262,15 +278,15 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
             if (change.operation != sysrepo::ChangeOperation::Created)
             {
                 auto path_p = deleteList->Add();
-                gnmi::Path path;
-                xpath_to_gnmi(change.node.path(), path);
-                *path_p = path;
+                gnxi::dataNodeToGnmiPath(change.node, format, *path_p);
+                path_p->set_origin(origin);
             }
             if (change.operation != sysrepo::ChangeOperation::Deleted)
             {
                 auto update = updateList->Add();
 
-                xpath_to_gnmi(change.node.path(), *update->mutable_path());
+                gnxi::dataNodeToGnmiPath(change.node, format, *update->mutable_path());
+                update->mutable_path()->set_origin(origin);
                 // Remove all of the attributes from nodes which we don't need and may confuse
                 // parsers of the JSON when using that encoding.
                 // auto opts = static_cast<uint32_t>(libyang::DuplicationOptions::NoMeta) |
@@ -302,7 +318,7 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
 void Subscribe::triggerSampleUpdate(
     grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> &sub,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
-    gnmi::Encoding encoding)
+    gnmi::Encoding encoding, const gnmi::Path &prefix)
 {
     gnmi::SubscribeResponse response;
     gnmi::SubscriptionList updateList;
@@ -311,9 +327,9 @@ void Subscribe::triggerSampleUpdate(
     updateList.add_subscription()->CopyFrom(*sub);
     // Propagate the encoding of the original subscription list
     updateList.set_encoding(encoding);
-    // gnmi::Path *prefix = new gnmi::Path();
-    // prefix->set_origin("rfc7951");
-    // updateList.set_allocated_prefix(prefix);
+    // Propagate the prefix of the original subscription list - both the data
+    // fetch and the emitted paths depend on it
+    *updateList.mutable_prefix() = prefix;
 
     if (!context->IsCancelled())
     {
@@ -510,13 +526,13 @@ Task sampleSubscription(
     Scheduler &scheduler, std::chrono::nanoseconds duration, Subscribe *subscribe,
     grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> sub,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
-    gnmi::Encoding encoding)
+    gnmi::Encoding encoding, gnmi::Path prefix)
 {
     while (true)
     {
         // suspend, the scheduler will resume you after the time duration
         co_await async_sleep{scheduler, duration};
-        subscribe->triggerSampleUpdate(context, sub, stream, encoding);
+        subscribe->triggerSampleUpdate(context, sub, stream, encoding, prefix);
     }
 }
 
@@ -532,7 +548,8 @@ void Subscribe::streamWorker(
         {
         case gnmi::SAMPLE:
             sampleSubscription(scheduler, std::chrono::nanoseconds{sub->sample_interval()}, this,
-                               context, sub, stream, request.subscribe().encoding());
+                               context, sub, stream, request.subscribe().encoding(),
+                               request.subscribe().prefix());
             break;
         default:
             break;
@@ -558,8 +575,9 @@ class SrModuleOnChangeParams
     SrModuleOnChangeParams(
         gnmi::SubscribeRequest *request,
         grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
-        Subscribe *subscribe, Scheduler &scheduler)
-        : request(request), stream(stream), subscribe(subscribe), scheduler(scheduler)
+        Subscribe *subscribe, Scheduler &scheduler, std::string origin)
+        : request(request), stream(stream), subscribe(subscribe), scheduler(scheduler),
+          origin(std::move(origin))
     {
     }
 
@@ -567,6 +585,7 @@ class SrModuleOnChangeParams
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream;
     Subscribe *subscribe;
     Scheduler &scheduler;
+    std::string origin;
 };
 
 sysrepo::ErrorCode srModuleOnChange(sysrepo::Session session, std::string_view module_name,
@@ -583,7 +602,8 @@ sysrepo::ErrorCode srModuleOnChange(sysrepo::Session session, std::string_view m
     std::string changes_path(xpath);
 
     status = params.subscribe->BuildSubscribeNotificationForChanges(
-        response->mutable_update(), params.request->subscribe(), changes_path, session);
+        response->mutable_update(), params.request->subscribe(), changes_path, params.origin,
+        session);
     if (!status.ok())
     {
         SLOG_WARN("unable to build update in response to notification for ", xpath);
@@ -604,25 +624,23 @@ grpc::Status Subscribe::registerStreamOnChange(
     Scheduler &scheduler, std::shared_ptr<DataSubscribe> sr_sub,
     std::vector<SrModuleOnChangeParams> &params_vec)
 {
-    std::string fullpath = "";
+    std::string origin;
+    std::string fullpath;
     try
     {
-        if (request.subscribe().prefix().elem_size() > 0 ||
-            !request.subscribe().prefix().target().empty())
-        {
-            fullpath = gnmi_to_xpath(request.subscribe().prefix());
-        }
-        fullpath += gnmi_to_xpath(sub.path());
+        origin = gnxi::resolveOrigin(request.subscribe().prefix(), sub.path());
+        fullpath =
+            gnxi::gnmiToXPath(sr_sess.getContext(), request.subscribe().prefix(), sub.path());
     }
-    catch (const std::runtime_error &exc)
+    catch (const grpc::Status &status)
     {
-        SLOG_WARN("Invalid subscription prefix or path: ", exc.what());
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+        SLOG_WARN("Invalid subscription prefix or path: ", status.error_message());
+        return status;
     }
 
     SLOG_DEBUG("Subscribe (stream) ", fullpath);
 
-    SrModuleOnChangeParams params(&request, stream, this, scheduler);
+    SrModuleOnChangeParams params(&request, stream, this, scheduler, origin);
     params_vec.push_back(params);
     try
     {
@@ -743,7 +761,7 @@ grpc::Status Subscribe::handleStream(
         switch (sub.mode())
         {
         case gnmi::SAMPLE:
-            SLOG_DEBUG("Subscribe (stream sample) ", gnmi_to_xpath(sub.path()));
+            SLOG_DEBUG("Subscribe (stream sample) ", sub.path().ShortDebugString());
             break;
         case gnmi::ON_CHANGE:
             status = registerStreamOnChange(request, sub, stream, scheduler, sr_sub, params_vec);

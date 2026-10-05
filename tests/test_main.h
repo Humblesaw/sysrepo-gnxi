@@ -45,7 +45,7 @@ extern std::unique_ptr<yang_rpc::YANG_RPC::Stub> gnxi_client;
 // sysrepo session to inspect data
 extern std::optional<sysrepo::Session> sr_sess;
 
-extern void xpath_to_path(std::string xpath, gnmi::Path *path);
+extern void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin = "rfc7951");
 extern std::string path_to_xpath(const gnmi::Path &path);
 
 /**

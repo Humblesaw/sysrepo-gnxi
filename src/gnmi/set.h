@@ -61,7 +61,7 @@ class Set
 
   private:
     grpc::Status handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
-                              const std::string &prefix_str, const gnmi::Path &prefix, UpdateOp op);
+                              const gnmi::Path &prefix, UpdateOp op);
 
     sysrepo::Session sr_sess;             // sysrepo running datastore session
     std::shared_ptr<Encode> encodef;      // support for json ietf encoding

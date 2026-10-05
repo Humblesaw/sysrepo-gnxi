@@ -52,7 +52,8 @@ class Get
                                       const gnmi::Path &path, gnmi::Encoding encoding,
                                       gnmi::GetRequest_DataType dataType);
     grpc::Status BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                                const std::string &fullpath, gnmi::Encoding encoding);
+                                const std::string &fullpath, gnmi::Encoding encoding,
+                                const std::string &origin);
 
   private:
     sysrepo::Session sr_sess;        // sysrepo session

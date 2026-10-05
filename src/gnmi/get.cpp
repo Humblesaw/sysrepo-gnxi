@@ -29,13 +29,15 @@
 #include <sysrepo-cpp/utils/exception.hpp>
 
 #include <utils/log.h>
+#include <utils/path.h>
 #include <utils/utils.h>
 
 namespace impl
 {
 
 grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                                 const std::string &fullpath, gnmi::Encoding encoding)
+                                 const std::string &fullpath, gnmi::Encoding encoding,
+                                 const std::string &origin)
 {
     try
     {
@@ -48,8 +50,14 @@ grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update
         }
         for (auto n : sr_trees->findXPath(fullpath))
         {
+            // root and wildcard paths may span modules of other origins
+            if (!gnxi::dataNodeInOrigin(n, origin))
+            {
+                continue;
+            }
             auto update = updateList->Add();
-            xpath_to_gnmi(n.path(), *update->mutable_path());
+            gnxi::dataNodeToGnmiPath(n, gnxi::formatForOrigin(origin), *update->mutable_path());
+            update->mutable_path()->set_origin(origin);
             auto status = encodef->encode(encoding, n, update->mutable_val());
             if (!status.ok())
             {
@@ -87,55 +95,44 @@ grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const g
 {
     /* Data elements that have changed values */
     google::protobuf::RepeatedPtrField<gnmi::Update> *updateList = notification->mutable_update();
-    std::string fullpath = "";
     auto ds = sysrepo::Datastore::Operational;
 
     /* Get time since epoch in milliseconds */
     notification->set_timestamp(get_time_nanosec());
 
-    if (prefix.elem_size() > 0 || !prefix.target().empty())
-    {
-        std::string str;
-        try
-        {
-            str = gnmi_to_xpath(prefix);
-        }
-        catch (const std::runtime_error &exc)
-        {
-            SLOG_DEBUG("Invalid Get prefix: ", exc.what());
-            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
-        }
-        SLOG_DEBUG("prefix is ", str);
-        // gNMI spec §2.2.2.1:
-        // When set in the prefix in a request, GetRequest, SetRequest or
-        // SubscribeRequest, the field MUST be reflected in the prefix of the
-        // corresponding GetResponse, SetResponse or SubscribeResponse by a
-        // server.
-        notification->mutable_prefix()->set_target(prefix.target());
-        if (prefix.elem_size() > 0)
-        {
-            fullpath += str;
-        }
-    }
-
+    std::string origin;
+    std::string fullpath;
     try
     {
-        gnmi_check_origin(prefix, path);
-        fullpath += gnmi_to_xpath(path);
+        origin = gnxi::resolveOrigin(prefix, path);
+        fullpath = gnxi::gnmiToXPath(sr_sess.getContext(), prefix, path);
     }
-    catch (const std::runtime_error &exc)
+    catch (const grpc::Status &status)
     {
-        SLOG_DEBUG("Invalid Get path: ", exc.what());
-        return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
+        SLOG_DEBUG("Invalid Get prefix or path: ", status.error_message());
+        return status;
     }
     SLOG_DEBUG("GetRequest Path ", fullpath);
+
+    // gNMI spec §2.2.2.1: the target set in the prefix of a request MUST be
+    // reflected in the prefix of the corresponding response, and MUST NOT be
+    // set when the request does not set it
+    if (!prefix.target().empty())
+    {
+        notification->mutable_prefix()->set_target(prefix.target());
+    }
+    // the origin of the request prefix is echoed in the response prefix
+    if (!prefix.origin().empty())
+    {
+        notification->mutable_prefix()->set_origin(origin);
+    }
 
     if (dataType == gnmi::GetRequest_DataType_CONFIG)
         ds = sysrepo::Datastore::Running;
 
     SessionDsSwitcher ds_switch(sr_sess, ds);
 
-    return BuildGetUpdate(updateList, fullpath, encoding);
+    return BuildGetUpdate(updateList, fullpath, encoding, origin);
 }
 
 /* Verify request fields are correct */

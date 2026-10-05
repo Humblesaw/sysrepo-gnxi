@@ -523,7 +523,7 @@ TEST_CASE("Set request (with prefix)", "[set]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']", request.mutable_prefix());
+    xpath_to_path("/gnmi-server-test:test/things[name='A']", request.mutable_prefix(), "");
     xpath_to_path("/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
     auto status = gnmi_client->Set(&ctx, request, &response);
@@ -1448,4 +1448,252 @@ TEST_CASE("Set request (data model error)", "[set-neg]")
     CHECK(status.error_code() == grpc::StatusCode::ABORTED);
     CHECK_THAT(status.error_message(), Equals("Must condition \"current() > 42\" not satisfied. "
                                               "(path \"/gnmi-server-test:test2/must-error\")"));
+}
+
+// origin tests
+
+TEST_CASE("Set request with default origin (bare names)", "[set-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+
+    xpath_to_path("/test/things[name='C']/description", update->mutable_path(), "");
+    update->mutable_val()->set_json_ietf_val("\"clash\"");
+    auto status = gnmi_client->Set(&ctx, request, &response);
+    CHECK(status.ok());
+
+    CHECK(response.extension_size() == 0);
+    CHECK(response.timestamp() > 0);
+    CHECK(!response.has_prefix());
+    REQUIRE(response.response_size() == 1);
+    CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
+    // the UpdateResult path echoes the request path verbatim
+    CHECK(response.response().Get(0).path().origin() == "");
+    CHECK_THAT(path_to_xpath(response.response().Get(0).path()),
+               Equals("/test/things[name='C']/description"));
+
+    sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    auto data = sr_sess->getData("/gnmi-server-test:test/things[name='C']/description");
+    REQUIRE(data.has_value());
+
+    // clean up
+    sr_sess->deleteItem("/gnmi-server-test:test/things[name='C']");
+    sr_sess->applyChanges();
+}
+
+TEST_CASE("Set request with unsupported origin", "[set-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+
+    xpath_to_path("/gnmi-server-test:test/things[name='C']/description", update->mutable_path(),
+                  "frob");
+    update->mutable_val()->set_json_ietf_val("\"clash\"");
+    auto status = gnmi_client->Set(&ctx, request, &response);
+    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
+    CHECK_THAT(status.error_message(), Equals("unsupported origin \"frob\""));
+
+    CHECK(response.extension_size() == 0);
+    CHECK(response.timestamp() == 0);
+    CHECK(response.response_size() == 0);
+}
+
+TEST_CASE("Set request with ambiguous bare element name", "[set-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+
+    xpath_to_path("/test2/clash", update->mutable_path(), "");
+    update->mutable_val()->set_json_ietf_val("\"clash\"");
+    auto status = gnmi_client->Set(&ctx, request, &response);
+    CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
+    CHECK_THAT(status.error_message(), Contains("ambiguous path element \"test2\""));
+    CHECK_THAT(status.error_message(), Contains("gnmi-server-test:test2"));
+    CHECK_THAT(status.error_message(), Contains("sysrepo-gnxi-test-clash:test2"));
+}
+
+TEST_CASE("Set request to a module under a different origin", "[set-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+
+    xpath_to_path("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score",
+                  update->mutable_path(), "");
+    update->mutable_val()->set_json_ietf_val("89");
+    auto status = gnmi_client->Set(&ctx, request, &response);
+    CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
+    CHECK_THAT(status.error_message(),
+               Equals("module \"gnmi-server-test-wine\" is under origin \"rfc7951\" and cannot "
+                      "be addressed under origin \"openconfig\""));
+
+    CHECK(response.extension_size() == 0);
+    CHECK(response.timestamp() == 0);
+    CHECK(response.response_size() == 0);
+
+    sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    CHECK(!sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+               .has_value());
+}
+
+TEST_CASE("Set request to a module under its origin", "[set-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+
+    xpath_to_path("/wines/wine[name='X'][vintage='1985']/score", update->mutable_path(), "rfc7951");
+    update->mutable_val()->set_json_ietf_val("89");
+    auto status = gnmi_client->Set(&ctx, request, &response);
+    CHECK(status.ok());
+
+    CHECK(response.extension_size() == 0);
+    CHECK(response.timestamp() > 0);
+    CHECK(!response.has_prefix());
+    REQUIRE(response.response_size() == 1);
+    CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
+    // the UpdateResult path echoes the request path verbatim
+    CHECK(response.response().Get(0).path().origin() == "rfc7951");
+    CHECK_THAT(path_to_xpath(response.response().Get(0).path()),
+               Equals("/wines/wine[name='X'][vintage='1985']/score"));
+
+    sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    auto val =
+        sr_sess->getOneNode("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score");
+    CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("89"));
+
+    // clean up
+    sr_sess->deleteItem("/gnmi-server-test-wine:wines");
+    sr_sess->applyChanges();
+}
+
+TEST_CASE("Set request with origin in both prefix and path", "[set-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+
+    request.mutable_prefix()->set_origin("rfc7951");
+    xpath_to_path("/gnmi-server-test:test2/enabled", update->mutable_path());
+    update->mutable_val()->set_json_ietf_val("true");
+    auto status = gnmi_client->Set(&ctx, request, &response);
+    CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
+    CHECK_THAT(status.error_message(),
+               Equals("origin must not be specified in both prefix and path (gNMI spec 2.7)"));
+
+    CHECK(response.extension_size() == 0);
+    CHECK(response.timestamp() == 0);
+    CHECK(response.response_size() == 0);
+}
+
+TEST_CASE("Set request root delete is constrained to origin", "[set-origin]")
+{
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+    auto update2 = request.add_update();
+
+    // seed an annotated (rfc7951) module and an unannotated one
+    xpath_to_path("/wines/wine[name='X'][vintage='1985']/score", update->mutable_path(), "rfc7951");
+    update->mutable_val()->set_json_ietf_val("89");
+    xpath_to_path("/gnmi-server-test:test2/enabled", update2->mutable_path(), "");
+    update2->mutable_val()->set_json_ietf_val("true");
+    grpc::ClientContext seedCtx;
+    auto status = gnmi_client->Set(&seedCtx, request, &response);
+    CHECK(status.ok());
+
+    // deleting the whole root under the default origin leaves annotated data
+    gnmi::SetRequest deleteRequest;
+    gnmi::SetResponse deleteResponse;
+    xpath_to_path("/", deleteRequest.add_delete_(), "");
+    grpc::ClientContext deleteCtx;
+    auto deleteStatus = gnmi_client->Set(&deleteCtx, deleteRequest, &deleteResponse);
+    CHECK(deleteStatus.ok());
+
+    sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    CHECK(sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+              .has_value());
+    CHECK(!sr_sess->getData("/gnmi-server-test:test2/enabled").has_value());
+
+    // deleting the whole root under rfc7951 deletes everything
+    gnmi::SetRequest deleteRequest2;
+    gnmi::SetResponse deleteResponse2;
+    xpath_to_path("/", deleteRequest2.add_delete_());
+    grpc::ClientContext deleteCtx2;
+    deleteStatus = gnmi_client->Set(&deleteCtx2, deleteRequest2, &deleteResponse2);
+    CHECK(deleteStatus.ok());
+    CHECK(!sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+               .has_value());
+}
+
+TEST_CASE("Set request root update with data of another origin", "[set-origin]")
+{
+    grpc::ClientContext ctx;
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+
+    // the payload mixes modules of different origins
+    xpath_to_path("/", update->mutable_path(), "");
+    update->mutable_val()->set_json_ietf_val(
+        "{\"gnmi-server-test:test2\":{\"enabled\":true},"
+        "\"gnmi-server-test-wine:wines\":{\"wine\":[{\"name\":\"X\",\"vintage\":1985,"
+        "\"score\":89}]}}");
+    auto status = gnmi_client->Set(&ctx, request, &response);
+    CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
+    CHECK_THAT(status.error_message(), Equals("update data under origin \"openconfig\" must not "
+                                              "contain data of other origins"));
+
+    CHECK(response.extension_size() == 0);
+    CHECK(response.timestamp() == 0);
+    CHECK(response.response_size() == 0);
+
+    sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    CHECK(!sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+               .has_value());
+    CHECK(!sr_sess->getData("/gnmi-server-test:test2/enabled").has_value());
+}
+
+TEST_CASE("Set request delete with prefix", "[set-origin]")
+{
+    gnmi::SetRequest request;
+    gnmi::SetResponse response;
+    auto update = request.add_update();
+    auto update2 = request.add_update();
+
+    xpath_to_path("/gnmi-server-test:test/things[name='C']/description", update->mutable_path());
+    update->mutable_val()->set_json_ietf_val("\"clash\"");
+    xpath_to_path("/gnmi-server-test:test/things[name='D']/description", update2->mutable_path());
+    update2->mutable_val()->set_json_ietf_val("\"clash\"");
+    grpc::ClientContext seedCtx;
+    auto status = gnmi_client->Set(&seedCtx, request, &response);
+    CHECK(status.ok());
+
+    gnmi::SetRequest deleteRequest;
+    gnmi::SetResponse deleteResponse;
+    xpath_to_path("/gnmi-server-test:test/things[name='C']", deleteRequest.mutable_prefix());
+    xpath_to_path("/description", deleteRequest.add_delete_(), "");
+    grpc::ClientContext deleteCtx;
+    auto deleteStatus = gnmi_client->Set(&deleteCtx, deleteRequest, &deleteResponse);
+    CHECK(deleteStatus.ok());
+    CHECK(deleteResponse.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
+
+    sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    CHECK(sr_sess->getData("/gnmi-server-test:test/things[name='C']").has_value());
+    CHECK(!sr_sess->getData("/gnmi-server-test:test/things[name='C']/description").has_value());
+    CHECK(sr_sess->getData("/gnmi-server-test:test/things[name='D']/description").has_value());
+
+    // clean up
+    sr_sess->deleteItem("/gnmi-server-test:test/things[name='C']");
+    sr_sess->deleteItem("/gnmi-server-test:test/things[name='D']");
+    sr_sess->applyChanges();
 }

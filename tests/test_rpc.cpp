@@ -66,6 +66,37 @@ TEST_CASE("Rpc action", "[rpc]")
     CHECK_THAT(response.output().json_ietf_val(), Equals("{\"bar\":\"action-result\"}"));
 }
 
+TEST_CASE("Rpc (default origin)", "[rpc-origin]")
+{
+    grpc::ClientContext ctx;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
+
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/clear-stats", request.mutable_path(), "");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
+    auto status = gnxi_client->Rpc(&ctx, request, &response);
+    CHECK(status.ok());
+    CHECK(response.timestamp() > 0);
+    CHECK_THAT(response.output().json_ietf_val(), Equals("{\"old-stats\":\"613\"}"));
+}
+
+TEST_CASE("Rpc (unsupported origin)", "[rpc-origin]")
+{
+    grpc::ClientContext ctx;
+    yang_rpc::RpcRequest request;
+    yang_rpc::RpcResponse response;
+
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path("/gnmi-server-test:clear-stats", request.mutable_path(), "frob");
+    request.mutable_input()->set_json_ietf_val("{\"interface\": \"eth45\"}");
+    auto status = gnxi_client->Rpc(&ctx, request, &response);
+    CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
+    CHECK_THAT(status.error_message(), Equals("unsupported origin \"frob\""));
+    CHECK(response.timestamp() == 0);
+    CHECK(response.output().value_case() == gnmi::TypedValue::VALUE_NOT_SET);
+}
+
 // negative tests
 
 TEST_CASE("Rpc (no path)", "[rpc-neg]")

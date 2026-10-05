@@ -130,7 +130,8 @@ Passwords are never stored in plaintext: the utility hashes them into the `iana-
 
 | Area | Spec requirement | Implementation |
 |------|------------------|-----------------|
-| Path `origin` | identifies the data origin of a path, e.g. `openconfig` | RFC 7951 module names are carried as the first path element instead; the `origin` must be `rfc7951` — on the request prefix, or on each path when the prefix carries no origin - otherwise the request is rejected |
+| Path `origin` | identifies the data origin of a path, e.g. `openconfig` | the origins `openconfig` (also the default when unspecified) and `rfc7951` are supported and address the same sysrepo datastore, differing only in path naming (`rfc7951` emits module-qualified element names, `openconfig` bare local names, both forms are accepted on input), a YANG module annotated with `oc-ext:origin` is only addressable under the annotated origin, unannotated modules under all origins, any other origin is rejected with `UNIMPLEMENTED` |
+| Path element key values | arbitrary string key values | a key value containing both single and double quotes cannot be expressed (XPath 1.0 predicates have no escape mechanism) and is rejected with `INVALID_ARGUMENT` |
 | Encodings | target MUST support JSON | only `JSON_IETF` is supported, all other encodings are rejected with `UNIMPLEMENTED` |
 | `SubscriptionList.use_aliases` | alias expansion | aliases are not supported, the flag is ignored |
 | `GetRequest.use_models` | restrict the response to the listed models | rejected with `UNIMPLEMENTED` |
