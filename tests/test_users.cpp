@@ -247,7 +247,7 @@ TEST_CASE_METHOD(UsersFixture, "Users: add duplicate user fails", "[users]")
 TEST_CASE_METHOD(UsersFixture, "Users: add with ACL", "[users]")
 {
     REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512",
-                     "--permissions", "gnmi-server-test:rw,ietf-interfaces:ro"}) == 0);
+                     "--permissions", "sysrepo-gnxi-test:rw,ietf-interfaces:ro"}) == 0);
 
     auto root = get_db();
     auto user = get_user(root, "alice");
@@ -262,7 +262,7 @@ TEST_CASE_METHOD(UsersFixture, "Users: add with ACL", "[users]")
         auto acc = entry.findPath("access");
         REQUIRE(mod.has_value());
         REQUIRE(acc.has_value());
-        if (mod->asTerm().valueStr() == "gnmi-server-test" && acc->asTerm().valueStr() == "rw")
+        if (mod->asTerm().valueStr() == "sysrepo-gnxi-test" && acc->asTerm().valueStr() == "rw")
         {
             found_rw = true;
         }

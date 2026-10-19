@@ -188,21 +188,21 @@ TEST_CASE("mTLS: valid cert + valid credentials (md5-hashed password)", "[auth]"
 TEST_CASE("mTLS: authorized Get RPC (rw)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    auto status = do_get(ch, "/gnmi-server-test:test/things", "alice", "alicepass");
+    auto status = do_get(ch, "/sysrepo-gnxi-test:test/things", "alice", "alicepass");
     CHECK(status.ok());
 }
 
 TEST_CASE("mTLS: authorized Get RPC (ro)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    auto status = do_get(ch, "/gnmi-server-test:test/things", "bob", "bobpass");
+    auto status = do_get(ch, "/sysrepo-gnxi-test:test/things", "bob", "bobpass");
     CHECK(status.ok());
 }
 
 TEST_CASE("mTLS: denied Get RPC", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    auto status = do_get(ch, "/gnmi-server-test:test/things", "chuck", "chuck$pass");
+    auto status = do_get(ch, "/sysrepo-gnxi-test:test/things", "chuck", "chuck$pass");
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
 
@@ -217,7 +217,7 @@ TEST_CASE("mTLS: internal sysrepo module is private", "[auth]")
 TEST_CASE("mTLS: authorized Set RPC (rw)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    auto status = do_set(ch, "/gnmi-server-test:test/things[name='auth-set-pos']/description",
+    auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
                          "\"set by alice\"", "alice", "alicepass");
     CHECK(status.ok());
 }
@@ -225,7 +225,7 @@ TEST_CASE("mTLS: authorized Set RPC (rw)", "[auth]")
 TEST_CASE("mTLS: denied Set RPC (ro)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    auto status = do_set(ch, "/gnmi-server-test:test/things[name='auth-set-pos']/description",
+    auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
                          "\"set by bob\"", "bob", "bobpass");
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
@@ -233,7 +233,7 @@ TEST_CASE("mTLS: denied Set RPC (ro)", "[auth]")
 TEST_CASE("mTLS: denied Set RPC", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    auto status = do_set(ch, "/gnmi-server-test:test/things[name='auth-set-pos']/description",
+    auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
                          "\"set by chuck\"", "chuck", "chuck$pass");
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
@@ -243,7 +243,7 @@ TEST_CASE("mTLS: authorized Subscribe (rw)", "[auth]")
     auto ch = make_mtls_channel(mtls_addr);
     gnmi::SubscribeRequest request;
     grpc::ClientContext ctx;
-    auto rw = do_subscribe(ch, ctx, "/gnmi-server-test:test-state", request, "alice", "alicepass");
+    auto rw = do_subscribe(ch, ctx, "/sysrepo-gnxi-test:test-state", request, "alice", "alicepass");
     CHECK(rw->Write(request));
 
     gnmi::SubscribeResponse response;
@@ -271,7 +271,7 @@ TEST_CASE("mTLS: authorized Subscribe (ro)", "[auth]")
     auto ch = make_mtls_channel(mtls_addr);
     gnmi::SubscribeRequest request;
     grpc::ClientContext ctx;
-    auto rw = do_subscribe(ch, ctx, "/gnmi-server-test:test-state", request, "bob", "bobpass");
+    auto rw = do_subscribe(ch, ctx, "/sysrepo-gnxi-test:test-state", request, "bob", "bobpass");
     CHECK(rw->Write(request));
 
     gnmi::SubscribeResponse response;
@@ -299,7 +299,8 @@ TEST_CASE("mTLS: denied Subscribe", "[auth]")
     auto ch = make_mtls_channel(mtls_addr);
     gnmi::SubscribeRequest request;
     grpc::ClientContext ctx;
-    auto rw = do_subscribe(ch, ctx, "/gnmi-server-test:test-state", request, "chuck", "chuck$pass");
+    auto rw =
+        do_subscribe(ch, ctx, "/sysrepo-gnxi-test:test-state", request, "chuck", "chuck$pass");
     (void)rw->Write(request);
 
     gnmi::SubscribeResponse response;
@@ -362,7 +363,7 @@ TEST_CASE("mTLS: commit confirm is bound to the initiating user", "[auth-commit]
         commit->set_id(commit_id);
         commit->mutable_commit();
         auto upd = request.add_update();
-        xpath_to_path("/gnmi-server-test:test/things[name='bind-test']/description",
+        xpath_to_path("/sysrepo-gnxi-test:test/things[name='bind-test']/description",
                       upd->mutable_path());
         upd->mutable_val()->set_json_ietf_val("\"confirm binding\"");
         gnmi::SetResponse response;

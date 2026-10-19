@@ -146,7 +146,7 @@ static sysrepo::ErrorCode module_change_cb(sysrepo::Session session, uint32_t su
     (void)request_id;
     (void)sub_id;
 
-    if (event == sysrepo::Event::Change && xpath == "/gnmi-server-test:test2/custom-error")
+    if (event == sysrepo::Event::Change && xpath == "/sysrepo-gnxi-test:test2/custom-error")
     {
         session.setErrorMessage(std::string("Fiddlesticks: ") + std::string(xpath.value()));
         return sysrepo::ErrorCode::CallbackFailed;
@@ -297,8 +297,8 @@ static void install_test_modules(sysrepo::Connection &sr_conn)
 
     std::vector<sysrepo::ModuleInstallation> modules = {
         make_inst(modules_dir, "openconfig-extensions.yang"),
-        make_inst(files_dir, "gnmi-server-test.yang"),
-        make_inst(files_dir, "gnmi-server-test-wine.yang"),
+        make_inst(files_dir, "sysrepo-gnxi-test.yang"),
+        make_inst(files_dir, "sysrepo-gnxi-test-wine.yang"),
         make_inst(files_dir, "sysrepo-gnxi-test-clash.yang"),
         make_inst(modules_dir, "iana-crypt-hash@2014-08-06.yang"),
         make_inst(modules_dir, "iana-tls-cipher-suite-algs@2024-03-16.yang"),
@@ -556,21 +556,21 @@ class SetupSysrepo
 
         sr_sess = sr_conn.sessionStart();
 
-        sub = sr_sess->onModuleChange("gnmi-server-test", module_change_cb,
-                                      "/gnmi-server-test:test2/custom-error");
+        sub = sr_sess->onModuleChange("sysrepo-gnxi-test", module_change_cb,
+                                      "/sysrepo-gnxi-test:test2/custom-error");
 
         // operational data for the Get/Subscribe tests
         sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='A']", std::nullopt);
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='B']", std::nullopt);
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='A']/counter", "1");
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='B']/counter", "2");
-        sr_sess->setItem("/gnmi-server-test:test-state/cargo", "");
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='A']", std::nullopt);
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='B']", std::nullopt);
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='A']/counter", "1");
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='B']/counter", "2");
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/cargo", "");
         sr_sess->applyChanges();
 
-        sub->onRPCAction("/gnmi-server-test:clear-stats", clear_stats_rpc_cb, 0,
+        sub->onRPCAction("/sysrepo-gnxi-test:clear-stats", clear_stats_rpc_cb, 0,
                          sysrepo::SubscribeOptions::Default);
-        sub->onRPCAction("/gnmi-server-test:action-test/action-test", action_test_cb, 0,
+        sub->onRPCAction("/sysrepo-gnxi-test:action-test/action-test", action_test_cb, 0,
                          sysrepo::SubscribeOptions::Default);
     };
 

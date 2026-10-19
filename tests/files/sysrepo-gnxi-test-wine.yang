@@ -1,0 +1,53 @@
+module sysrepo-gnxi-test-wine {
+  yang-version 1.1;
+  namespace "urn:sysrepo:gnxi:test-wine";
+  prefix sgtw;
+
+  import openconfig-extensions {
+    prefix oc-ext;
+  }
+
+  organization
+    "CESNET, z.s.p.o.";
+  contact
+    "Ondrej Kusnirik <kusnirik@cesnet.cz>";
+  description
+    "sysrepo-gnxi test module with wines.
+
+     Copyright (c) 2025 Graphiant, Inc.
+     Copyright (c) 2026 CESNET, z.s.p.o.
+
+     Licensed under the Apache License, Version 2.0 (the 'License');
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
+     http://www.apache.org/licenses/LICENSE-2.0";
+
+  revision 2022-04-27 {
+    description "Initial revision.";
+  }
+
+  // bind this module to the rfc7951 origin only
+  oc-ext:origin rfc7951;
+
+  container wines {
+    list wine {
+      key "name vintage";
+
+      leaf name {
+        type string;
+      }
+
+      leaf vintage {
+        type uint32 {
+          range "1900..2100";
+        }
+      }
+
+      leaf score {
+        type uint32 {
+          range "0..100";
+        }
+      }
+    }
+  }
+}

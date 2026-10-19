@@ -43,7 +43,7 @@ TEST_CASE("Subscribe (once)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -64,7 +64,7 @@ TEST_CASE("Subscribe (once)", "[subs]")
     CHECK_THAT(json, Equals("{\"things\":[{\"name\":\"A\",\"counter\":\"1\"},{\"name\":\"B\","
                             "\"counter\":\"2\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -94,7 +94,7 @@ TEST_CASE("Subscribe (poll)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -119,7 +119,7 @@ TEST_CASE("Subscribe (poll)", "[subs]")
     CHECK_THAT(json, Equals("{\"things\":[{\"name\":\"A\",\"counter\":\"1\"},{\"name\":\"B\","
                             "\"counter\":\"2\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -148,7 +148,7 @@ TEST_CASE("Subscribe (poll)", "[subs]")
     CHECK_THAT(json, Equals("{\"things\":[{\"name\":\"A\",\"counter\":\"1\"},{\"name\":\"B\","
                             "\"counter\":\"2\"}],\"cargo\":{}}"));
     path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -176,7 +176,7 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
 
@@ -199,7 +199,7 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
     CHECK_THAT(json, Equals("{\"things\":[{\"name\":\"A\",\"counter\":\"1\"},{\"name\":\"B\","
                             "\"counter\":\"2\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -224,7 +224,7 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
     CHECK_THAT(json, Equals("{\"things\":[{\"name\":\"A\",\"counter\":\"1\"},{\"name\":\"B\","
                             "\"counter\":\"2\"}],\"cargo\":{}}"));
     path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     // And then cancel
@@ -246,7 +246,7 @@ TEST_CASE("Subscribe (once) with prefix", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", list->mutable_prefix(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test-state", list->mutable_prefix(), "");
     xpath_to_path("/things[name='A']", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -268,7 +268,7 @@ TEST_CASE("Subscribe (once) with prefix", "[subs]")
     auto json = response.update().update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"A\",\"counter\":\"1\"}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -298,7 +298,7 @@ TEST_CASE("Subscribe (once) with target", "[subs]")
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     *list->mutable_prefix()->mutable_target() = "foo";
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -320,7 +320,7 @@ TEST_CASE("Subscribe (once) with target", "[subs]")
     CHECK_THAT(json, Equals("{\"things\":[{\"name\":\"A\",\"counter\":\"1\"},{\"name\":\"B\","
                             "\"counter\":\"2\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -349,7 +349,7 @@ TEST_CASE("Subscribe (once) with wildcards", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/*/counter", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/*/counter", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -370,13 +370,13 @@ TEST_CASE("Subscribe (once) with wildcards", "[subs]")
     // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(response.update().update().Get(1).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     json = response.update().update().Get(1).val().json_ietf_val();
     CHECK_THAT(json, Equals("\"2\""));
     path = path_to_xpath(response.update().update().Get(1).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='B']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='B']/counter"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -414,7 +414,7 @@ TEST_CASE("Subscribe (on-change, no updates)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -438,7 +438,7 @@ TEST_CASE("Subscribe (on-change, no updates)", "[subs]")
         Equals("{\"things\":[{\"@\":{\"yang:key\":[null]},\"name\":\"A\",\"counter\":\"1\"},{\"@\":"
                "{\"yang:key\":\"[name='A']\"},\"name\":\"B\",\"counter\":\"2\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -471,12 +471,12 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
 
     // Make sure the item doesn't already exist, or no notifications
     // will be generated and the test will hang
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test-state/things[name='C']/name"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test-state/things[name='C']/name"),
                       Contains("SR_ERR_NOT_FOUND"));
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -500,7 +500,7 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
         Equals("{\"things\":[{\"@\":{\"yang:key\":[null]},\"name\":\"A\",\"counter\":\"1\"},{\"@\":"
                "{\"yang:key\":\"[name='A']\"},\"name\":\"B\",\"counter\":\"2\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -511,9 +511,9 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK(response.sync_response());
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "3");
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter2", "23");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "3");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter2", "23");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -529,11 +529,11 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     json = response.update().update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"C\",\"counter\":\"3\",\"counter2\":\"23\"}"));
     path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']"));
     CHECK(!response.update().atomic());
 
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "4");
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter2", "24");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "4");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter2", "24");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -542,9 +542,9 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK(response.extension_size() == 0);
     REQUIRE(response.update().delete__size() == 2);
     path = path_to_xpath(response.update().delete_().Get(0));
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     path = path_to_xpath(response.update().delete_().Get(1));
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter2"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter2"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
     REQUIRE(response.update().update_size() == 2);
@@ -554,14 +554,14 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK_THAT(json, Equals("\"4\",\"@counter\":{\"yang:operation\":\"replace\",\"yang:orig-"
                             "default\":false,\"yang:orig-value\":\"3\"}"));
     path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(response.update().update().Get(1).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     json = response.update().update().Get(1).val().json_ietf_val();
     CHECK_THAT(json, Equals("\"24\",\"@counter2\":{\"yang:operation\":\"replace\",\"yang:orig-"
                             "default\":false,\"yang:orig-value\":\"23\"}"));
     path = path_to_xpath(response.update().update().Get(1).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter2"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter2"));
     CHECK(!response.update().atomic());
 
     ctx.TryCancel();
@@ -574,7 +574,7 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -588,13 +588,13 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
     auto sub = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "4");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "4");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -619,7 +619,7 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
                "{\"yang:key\":\"[name='A']\"},\"name\":\"B\",\"counter\":\"2\"},{\"@\":{\"yang:"
                "key\":\"[name='B']\"},\"name\":\"C\",\"counter\":\"4\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -629,7 +629,7 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -641,7 +641,7 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
     CHECK(!response.update().has_prefix());
     REQUIRE(response.update().delete__size() == 1);
     path = path_to_xpath(response.update().delete_().Get(0));
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']"));
     CHECK(!response.update().atomic());
 
     ctx.TryCancel();
@@ -664,13 +664,13 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     auto sub = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "5");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "5");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='C']/counter", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -691,7 +691,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     auto json = response.update().update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("\"5\""));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -701,7 +701,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "6");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "6");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -711,7 +711,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
 
     REQUIRE(response.update().delete__size() == 1);
     path = path_to_xpath(response.update().delete_().Get(0));
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
     REQUIRE(response.update().update_size() == 1);
@@ -721,7 +721,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     CHECK_THAT(json, Equals("\"6\",\"@counter\":{\"yang:operation\":\"replace\",\"yang:orig-"
                             "default\":false,\"yang:orig-value\":\"5\"}"));
     path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(!response.update().atomic());
 
     ctx.TryCancel();
@@ -734,7 +734,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -748,12 +748,12 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
     auto sub = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']",
                   sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
@@ -777,7 +777,7 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
                             "origin:origin\":\"ietf-origin:unknown\"}}"));
     auto resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -790,7 +790,7 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    sr_sess->deleteItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -800,7 +800,7 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
     REQUIRE(response.update().delete__size() == 1);
     resppath = response.update().delete_().Get(0);
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -829,13 +829,13 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     auto sub = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "7");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "7");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='C']/counter", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -856,7 +856,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     auto json = response.update().update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("\"7\""));
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -867,9 +867,9 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK(response.sync_response());
 
     // Delete then add - sysrepo generates both delete and create events, check that we handle that
-    sr_sess->dropForeignOperationalContent("/gnmi-server-test:test-state/things");
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "8");
+    sr_sess->dropForeignOperationalContent("/sysrepo-gnxi-test:test-state/things");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "8");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -878,7 +878,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK(response.extension_size() == 0);
     REQUIRE(response.update().delete__size() == 1);
     path = path_to_xpath(response.update().delete_().Get(0));
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(response.update().timestamp() > 0);
     CHECK(!response.update().has_prefix());
     REQUIRE(response.update().update_size() == 1);
@@ -888,13 +888,13 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK_THAT(json, Equals("\"8\",\"@counter\":{\"yang:operation\":\"replace\",\"yang:orig-"
                             "default\":false,\"yang:orig-value\":\"7\"}"));
     path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(!response.update().atomic());
 
     // Update then delete - sysrepo collapses this to nothing
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "8");
-    sr_sess->dropForeignOperationalContent("/gnmi-server-test:test-state/things");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "8");
+    sr_sess->dropForeignOperationalContent("/sysrepo-gnxi-test:test-state/things");
     sr_sess->applyChanges();
 
     ctx.TryCancel();
@@ -907,7 +907,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -921,7 +921,7 @@ TEST_CASE("Subscribe with non-existent path (once)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='C']", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -965,7 +965,7 @@ TEST_CASE("Subscribe with non-existent path (poll)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='C']", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -1034,7 +1034,7 @@ TEST_CASE("Subscribe with non-existent path (stream-sample)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='C']", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
 
@@ -1091,7 +1091,7 @@ TEST_CASE("Subscribe with non-existent path (on-change)", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='C']", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
 
@@ -1137,15 +1137,15 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     auto sub2 = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']",
                   sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
-    xpath_to_path("/gnmi-server-test:test3/complex-list[type='bar'][name='foofoo']",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foofoo']",
                   sub2->mutable_path());
     sub2->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
@@ -1169,7 +1169,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
                             "origin:origin\":\"ietf-origin:unknown\"}}"));
     auto resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1194,7 +1194,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK(response.sync_response());
 
     // Delete for 1 subscription
-    sr_sess->deleteItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -1204,7 +1204,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     REQUIRE(response.update().delete__size() == 1);
     resppath = response.update().delete_().Get(0);
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1214,7 +1214,8 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK(!response.update().atomic());
 
     // Update for the other subscription
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foofoo']/data", "baz");
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foofoo']/data",
+                     "baz");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -1231,7 +1232,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK_THAT(json, Equals("{\"type\":\"bar\",\"name\":\"foofoo\",\"data\":\"baz\"}"));
     resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foofoo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1258,17 +1259,17 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     auto sub2 = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
-    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
-                     "98");
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
+    sr_sess->setItem(
+        "/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "98");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']",
                   sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
-    xpath_to_path("/gnmi-server-test-wine:wines", sub2->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test-wine:wines", sub2->mutable_path());
     sub2->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -1291,7 +1292,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
                             "origin:origin\":\"ietf-origin:unknown\"}}"));
     auto resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1314,7 +1315,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
                             "origin\":\"ietf-origin:unknown\"}}]}"));
     resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 1);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test-wine:wines"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test-wine:wines"));
     CHECK(!response.update().atomic());
 
     // Sync
@@ -1326,7 +1327,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(response.sync_response());
 
     // Delete for 1 subscription
-    sr_sess->deleteItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -1336,7 +1337,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     REQUIRE(response.update().delete__size() == 1);
     resppath = response.update().delete_().Get(0);
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1346,8 +1347,8 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(!response.update().atomic());
 
     // Update for the other subscription
-    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
-                     "99");
+    sr_sess->setItem(
+        "/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "99");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -1367,7 +1368,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
                             "false,\"yang:orig-value\":\"98\"}"));
     resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 3);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test-wine:wines"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test-wine:wines"));
     CHECK_THAT(resppath.elem(1).name(), Equals("wine"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("Mas La Plana"));
     CHECK_THAT(resppath.elem(1).key().at("vintage"), Equals("1985"));
@@ -1394,17 +1395,18 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     std::chrono::seconds interval(1);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foofoo']/data", "baz");
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foofoo']/data",
+                     "baz");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']",
                   sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
-    xpath_to_path("/gnmi-server-test:test3/complex-list[type='bar'][name='foofoo']",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foofoo']",
                   sub2->mutable_path());
     sub2->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
@@ -1429,7 +1431,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK_THAT(json, Equals("{\"type\":\"bar\",\"name\":\"foo\",\"data\":\"baz\"}"));
     auto resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1452,7 +1454,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
                             "\"ietf-origin:origin\":\"ietf-origin:unknown\"}}"));
     resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foofoo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1482,7 +1484,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK_THAT(json, Equals("{\"type\":\"bar\",\"name\":\"foo\",\"data\":\"baz\"}"));
     resppath = response.update().update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
@@ -1501,8 +1503,8 @@ static void update_counter()
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
     for (uint32_t i = 1; i <= 20; i++)
     {
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter",
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter",
                          std::to_string(i).c_str());
         sr_sess->applyChanges();
     }
@@ -1520,14 +1522,15 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
         auto sub = list->add_subscription();
 
         sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter",
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter",
                          std::to_string(0).c_str());
         sr_sess->applyChanges();
 
         list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
         list->set_encoding(gnmi::Encoding::JSON_IETF);
-        xpath_to_path("/gnmi-server-test:test-state/things[name='C']/counter", sub->mutable_path());
+        xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']/counter",
+                      sub->mutable_path());
         sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
         // This is to have race condition where the data is being modified
@@ -1553,7 +1556,7 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
         // We don't check the value since it can be 0...max
         // CHECK_THAT(json, Equals("\"0\""));
         auto path = path_to_xpath(response.update().update().Get(0).path());
-        CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='C']/counter"));
+        CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
         CHECK(!response.update().atomic());
 
         success = rw->Read(&response);
@@ -1575,7 +1578,7 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
         CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
         // Clean up
-        sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='C']");
+        sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
         sr_sess->applyChanges();
     }
 }
@@ -1591,7 +1594,7 @@ TEST_CASE("Subscribe (once) with origin in both prefix and path", "[subs-origin]
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     list->mutable_prefix()->set_origin("rfc7951");
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -1617,7 +1620,7 @@ TEST_CASE("Subscribe (stream sample) with prefix", "[subs-origin]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", list->mutable_prefix(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']", list->mutable_prefix(), "");
     xpath_to_path("/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::chrono::nanoseconds(interval).count());
@@ -1641,7 +1644,7 @@ TEST_CASE("Subscribe (stream sample) with prefix", "[subs-origin]")
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.update().atomic());
 
     success = rw->Read(&response);
@@ -1658,7 +1661,7 @@ TEST_CASE("Subscribe (stream sample) with prefix", "[subs-origin]")
     update = response.update().update().Get(0);
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
 
     // and then cancel
     ctx.TryCancel();
@@ -1680,7 +1683,7 @@ TEST_CASE("Subscribe (stream on-change) with prefix", "[subs-origin]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", list->mutable_prefix(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']", list->mutable_prefix(), "");
     xpath_to_path("/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
@@ -1699,7 +1702,7 @@ TEST_CASE("Subscribe (stream on-change) with prefix", "[subs-origin]")
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
 
     success = rw->Read(&response);
     CHECK(success == true);
@@ -1708,7 +1711,7 @@ TEST_CASE("Subscribe (stream on-change) with prefix", "[subs-origin]")
 
     // changing the value triggers a notification
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='A']/counter", "5");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='A']/counter", "5");
     sr_sess->applyChanges();
 
     success = rw->Read(&response);
@@ -1716,14 +1719,14 @@ TEST_CASE("Subscribe (stream on-change) with prefix", "[subs-origin]")
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
     CHECK(response.update().delete__size() == 1);
     CHECK_THAT(path_to_xpath(response.update().delete_().Get(0)),
-               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     REQUIRE(response.update().update_size() == 1);
     update = response.update().update().Get(0);
     CHECK_THAT(update.val().json_ietf_val(),
                Equals("\"5\",\"@counter\":{\"yang:operation\":\"replace\",\"yang:orig-default\":"
                       "false,\"yang:orig-value\":\"1\"}"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
 
     // and then cancel
     ctx.TryCancel();
@@ -1735,7 +1738,7 @@ TEST_CASE("Subscribe (stream on-change) with prefix", "[subs-origin]")
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
     // restore the initial value
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='A']/counter", "1");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='A']/counter", "1");
     sr_sess->applyChanges();
 }
 
@@ -1749,13 +1752,13 @@ TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
     auto sub = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter", "0");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "0");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='C']/counter", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='C']/counter", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -1767,7 +1770,7 @@ TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
     // system component.
     for (uint32_t i = 0; i < 25000; i++)
     {
-        sr_sess->setItem("/gnmi-server-test:test-state/things[name='C']/counter",
+        sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter",
                          std::to_string(i).c_str());
         sr_sess->applyChanges();
     }
@@ -1782,7 +1785,7 @@ TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -1815,7 +1818,7 @@ TEST_CASE("Subscribe (once) with invalid mode", "[subs-neg]")
 
     list->set_mode(static_cast<gnmi::SubscriptionList_Mode>(42));
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:non-existent", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:non-existent", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -1838,7 +1841,7 @@ TEST_CASE("Subscribe (once) with unsupported encoding type", "[subs-neg]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::BYTES);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -1861,7 +1864,7 @@ TEST_CASE("Subscribe (once) with another unsupported encoding type", "[subs-neg]
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::PROTO);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -1886,7 +1889,7 @@ TEST_CASE("Subscribe (poll) with updates_only", "[subs-neg]")
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     list->set_updates_only(true);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -1915,7 +1918,7 @@ TEST_CASE("Subscribe (poll) with dup sub request", "[subs-neg]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_POLL);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -1944,7 +1947,7 @@ TEST_CASE("Subscribe (stream-sample) with huge sample interval", "[subs-neg]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::numeric_limits<uint64_t>::max());
 
@@ -1972,7 +1975,7 @@ TEST_CASE("Subscribe (stream) with updates_only", "[subs-neg]")
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
     list->set_updates_only(true);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     sub->set_sample_interval(std::chrono::nanoseconds(std::chrono::seconds(1)).count());
 
@@ -1998,7 +2001,7 @@ TEST_CASE("Subscribe (stream) with TARGET_DEFINED subscription mode", "[subs-neg
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::TARGET_DEFINED);
 
     auto rw = gnmi_client->Subscribe(&ctx);
@@ -2023,7 +2026,7 @@ TEST_CASE("Subscribe (stream-sample) with zero sample interval", "[subs]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path());
     sub->set_mode(gnmi::SubscriptionMode::SAMPLE);
     // gNMI spec: 0 means the lowest interval possible for the target,
     // the server clamps it to its minimum - so updates must keep coming
@@ -2065,7 +2068,7 @@ TEST_CASE("Subscribe (stream-sample) with zero sample interval", "[subs]")
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto path = path_to_xpath(response.update().update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
 
     // And then cancel
     ctx.TryCancel();
@@ -2136,7 +2139,7 @@ TEST_CASE("Subscribe (once) with unsupported origin", "[subs-origin]")
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", sub->mutable_path(), "frob");
+    xpath_to_path("/sysrepo-gnxi-test:test-state", sub->mutable_path(), "frob");
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -2184,7 +2187,7 @@ TEST_CASE("Subscribe (once) to a module under a different origin", "[subs-origin
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_ONCE);
     list->set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test-wine:wines", sub->mutable_path(), "");
+    xpath_to_path("/sysrepo-gnxi-test-wine:wines", sub->mutable_path(), "");
 
     auto rw = gnmi_client->Subscribe(&ctx);
     auto success = rw->Write(request);
@@ -2196,7 +2199,7 @@ TEST_CASE("Subscribe (once) to a module under a different origin", "[subs-origin
     auto status = rw->Finish();
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("module \"gnmi-server-test-wine\" is under origin \"rfc7951\" and cannot "
+               Equals("module \"sysrepo-gnxi-test-wine\" is under origin \"rfc7951\" and cannot "
                       "be addressed under origin \"openconfig\""));
 }
 
@@ -2209,8 +2212,8 @@ TEST_CASE("Subscribe (stream on-change) root path excludes other origins", "[sub
     auto sub = list->add_subscription();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
-                     "98");
+    sr_sess->setItem(
+        "/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "98");
     sr_sess->applyChanges();
 
     list->set_mode(gnmi::SubscriptionList_Mode::SubscriptionList_Mode_STREAM);
@@ -2270,6 +2273,6 @@ TEST_CASE("Subscribe (stream on-change) root path excludes other origins", "[sub
     CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
 
     // clean up
-    sr_sess->deleteItem("/gnmi-server-test-wine:wines");
+    sr_sess->deleteItem("/sysrepo-gnxi-test-wine:wines");
     sr_sess->applyChanges();
 }

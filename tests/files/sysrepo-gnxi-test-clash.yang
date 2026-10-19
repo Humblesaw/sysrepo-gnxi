@@ -9,7 +9,7 @@ module sysrepo-gnxi-test-clash {
     "Ondrej Kusnirik <kusnirik@cesnet.cz>";
   description
     "sysrepo-gnxi test module - its top-level node name clashes with
-     gnmi-server-test to exercise ambiguous bare-name path resolution.
+     sysrepo-gnxi-test to exercise ambiguous bare-name path resolution.
 
      Copyright (c) 2026 CESNET, z.s.p.o.
 

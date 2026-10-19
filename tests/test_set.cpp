@@ -37,8 +37,8 @@ TEST_CASE("Top-level Set request (replace) empty", "[set]")
     gnmi::SetResponse response;
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test4/params[.=\"abc\"]", "");
-    sr_sess->setItem("/gnmi-server-test:test/things[name=\"B\"]/enabled", "false");
+    sr_sess->setItem("/sysrepo-gnxi-test:test4/params[.=\"abc\"]", "");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled", "false");
     sr_sess->applyChanges();
 
     auto replace = request.add_replace();
@@ -68,7 +68,7 @@ TEST_CASE("Empty leaf Set request (update)", "[set]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/ready", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/ready", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("[null]");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -79,15 +79,15 @@ TEST_CASE("Empty leaf Set request (update)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='A']/ready"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='A']/ready"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/ready");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/ready");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals(""));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -98,13 +98,13 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
     gnmi::SetResponse response;
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test4/params[.=\"abc\"]", "");
-    sr_sess->setItem("/gnmi-server-test:test/things[name=\"B\"]/enabled", "false");
+    sr_sess->setItem("/sysrepo-gnxi-test:test4/params[.=\"abc\"]", "");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled", "false");
     sr_sess->applyChanges();
 
     auto replace = request.add_replace();
 
-    xpath_to_path("/gnmi-server-test:test4/params", replace->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test4/params", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val("[\"speed\", \"mtu\", \"queue\"]");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -115,20 +115,20 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_REPLACE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test4/params"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test4/params"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test4/params[.='mtu']");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test4/params[.='mtu']");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("mtu"));
 
-    auto parent = sr_sess->getData("/gnmi-server-test:test4/params");
+    auto parent = sr_sess->getData("/sysrepo-gnxi-test:test4/params");
     auto json = parent->printStr(DataFormat::JSON, PrintFlags::Siblings | PrintFlags::Shrink);
 
     CHECK_THAT(json.value(),
-               Equals("{\"gnmi-server-test:test4\":{\"params\":[\"mtu\",\"queue\",\"speed\"]}}"));
+               Equals("{\"sysrepo-gnxi-test:test4\":{\"params\":[\"mtu\",\"queue\",\"speed\"]}}"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test4");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test4");
     sr_sess->applyChanges();
 }
 
@@ -141,33 +141,33 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
 //     SetResponse response;
 //     using namespace libyang;
 //     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-//     sr_sess->setItem("/gnmi-server-test:test/things[name=\"B\"]/enabled", "false");
-//     sr_sess->setItem("/gnmi-server-test:test/things[name=\"A\"]/enabled", "true");
-//     sr_sess->setItem("/gnmi-server-test:test/things[name=\"A\"]/amount-history", "1");
-//     sr_sess->setItem("/gnmi-server-test:test/things[name=\"A\"]/amount-history", "2");
+//     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled", "false");
+//     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"A\"]/enabled", "true");
+//     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"A\"]/amount-history", "1");
+//     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"A\"]/amount-history", "2");
 //     sr_sess->applyChanges();
 
 //     auto replace = request.add_replace();
 
-//     xpath_to_path("/gnmi-server-test:test/things[name=\"A\"]/amount-history",
+//     xpath_to_path("/sysrepo-gnxi-test:test/things[name=\"A\"]/amount-history",
 //                   replace->mutable_path());
 //     replace->mutable_val()->set_json_ietf_val("[4,5,6]");
 //     auto status = gnmi_client->Set(&ctx, request, &response);
 //     REQUIRE(status.ok());
 
-//     auto vals = sr_sess->getData("/gnmi-server-test:test/things[name=\"A\"]/amount-history");
+//     auto vals = sr_sess->getData("/sysrepo-gnxi-test:test/things[name=\"A\"]/amount-history");
 //     auto json = vals->printStr(DataFormat::JSON, PrintFlags::Siblings | PrintFlags::Shrink);
-//     CHECK_THAT(json.value(), Equals("{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\","
+//     CHECK_THAT(json.value(), Equals("{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\","
 //                                     "\"amount-history\":[4,5,6]}]}}"));
 
 //     // check that all unrelated nodes are not altered
-//     auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name=\"A\"]/enabled");
+//     auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name=\"A\"]/enabled");
 //     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
-//     val = sr_sess->getOneNode("/gnmi-server-test:test/things[name=\"B\"]/enabled");
+//     val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled");
 //     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
 //     // Clean up
-//     sr_sess->deleteItem("/gnmi-server-test:test");
+//     sr_sess->deleteItem("/sysrepo-gnxi-test:test");
 //     sr_sess->applyChanges();
 // }
 
@@ -178,12 +178,12 @@ TEST_CASE("Top-level Set request leaflist (update)", "[set]")
     gnmi::SetResponse response;
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test4/params[.=\"abc\"]", "");
+    sr_sess->setItem("/sysrepo-gnxi-test:test4/params[.=\"abc\"]", "");
     sr_sess->applyChanges();
 
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test4/params", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test4/params", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("[\"speed\", \"mtu\", \"queue\"]");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -194,20 +194,20 @@ TEST_CASE("Top-level Set request leaflist (update)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test4/params"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test4/params"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test4/params[.='mtu']");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test4/params[.='mtu']");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("mtu"));
 
-    auto parent = sr_sess->getData("/gnmi-server-test:test4/params");
+    auto parent = sr_sess->getData("/sysrepo-gnxi-test:test4/params");
     auto json = parent->printStr(DataFormat::JSON, PrintFlags::Siblings | PrintFlags::Shrink);
 
     CHECK_THAT(
         json.value(),
-        Equals("{\"gnmi-server-test:test4\":{\"params\":[\"abc\",\"mtu\",\"queue\",\"speed\"]}}"));
+        Equals("{\"sysrepo-gnxi-test:test4\":{\"params\":[\"abc\",\"mtu\",\"queue\",\"speed\"]}}"));
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test4");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test4");
     sr_sess->applyChanges();
 }
 
@@ -220,7 +220,7 @@ TEST_CASE("Top-level Set request (update)", "[set]")
     auto update = request.add_update();
 
     xpath_to_path("/", update->mutable_path());
-    update->mutable_val()->set_json_ietf_val("{\"gnmi-server-test:test\":{\"things\":[{\"name\":"
+    update->mutable_val()->set_json_ietf_val("{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":"
                                              "\"A\",\"enabled\":true, \"ready\":[null]}]}}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -234,22 +234,22 @@ TEST_CASE("Top-level Set request (update)", "[set]")
     CHECK_THAT(path, Equals("/"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/ready");
+    val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/ready");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals(""));
 
     // Also verify it makes it into the startup datastore since confirmed commit not used
     sr_sess->switchDatastore(sysrepo::Datastore::Startup);
-    val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Clean up
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -261,13 +261,13 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
     auto replace = request.add_replace();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
-    sr_sess->setItem("/gnmi-server-test:test2/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test2/enabled", "true");
     sr_sess->applyChanges();
 
     xpath_to_path("/", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -279,21 +279,21 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
     auto path = path_to_xpath(response.response().Get(0).path());
     CHECK_THAT(path, Equals("/"));
 
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Item B should have been removed since the whole config was replaced and the new config only
     // contained item A
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
     // test2 should have been removed since the whole config was replaced and the new config
     // includes only the test container
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test2/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -305,14 +305,14 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
     auto replace = request.add_replace();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
-    sr_sess->setItem("/gnmi-server-test:test2/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test2/enabled", "true");
     sr_sess->applyChanges();
 
     xpath_to_path("/", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\"gnmi-server-"
-        "test:test2\":{}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\""
+        "sysrepo-gnxi-test:test2\":{}}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -324,21 +324,21 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
     auto path = path_to_xpath(response.response().Get(0).path());
     CHECK_THAT(path, Equals("/"));
 
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Item B should have been removed since the whole config was replaced and the new config only
     // contained item A
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
     // test2 should have been removed since the whole config was replaced and the test2 container
     // was empty in the new config
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test2/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -351,18 +351,18 @@ TEST_CASE("Top-level Set request (multi replace + update)", "[set]")
     auto update = request.add_update();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
-    sr_sess->setItem("/gnmi-server-test:test2/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test2/enabled", "true");
     sr_sess->applyChanges();
 
     xpath_to_path("/", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\"gnmi-server-"
-        "test:test2\":{\"enabled2\":true}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\""
+        "sysrepo-gnxi-test:test2\":{\"enabled2\":true}}");
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":false}]},\"gnmi-"
-        "server-test:test2\":{\"enabled2\":false}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":false}]},\""
+        "sysrepo-gnxi-test:test2\":{\"enabled2\":false}}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -377,27 +377,27 @@ TEST_CASE("Top-level Set request (multi replace + update)", "[set]")
     path = path_to_xpath(response.response().Get(1).path());
     CHECK_THAT(path, Equals("/"));
 
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     // The update should be applied after the replace
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
     // Item B should have been removed since the whole config was replaced and the new config only
     // contained item A
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
     // The replace should have caused this node to be removed
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test2/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
     // The update should be applied after the replace
-    val = sr_sess->getOneNode("/gnmi-server-test:test2/enabled2");
+    val = sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled2");
 
     // The update should be applied after the replace
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
-    sr_sess->deleteItem("/gnmi-server-test:test2/enabled");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test2/enabled");
     sr_sess->applyChanges();
 }
 
@@ -408,7 +408,7 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     gnmi::SetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->applyChanges();
 
     xpath_to_path("/", request.add_delete_());
@@ -424,7 +424,7 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     CHECK_THAT(path, Equals("/"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 }
 
@@ -435,10 +435,10 @@ TEST_CASE("Path-based Set request (delete)", "[set]")
     gnmi::SetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->applyChanges();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='B']/enabled", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='B']/enabled", request.add_delete_());
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -448,12 +448,12 @@ TEST_CASE("Path-based Set request (delete)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='B']/enabled"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='B']/enabled"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='B']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
 }
 
 TEST_CASE("Path-based Set request (update)", "[set]")
@@ -463,7 +463,7 @@ TEST_CASE("Path-based Set request (update)", "[set]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("{\"enabled\":true}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -474,15 +474,15 @@ TEST_CASE("Path-based Set request (update)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='A']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='A']"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -493,7 +493,7 @@ TEST_CASE("Leaf Set request (update)", "[set]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/name", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -504,15 +504,15 @@ TEST_CASE("Leaf Set request (update)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='A']/name"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='A']/name"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/name");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/name");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("A"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -523,7 +523,7 @@ TEST_CASE("Set request (with prefix)", "[set]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']", request.mutable_prefix(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']", request.mutable_prefix(), "");
     xpath_to_path("/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
     auto status = gnmi_client->Set(&ctx, request, &response);
@@ -532,19 +532,19 @@ TEST_CASE("Set request (with prefix)", "[set]")
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() > 0);
     auto prefix = path_to_xpath(response.prefix());
-    CHECK_THAT(prefix, Equals("/gnmi-server-test:test/things[name='A']"));
+    CHECK_THAT(prefix, Equals("/sysrepo-gnxi-test:test/things[name='A']"));
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     auto path = path_to_xpath(response.response().Get(0).path());
     CHECK_THAT(path, Equals("/name"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/name");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/name");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("A"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -557,7 +557,7 @@ TEST_CASE("Set request (with empty prefix)", "[set]")
 
     // Add empty prefix
     request.mutable_prefix();
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/name", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -569,14 +569,14 @@ TEST_CASE("Set request (with empty prefix)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='A']/name"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='A']/name"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/name");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/name");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("A"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -589,11 +589,11 @@ TEST_CASE("Set request transaction (update)", "[set]")
 
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
     update = request.add_update();
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"B\",\"enabled\":true}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"B\",\"enabled\":true}]}}");
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -610,16 +610,16 @@ TEST_CASE("Set request transaction (update)", "[set]")
     CHECK_THAT(path, Equals("/"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
-    val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled");
+    val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='B']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
     sr_sess->applyChanges();
 }
 
@@ -631,13 +631,13 @@ TEST_CASE("Set request transaction (delete+update)", "[set]")
     auto update = request.add_update();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->applyChanges();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='B']", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='B']", request.add_delete_());
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
@@ -648,7 +648,7 @@ TEST_CASE("Set request transaction (delete+update)", "[set]")
     REQUIRE(response.response_size() == 2);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='B']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='B']"));
     CHECK(response.response().Get(1).op() == gnmi::UpdateResult_Operation_UPDATE);
     path = path_to_xpath(response.response().Get(1).path());
     CHECK_THAT(path, Equals("/"));
@@ -656,14 +656,14 @@ TEST_CASE("Set request transaction (delete+update)", "[set]")
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
 
     // TODO: try catch block
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
                       Contains("SR_ERR_NOT_FOUND"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -674,11 +674,11 @@ TEST_CASE("Set request (delete with wildcards)", "[set]")
     gnmi::SetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='A']/enabled", "true");
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='A']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->applyChanges();
 
-    xpath_to_path("/gnmi-server-test:test/*/enabled", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/*/enabled", request.add_delete_());
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -688,14 +688,14 @@ TEST_CASE("Set request (delete with wildcards)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/*/enabled"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/*/enabled"));
 
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='B']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
 }
 
 // gNMI spec §3.4.6: In the case that a path specifies an element within the data tree that does not
@@ -706,7 +706,7 @@ TEST_CASE("Set request (delete) with non-existent path", "[set]")
     gnmi::SetRequest request;
     gnmi::SetResponse response;
 
-    xpath_to_path("/gnmi-server-test:test-state/things[name='not-found']", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='not-found']", request.add_delete_());
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
@@ -717,7 +717,7 @@ TEST_CASE("Set request (delete) with non-existent path", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='not-found']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='not-found']"));
 }
 
 TEST_CASE("Set request (delete) the same path", "[set]")
@@ -727,15 +727,15 @@ TEST_CASE("Set request (delete) the same path", "[set]")
     gnmi::SetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='foo']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='foo']/enabled", "true");
     sr_sess->applyChanges();
 
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
-    xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='foo']", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='foo']", request.add_delete_());
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
@@ -746,11 +746,11 @@ TEST_CASE("Set request (delete) the same path", "[set]")
     REQUIRE(response.response_size() == 2);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='foo']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='foo']"));
 
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 }
 
@@ -761,15 +761,15 @@ TEST_CASE("Set request (delete) child then parent", "[set]")
     gnmi::SetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='foo']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='foo']/enabled", "true");
     sr_sess->applyChanges();
 
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    xpath_to_path("/gnmi-server-test:test/things[name='foo']/enabled", request.add_delete_());
-    xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='foo']/enabled", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='foo']", request.add_delete_());
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
@@ -780,13 +780,13 @@ TEST_CASE("Set request (delete) child then parent", "[set]")
     REQUIRE(response.response_size() == 2);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     CHECK_THAT(path_to_xpath(response.response().Get(0).path()),
-               Equals("/gnmi-server-test:test/things[name='foo']/enabled"));
+               Equals("/sysrepo-gnxi-test:test/things[name='foo']/enabled"));
     CHECK_THAT(path_to_xpath(response.response().Get(1).path()),
-               Equals("/gnmi-server-test:test/things[name='foo']"));
+               Equals("/sysrepo-gnxi-test:test/things[name='foo']"));
 
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 }
 
@@ -797,14 +797,14 @@ TEST_CASE("Set request (delete) parent then child", "[set]")
     gnmi::SetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='foo']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='foo']/enabled", "true");
     sr_sess->applyChanges();
 
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']/enabled");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    xpath_to_path("/gnmi-server-test:test/things[name='foo']", request.add_delete_());
-    xpath_to_path("/gnmi-server-test:test/things[name='foo']/enabled", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='foo']", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='foo']/enabled", request.add_delete_());
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::OK);
@@ -815,13 +815,13 @@ TEST_CASE("Set request (delete) parent then child", "[set]")
     REQUIRE(response.response_size() == 2);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     CHECK_THAT(path_to_xpath(response.response().Get(0).path()),
-               Equals("/gnmi-server-test:test/things[name='foo']"));
+               Equals("/sysrepo-gnxi-test:test/things[name='foo']"));
     CHECK_THAT(path_to_xpath(response.response().Get(1).path()),
-               Equals("/gnmi-server-test:test/things[name='foo']/enabled"));
+               Equals("/sysrepo-gnxi-test:test/things[name='foo']/enabled"));
 
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='foo']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='foo']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 }
 
@@ -834,16 +834,16 @@ TEST_CASE("Set request for list with composite key", "[set]")
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     CHECK_THROWS_WITH(
-        sr_sess->getOneNode("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data"),
+        sr_sess->getOneNode("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']/data"),
         Contains("SR_ERR_NOT_FOUND"));
 
-    xpath_to_path("/gnmi-server-test:test3/complex-list[name='foo'][type='bar']/data",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[name='foo'][type='bar']/data",
                   update->mutable_path());
 
     // check parsing of the xpath_to_path() function
     auto reqpath = update->path();
     CHECK(reqpath.elem_size() == 3);
-    CHECK_THAT(reqpath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(reqpath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(reqpath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(reqpath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(reqpath.elem(1).key().at("type"), Equals("bar"));
@@ -855,11 +855,11 @@ TEST_CASE("Set request for list with composite key", "[set]")
     CHECK(status.ok());
 
     auto val =
-        sr_sess->getOneNode("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data");
+        sr_sess->getOneNode("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']/data");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("baz"));
 
     // cleanup
-    sr_sess->deleteItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']");
     sr_sess->applyChanges();
 }
 
@@ -895,7 +895,7 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
         {
             auto update = request.add_update();
             auto xpath =
-                "/gnmi-server-test:test/things[name=\"A" + std::to_string(j) + "\"]/description";
+                "/sysrepo-gnxi-test:test/things[name=\"A" + std::to_string(j) + "\"]/description";
 
             xpath_to_path(xpath, update->mutable_path());
             update->mutable_val()->set_json_ietf_val(generate_random_string(1000));
@@ -905,7 +905,7 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
     }
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things");
     sr_sess->applyChanges();
 
     auto parent = sr_sess->getData("/*");
@@ -922,7 +922,7 @@ TEST_CASE("Set request (no val type)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val();
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -941,7 +941,7 @@ TEST_CASE("Set request (ascii val type)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_ascii_val("true");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -960,7 +960,7 @@ TEST_CASE("Set request (JSON val type)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_json_val("true");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -979,7 +979,7 @@ TEST_CASE("Set request (bytes val type)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_bytes_val("1");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -998,7 +998,7 @@ TEST_CASE("Set request (proto-bytes val type)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_proto_bytes("1");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1017,7 +1017,7 @@ TEST_CASE("Set request (any-val val type)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->mutable_any_val()->set_value("1");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1036,7 +1036,7 @@ TEST_CASE("Set request (leaf-list val type)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->mutable_leaflist_val()->add_element()->set_string_val("true");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1055,7 +1055,7 @@ TEST_CASE("Set request (bool val)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_bool_val(true);
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1074,7 +1074,7 @@ TEST_CASE("Set request (string val)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/description", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/description", update->mutable_path());
     update->mutable_val()->set_string_val("This is item A");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1093,7 +1093,7 @@ TEST_CASE("Set request (uint val)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/amount", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/amount", update->mutable_path());
     update->mutable_val()->set_uint_val(42);
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1112,7 +1112,7 @@ TEST_CASE("Set request (int val)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/signed-amount", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/signed-amount", update->mutable_path());
     update->mutable_val()->set_int_val(-42);
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1131,7 +1131,8 @@ TEST_CASE("Set request (double val)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/decimal-amount", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/decimal-amount",
+                  update->mutable_path());
     update->mutable_val()->set_double_val(42.1);
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1168,13 +1169,13 @@ TEST_CASE("Set request (incorrect prefix)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']", update->mutable_path());
-    // The prefix, if any, should be gnmi-server-test
-    update->mutable_val()->set_json_ietf_val("{\"gnmi-server-test-wine:enabled\":true}");
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']", update->mutable_path());
+    // The prefix, if any, should be sysrepo-gnxi-test
+    update->mutable_val()->set_json_ietf_val("{\"sysrepo-gnxi-test-wine:enabled\":true}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("failed to parse data for \"/gnmi-server-test:test/things[name=\"A\"]\": "
+               Equals("failed to parse data for \"/sysrepo-gnxi-test:test/things[name=\"A\"]\": "
                       "Can't parse value fragment data: LY_EVALID"));
 
     CHECK(response.extension_size() == 0);
@@ -1194,12 +1195,12 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
 
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
     update = request.add_update();
     xpath_to_path("/", update->mutable_path());
     // Contains bad value for enabled so expected to fail
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"B\",\"enabled\":\"maybe\"}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"B\",\"enabled\":\"maybe\"}]}}");
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -1213,9 +1214,9 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     // Check that no changes happened to the state
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
                       Contains("SR_ERR_NOT_FOUND"));
 
     request.Clear();
@@ -1223,7 +1224,7 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
     update = request.add_update();
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"C\",\"enabled\":true}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"C\",\"enabled\":true}]}}");
     status = gnmi_client->Set(&ctx2, request, &response);
     CHECK(status.ok());
 
@@ -1236,16 +1237,16 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
     CHECK_THAT(path, Equals("/"));
 
     // Check that no state was changed other than that related to the most recent updae
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='C']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='C']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -1259,14 +1260,14 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     auto update = request.add_update();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='B']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->applyChanges();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='B']", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='B']", request.add_delete_());
     xpath_to_path("/", update->mutable_path());
     // Contains bad value for enabled so expected to fail
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":\"maybe\"}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":\"maybe\"}]}}");
 
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -1279,10 +1280,10 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     REQUIRE(response.response_size() == 0);
 
     // Check that no changes happened to the state
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 
     request.Clear();
@@ -1290,7 +1291,7 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     update = request.add_update();
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test\":{\"things\":[{\"name\":\"C\",\"enabled\":true}]}}");
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"C\",\"enabled\":true}]}}");
     status = gnmi_client->Set(&ctx2, request, &response);
     CHECK(status.ok());
 
@@ -1303,18 +1304,18 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     CHECK_THAT(path, Equals("/"));
 
     // Check that no state was changed other than that related to the most recent updae
-    val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']/enabled");
+    val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='C']/enabled");
+    val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='C']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='B']");
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -1327,10 +1328,10 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("true");
     update = request.add_update();
-    xpath_to_path("/gnmi-server-test:test/things[name='B']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='B']/enabled", update->mutable_path());
     // Contains bad value for enabled so expected to fail
     update->mutable_val()->set_json_ietf_val("\"maybe\"");
 
@@ -1338,7 +1339,7 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
                Equals("failed to parse data for "
-                      "\"/gnmi-server-test:test/things[name=\"B\"]/enabled\": "
+                      "\"/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled\": "
                       "Can't parse value fragment data: LY_EVALID"));
 
     CHECK(response.extension_size() == 0);
@@ -1349,15 +1350,15 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
 
     // Check that no changes happened to the state
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
                       Contains("SR_ERR_NOT_FOUND"));
 
     request.Clear();
     // Try again with an unrelated update that succeeds
     update = request.add_update();
-    xpath_to_path("/gnmi-server-test:test/things[name='C']/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='C']/enabled", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("true");
     status = gnmi_client->Set(&ctx2, request, &response);
     CHECK(status.ok());
@@ -1368,19 +1369,19 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_UPDATE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='C']/enabled"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='C']/enabled"));
 
     // Check that no state was changed other than that related to the most recent updae
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='B']"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
                       Contains("SR_ERR_NOT_FOUND"));
-    auto val = sr_sess->getOneNode("/gnmi-server-test:test/things[name='C']/enabled");
+    auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='C']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
     // Clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -1400,7 +1401,7 @@ TEST_CASE("Top-level Set request (update, no namespace)", "[set-neg]")
                Equals("failed to parse data for \"/*\": Can't parse data: LY_EVALID"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    CHECK_THROWS_WITH(sr_sess->getOneNode("/gnmi-server-test:test/things[name='A']/enabled"),
+    CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled"),
                       Contains("SR_ERR_NOT_FOUND"));
 }
 
@@ -1411,12 +1412,12 @@ TEST_CASE("Set request (update with wildcards)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/*/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/*/enabled", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("true");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("failed to parse data for \"/gnmi-server-test:test/*/enabled\": "
+               Equals("failed to parse data for \"/sysrepo-gnxi-test:test/*/enabled\": "
                       "Can't parse value fragment data: LY_EVALID"));
 }
 
@@ -1427,12 +1428,12 @@ TEST_CASE("Set request (application error string)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test2/custom-error", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test2/custom-error", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("1");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::ABORTED);
     CHECK_THAT(status.error_message(),
-               Equals("Fiddlesticks: /gnmi-server-test:test2/custom-error"));
+               Equals("Fiddlesticks: /sysrepo-gnxi-test:test2/custom-error"));
 }
 
 TEST_CASE("Set request (data model error)", "[set-neg]")
@@ -1442,12 +1443,12 @@ TEST_CASE("Set request (data model error)", "[set-neg]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test2/must-error", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test2/must-error", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("1");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::ABORTED);
     CHECK_THAT(status.error_message(), Equals("Must condition \"current() > 42\" not satisfied. "
-                                              "(path \"/gnmi-server-test:test2/must-error\")"));
+                                              "(path \"/sysrepo-gnxi-test:test2/must-error\")"));
 }
 
 // origin tests
@@ -1475,11 +1476,11 @@ TEST_CASE("Set request with default origin (bare names)", "[set-origin]")
                Equals("/test/things[name='C']/description"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    auto data = sr_sess->getData("/gnmi-server-test:test/things[name='C']/description");
+    auto data = sr_sess->getData("/sysrepo-gnxi-test:test/things[name='C']/description");
     REQUIRE(data.has_value());
 
     // clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
     sr_sess->applyChanges();
 }
 
@@ -1490,7 +1491,7 @@ TEST_CASE("Set request with unsupported origin", "[set-origin]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='C']/description", update->mutable_path(),
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='C']/description", update->mutable_path(),
                   "frob");
     update->mutable_val()->set_json_ietf_val("\"clash\"");
     auto status = gnmi_client->Set(&ctx, request, &response);
@@ -1514,7 +1515,7 @@ TEST_CASE("Set request with ambiguous bare element name", "[set-origin]")
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Contains("ambiguous path element \"test2\""));
-    CHECK_THAT(status.error_message(), Contains("gnmi-server-test:test2"));
+    CHECK_THAT(status.error_message(), Contains("sysrepo-gnxi-test:test2"));
     CHECK_THAT(status.error_message(), Contains("sysrepo-gnxi-test-clash:test2"));
 }
 
@@ -1525,13 +1526,13 @@ TEST_CASE("Set request to a module under a different origin", "[set-origin]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    xpath_to_path("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score",
+    xpath_to_path("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score",
                   update->mutable_path(), "");
     update->mutable_val()->set_json_ietf_val("89");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("module \"gnmi-server-test-wine\" is under origin \"rfc7951\" and cannot "
+               Equals("module \"sysrepo-gnxi-test-wine\" is under origin \"rfc7951\" and cannot "
                       "be addressed under origin \"openconfig\""));
 
     CHECK(response.extension_size() == 0);
@@ -1539,7 +1540,7 @@ TEST_CASE("Set request to a module under a different origin", "[set-origin]")
     CHECK(response.response_size() == 0);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    CHECK(!sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+    CHECK(!sr_sess->getData("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score")
                .has_value());
 }
 
@@ -1567,11 +1568,11 @@ TEST_CASE("Set request to a module under its origin", "[set-origin]")
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     auto val =
-        sr_sess->getOneNode("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score");
+        sr_sess->getOneNode("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("89"));
 
     // clean up
-    sr_sess->deleteItem("/gnmi-server-test-wine:wines");
+    sr_sess->deleteItem("/sysrepo-gnxi-test-wine:wines");
     sr_sess->applyChanges();
 }
 
@@ -1583,7 +1584,7 @@ TEST_CASE("Set request with origin in both prefix and path", "[set-origin]")
     auto update = request.add_update();
 
     request.mutable_prefix()->set_origin("rfc7951");
-    xpath_to_path("/gnmi-server-test:test2/enabled", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test2/enabled", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("true");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -1605,7 +1606,7 @@ TEST_CASE("Set request root delete is constrained to origin", "[set-origin]")
     // seed an annotated (rfc7951) module and an unannotated one
     xpath_to_path("/wines/wine[name='X'][vintage='1985']/score", update->mutable_path(), "rfc7951");
     update->mutable_val()->set_json_ietf_val("89");
-    xpath_to_path("/gnmi-server-test:test2/enabled", update2->mutable_path(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test2/enabled", update2->mutable_path(), "");
     update2->mutable_val()->set_json_ietf_val("true");
     grpc::ClientContext seedCtx;
     auto status = gnmi_client->Set(&seedCtx, request, &response);
@@ -1620,9 +1621,9 @@ TEST_CASE("Set request root delete is constrained to origin", "[set-origin]")
     CHECK(deleteStatus.ok());
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    CHECK(sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+    CHECK(sr_sess->getData("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score")
               .has_value());
-    CHECK(!sr_sess->getData("/gnmi-server-test:test2/enabled").has_value());
+    CHECK(!sr_sess->getData("/sysrepo-gnxi-test:test2/enabled").has_value());
 
     // deleting the whole root under rfc7951 deletes everything
     gnmi::SetRequest deleteRequest2;
@@ -1631,7 +1632,7 @@ TEST_CASE("Set request root delete is constrained to origin", "[set-origin]")
     grpc::ClientContext deleteCtx2;
     deleteStatus = gnmi_client->Set(&deleteCtx2, deleteRequest2, &deleteResponse2);
     CHECK(deleteStatus.ok());
-    CHECK(!sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+    CHECK(!sr_sess->getData("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score")
                .has_value());
 }
 
@@ -1645,8 +1646,8 @@ TEST_CASE("Set request root update with data of another origin", "[set-origin]")
     // the payload mixes modules of different origins
     xpath_to_path("/", update->mutable_path(), "");
     update->mutable_val()->set_json_ietf_val(
-        "{\"gnmi-server-test:test2\":{\"enabled\":true},"
-        "\"gnmi-server-test-wine:wines\":{\"wine\":[{\"name\":\"X\",\"vintage\":1985,"
+        "{\"sysrepo-gnxi-test:test2\":{\"enabled\":true},"
+        "\"sysrepo-gnxi-test-wine:wines\":{\"wine\":[{\"name\":\"X\",\"vintage\":1985,"
         "\"score\":89}]}}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -1658,9 +1659,9 @@ TEST_CASE("Set request root update with data of another origin", "[set-origin]")
     CHECK(response.response_size() == 0);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    CHECK(!sr_sess->getData("/gnmi-server-test-wine:wines/wine[name='X'][vintage='1985']/score")
+    CHECK(!sr_sess->getData("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score")
                .has_value());
-    CHECK(!sr_sess->getData("/gnmi-server-test:test2/enabled").has_value());
+    CHECK(!sr_sess->getData("/sysrepo-gnxi-test:test2/enabled").has_value());
 }
 
 TEST_CASE("Set request delete with prefix", "[set-origin]")
@@ -1670,9 +1671,9 @@ TEST_CASE("Set request delete with prefix", "[set-origin]")
     auto update = request.add_update();
     auto update2 = request.add_update();
 
-    xpath_to_path("/gnmi-server-test:test/things[name='C']/description", update->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='C']/description", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"clash\"");
-    xpath_to_path("/gnmi-server-test:test/things[name='D']/description", update2->mutable_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='D']/description", update2->mutable_path());
     update2->mutable_val()->set_json_ietf_val("\"clash\"");
     grpc::ClientContext seedCtx;
     auto status = gnmi_client->Set(&seedCtx, request, &response);
@@ -1680,7 +1681,7 @@ TEST_CASE("Set request delete with prefix", "[set-origin]")
 
     gnmi::SetRequest deleteRequest;
     gnmi::SetResponse deleteResponse;
-    xpath_to_path("/gnmi-server-test:test/things[name='C']", deleteRequest.mutable_prefix());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='C']", deleteRequest.mutable_prefix());
     xpath_to_path("/description", deleteRequest.add_delete_(), "");
     grpc::ClientContext deleteCtx;
     auto deleteStatus = gnmi_client->Set(&deleteCtx, deleteRequest, &deleteResponse);
@@ -1688,12 +1689,12 @@ TEST_CASE("Set request delete with prefix", "[set-origin]")
     CHECK(deleteResponse.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    CHECK(sr_sess->getData("/gnmi-server-test:test/things[name='C']").has_value());
-    CHECK(!sr_sess->getData("/gnmi-server-test:test/things[name='C']/description").has_value());
-    CHECK(sr_sess->getData("/gnmi-server-test:test/things[name='D']/description").has_value());
+    CHECK(sr_sess->getData("/sysrepo-gnxi-test:test/things[name='C']").has_value());
+    CHECK(!sr_sess->getData("/sysrepo-gnxi-test:test/things[name='C']/description").has_value());
+    CHECK(sr_sess->getData("/sysrepo-gnxi-test:test/things[name='D']/description").has_value());
 
     // clean up
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='C']");
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='D']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='D']");
     sr_sess->applyChanges();
 }

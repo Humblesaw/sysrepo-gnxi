@@ -33,7 +33,7 @@
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
 
-static const std::string test_xpath = "/gnmi-server-test:test/things[name='A']/enabled";
+static const std::string test_xpath = "/sysrepo-gnxi-test:test/things[name='A']/enabled";
 
 /**
  * @brief Fixture: cleans sysrepo before and after every test case, and provides helpers that build
@@ -210,8 +210,8 @@ class CommitFixture
         sr_sess->switchDatastore(sysrepo::Datastore::Running);
         try
         {
-            sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
-            sr_sess->deleteItem("/gnmi-server-test:test/things[name='B']");
+            sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
+            sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
             sr_sess->applyChanges();
         }
         catch (...)

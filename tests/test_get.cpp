@@ -63,7 +63,7 @@ TEST_CASE("Top-level Get request", "[get]")
     {
         auto path = path_to_xpath(it.path());
         std::cout << "found path: " << path << std::endl;
-        if (path.compare("/gnmi-server-test:test-state"))
+        if (path.compare("/sysrepo-gnxi-test:test-state"))
             continue;
         found = true;
         CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
@@ -94,7 +94,7 @@ static void single_get()
     for (auto it : response.notification().Get(0).update())
     {
         auto path = path_to_xpath(it.path());
-        if (path.compare("/gnmi-server-test:test-state"))
+        if (path.compare("/sysrepo-gnxi-test:test-state"))
             continue;
         found = true;
         CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
@@ -125,7 +125,7 @@ TEST_CASE("Get request of all module oper state", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -143,7 +143,7 @@ TEST_CASE("Get request of all module oper state", "[get]")
     CHECK_THAT(json, Equals("{\"things\":[{\"name\":\"A\",\"counter\":\"1\"},{\"name\":\"B\","
                             "\"counter\":\"2\"}],\"cargo\":{}}"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -154,7 +154,7 @@ TEST_CASE("Get request of one list item oper state", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -170,7 +170,7 @@ TEST_CASE("Get request of one list item oper state", "[get]")
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"A\",\"counter\":\"1\"}"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -185,7 +185,7 @@ TEST_CASE("Get request of one leaf of oper state", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']/counter", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']/counter", request.add_path());
     auto status = gnmi_client->Get(&ctx, request, &response);
 
     CHECK(status.ok());
@@ -202,7 +202,7 @@ TEST_CASE("Get request of one leaf of oper state", "[get]")
     // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -213,7 +213,7 @@ TEST_CASE("Get request with prefix", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", request.mutable_prefix(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']", request.mutable_prefix(), "");
     xpath_to_path("/counter", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
@@ -232,7 +232,7 @@ TEST_CASE("Get request with prefix", "[get]")
     // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -244,7 +244,7 @@ TEST_CASE("Get request with target", "[get]")
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     *request.mutable_prefix()->mutable_target() = "foo";
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -261,7 +261,7 @@ TEST_CASE("Get request with target", "[get]")
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"A\",\"counter\":\"1\"}"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -273,7 +273,7 @@ TEST_CASE("Get request for config datastore", "[get]")
 
     request.set_type(gnmi::GetRequest_DataType::GetRequest_DataType_CONFIG);
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test/things[name='A']/enabled", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/enabled", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(response.extension_size() == 0);
@@ -285,7 +285,7 @@ TEST_CASE("Get request for config datastore", "[get]")
     REQUIRE(response.notification().Get(0).update_size() == 0);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/gnmi-server-test:test/things[name='A']/enabled", "true");
+    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='A']/enabled", "true");
     sr_sess->applyChanges();
 
     grpc::ClientContext ctx2;
@@ -303,10 +303,10 @@ TEST_CASE("Get request for config datastore", "[get]")
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("true"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test/things[name='A']/enabled"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='A']/enabled"));
     CHECK(!response.notification().Get(0).atomic());
 
-    sr_sess->deleteItem("/gnmi-server-test:test/things[name='A']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
 
@@ -317,7 +317,7 @@ TEST_CASE("Get request with wildcard", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/*/counter", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/*/counter", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -334,13 +334,13 @@ TEST_CASE("Get request with wildcard", "[get]")
     // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(response.notification().Get(0).update().Get(1).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     json = response.notification().Get(0).update().Get(1).val().json_ietf_val();
     CHECK_THAT(json, Equals("\"2\""));
     path = path_to_xpath(response.notification().Get(0).update().Get(1).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='B']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='B']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -351,8 +351,8 @@ TEST_CASE("Get request with multiple paths", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']/counter", request.add_path());
-    xpath_to_path("/gnmi-server-test:test-state/things[name='B']/counter", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']/counter", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='B']/counter", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -370,7 +370,7 @@ TEST_CASE("Get request with multiple paths", "[get]")
     // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 
     CHECK(response.notification().Get(1).delete__size() == 0);
@@ -382,7 +382,7 @@ TEST_CASE("Get request with multiple paths", "[get]")
     json = response.notification().Get(1).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("\"2\""));
     path = path_to_xpath(response.notification().Get(1).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='B']/counter"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='B']/counter"));
     CHECK(!response.notification().Get(1).atomic());
 }
 
@@ -393,7 +393,7 @@ TEST_CASE("Get request of empty container", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/cargo", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/cargo", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -409,7 +409,7 @@ TEST_CASE("Get request of empty container", "[get]")
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{}"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/cargo"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/cargo"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -420,7 +420,7 @@ TEST_CASE("Get request of list container", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -437,13 +437,13 @@ TEST_CASE("Get request of list container", "[get]")
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"A\",\"counter\":\"1\"}"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='A']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']"));
     CHECK(response.notification().Get(0).update().Get(1).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     json = response.notification().Get(0).update().Get(1).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"B\",\"counter\":\"2\"}"));
     path = path_to_xpath(response.notification().Get(0).update().Get(1).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='B']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='B']"));
 }
 
 TEST_CASE("Get request with non-existent path", "[get]")
@@ -453,7 +453,7 @@ TEST_CASE("Get request with non-existent path", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='not-found']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='not-found']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -473,12 +473,12 @@ TEST_CASE("Get request of one list item where name contains /", "[get]")
     gnmi::GetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']/counter", "5");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']/counter", "5");
     sr_sess->applyChanges();
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -494,11 +494,11 @@ TEST_CASE("Get request of one list item where name contains /", "[get]")
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"Gigabit5/0/0\",\"counter\":\"5\"}"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']"));
     CHECK(!response.notification().Get(0).atomic());
 
     // cleanup
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']");
     sr_sess->applyChanges();
 }
 
@@ -509,19 +509,19 @@ TEST_CASE("Get request of one leaf where parent name contains /", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']/counter",
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']/counter",
                   request.add_path());
 
     const gnmi::Path reqpath = request.path(0);
     CHECK(reqpath.elem_size() == 3);
-    CHECK_THAT(reqpath.elem(0).name(), Equals("gnmi-server-test:test-state"));
+    CHECK_THAT(reqpath.elem(0).name(), Equals("sysrepo-gnxi-test:test-state"));
     CHECK_THAT(reqpath.elem(1).name(), Equals("things"));
     CHECK_THAT(reqpath.elem(1).key().at("name"), Equals("Gigabit5/0/0"));
     CHECK_THAT(reqpath.elem(2).name(), Equals("counter"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']/counter", "5");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']/counter", "5");
     sr_sess->applyChanges();
 
     auto status = gnmi_client->Get(&ctx, request, &response);
@@ -541,13 +541,13 @@ TEST_CASE("Get request of one leaf where parent name contains /", "[get]")
 
     auto resppath = response.notification().Get(0).update().Get(0).path();
     CHECK(resppath.elem_size() == 3);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test-state"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test-state"));
     CHECK_THAT(resppath.elem(1).name(), Equals("things"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("Gigabit5/0/0"));
     CHECK_THAT(resppath.elem(2).name(), Equals("counter"));
 
     // cleanup
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='Gigabit5/0/0']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']");
     sr_sess->applyChanges();
 }
 
@@ -558,12 +558,12 @@ TEST_CASE("Get request of one list item where name contains [", "[get]")
     gnmi::GetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='One[1]']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='One[1]']/counter", "7");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='One[1]']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='One[1]']/counter", "7");
     sr_sess->applyChanges();
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='One[1]']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='One[1]']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -579,11 +579,11 @@ TEST_CASE("Get request of one list item where name contains [", "[get]")
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
     CHECK_THAT(json, Equals("{\"name\":\"One[1]\",\"counter\":\"7\"}"));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
-    CHECK_THAT(path, Equals("/gnmi-server-test:test-state/things[name='One[1]']"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='One[1]']"));
     CHECK(!response.notification().Get(0).atomic());
 
     // cleanup
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='One[1]']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='One[1]']");
     sr_sess->applyChanges();
 }
 
@@ -594,12 +594,12 @@ TEST_CASE("Get request of one list item where name contains '", "[get]")
     gnmi::GetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name=\"to-cpe2'\"]", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name=\"to-cpe2'\"]/counter", "8");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name=\"to-cpe2'\"]", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name=\"to-cpe2'\"]/counter", "8");
     sr_sess->applyChanges();
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name=\"to-cpe2'\"]", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name=\"to-cpe2'\"]", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -616,13 +616,13 @@ TEST_CASE("Get request of one list item where name contains '", "[get]")
     CHECK_THAT(json, Equals("{\"name\":\"to-cpe2'\",\"counter\":\"8\"}"));
     auto resppath = response.notification().Get(0).update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test-state"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test-state"));
     CHECK_THAT(resppath.elem(1).name(), Equals("things"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("to-cpe2'"));
     CHECK(!response.notification().Get(0).atomic());
 
     // cleanup
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name=\"to-cpe2'\"]");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name=\"to-cpe2'\"]");
     sr_sess->applyChanges();
 }
 
@@ -633,12 +633,12 @@ TEST_CASE("Get request of one list item where name contains \\", "[get]")
     gnmi::GetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='to\\cpe2']", std::nullopt);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='to\\cpe2']/counter", "8");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='to\\cpe2']", std::nullopt);
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='to\\cpe2']/counter", "8");
     sr_sess->applyChanges();
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='to\\cpe2']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='to\\cpe2']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -655,13 +655,13 @@ TEST_CASE("Get request of one list item where name contains \\", "[get]")
     CHECK_THAT(json, Equals("{\"name\":\"to\\\\cpe2\",\"counter\":\"8\"}"));
     auto resppath = response.notification().Get(0).update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test-state"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test-state"));
     CHECK_THAT(resppath.elem(1).name(), Equals("things"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("to\\cpe2"));
     CHECK(!response.notification().Get(0).atomic());
 
     // cleanup
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='to\\cpe2']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='to\\cpe2']");
     sr_sess->applyChanges();
 }
 
@@ -673,17 +673,17 @@ TEST_CASE("Get request from list with composite key ", "[get-composite-key]")
 
     // create an entry in the list wiht composite keys
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']/data", "baz");
     sr_sess->applyChanges();
 
     // prepare a get request for that entry
-    xpath_to_path("/gnmi-server-test:test3/complex-list[name='foo'][type='bar']",
+    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[name='foo'][type='bar']",
                   request.add_path());
 
     // check parsing of the xpath_to_path() function
     const gnmi::Path reqpath = request.path(0);
     CHECK(reqpath.elem_size() == 2);
-    CHECK_THAT(reqpath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(reqpath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(reqpath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(reqpath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(reqpath.elem(1).key().at("type"), Equals("bar"));
@@ -704,14 +704,14 @@ TEST_CASE("Get request from list with composite key ", "[get-composite-key]")
     CHECK_THAT(json, Equals("{\"type\":\"bar\",\"name\":\"foo\",\"data\":\"baz\"}"));
     auto resppath = response.notification().Get(0).update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
     CHECK(!response.notification().Get(0).atomic());
 
     // cleanup
-    sr_sess->deleteItem("/gnmi-server-test:test3/complex-list[type='bar'][name='foo']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']");
     sr_sess->applyChanges();
 }
 
@@ -725,19 +725,19 @@ TEST_CASE("Get request from list with composite key having slashes ",
     // create an entry in the list wiht composite keys
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
     sr_sess->setItem(
-        "/gnmi-server-test:test3/complex-list[type='bar/cat/fish'][name='foo/dog/sausage']/data",
+        "/sysrepo-gnxi-test:test3/complex-list[type='bar/cat/fish'][name='foo/dog/sausage']/data",
         "baz");
     sr_sess->applyChanges();
 
     // prepare a get request for that entry
     xpath_to_path(
-        "/gnmi-server-test:test3/complex-list[name='foo/dog/sausage'][type='bar/cat/fish']",
+        "/sysrepo-gnxi-test:test3/complex-list[name='foo/dog/sausage'][type='bar/cat/fish']",
         request.add_path());
 
     // check parsing of the xpath_to_path() function
     const gnmi::Path reqpath = request.path(0);
     CHECK(reqpath.elem_size() == 2);
-    CHECK_THAT(reqpath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(reqpath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(reqpath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(reqpath.elem(1).key().at("name"), Equals("foo/dog/sausage"));
     CHECK_THAT(reqpath.elem(1).key().at("type"), Equals("bar/cat/fish"));
@@ -759,7 +759,7 @@ TEST_CASE("Get request from list with composite key having slashes ",
                Equals("{\"type\":\"bar/cat/fish\",\"name\":\"foo/dog/sausage\",\"data\":\"baz\"}"));
     auto resppath = response.notification().Get(0).update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo/dog/sausage"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar/cat/fish"));
@@ -767,7 +767,7 @@ TEST_CASE("Get request from list with composite key having slashes ",
 
     // cleanup
     sr_sess->deleteItem(
-        "/gnmi-server-test:test3/complex-list[type='bar/cat/fish'][name='foo/dog/sausage']");
+        "/sysrepo-gnxi-test:test3/complex-list[type='bar/cat/fish'][name='foo/dog/sausage']");
     sr_sess->applyChanges();
 }
 TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
@@ -779,20 +779,20 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
 
     // create an entry in the list with composite keys
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test3/complex-list[type='bar/cat/fish'][name='quotes: \", "
+    sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar/cat/fish'][name='quotes: \", "
                      "blah blah']/data",
                      "baz");
     sr_sess->applyChanges();
 
     // prepare a get request for that entry
     xpath_to_path(
-        "/gnmi-server-test:test3/complex-list[name='quotes: \", blah blah'][type='bar/cat/fish']",
+        "/sysrepo-gnxi-test:test3/complex-list[name='quotes: \", blah blah'][type='bar/cat/fish']",
         request.add_path());
 
     // check parsing of the xpath_to_path() function
     const gnmi::Path reqpath = request.path(0);
     CHECK(reqpath.elem_size() == 2);
-    CHECK_THAT(reqpath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(reqpath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(reqpath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(reqpath.elem(1).key().at("name"), Equals("quotes: \", blah blah"));
     CHECK_THAT(reqpath.elem(1).key().at("type"), Equals("bar/cat/fish"));
@@ -816,7 +816,7 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
             "{\"type\":\"bar/cat/fish\",\"name\":\"quotes: \\\", blah blah\",\"data\":\"baz\"}"));
     auto resppath = response.notification().Get(0).update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
-    CHECK_THAT(resppath.elem(0).name(), Equals("gnmi-server-test:test3"));
+    CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
     CHECK_THAT(resppath.elem(1).name(), Equals("complex-list"));
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("quotes: \", blah blah"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar/cat/fish"));
@@ -824,7 +824,7 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
 
     // cleanup
     sr_sess->deleteItem(
-        "/gnmi-server-test:test3/complex-list[type='bar/cat/fish'][name='quotes: \", blah blah']");
+        "/sysrepo-gnxi-test:test3/complex-list[type='bar/cat/fish'][name='quotes: \", blah blah']");
     sr_sess->applyChanges();
 }
 
@@ -837,7 +837,7 @@ TEST_CASE("Get request with unsupported encoding type", "[get-neg]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::BYTES);
-    xpath_to_path("/gnmi-server-test:test-state", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -851,7 +851,7 @@ TEST_CASE("Get request with simple JSON encoding", "[get-neg]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON);
-    xpath_to_path("/gnmi-server-test:test-state", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -865,11 +865,11 @@ TEST_CASE("Get request with unsupported use of models", "[get-neg]")
     gnmi::GetResponse response;
 
     auto model_data = request.add_use_models();
-    model_data->set_name("gnmi-server-test");
+    model_data->set_name("sysrepo-gnxi-test");
     model_data->set_version("2021-02-10");
     model_data->set_organization("graphiant");
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -884,7 +884,7 @@ TEST_CASE("Get request with invalid datatype", "[get-neg]")
 
     request.set_type(static_cast<gnmi::GetRequest_DataType>(42));
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -898,7 +898,7 @@ TEST_CASE("Get request with relative path", "[get-neg]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/cargo/../things[name='A']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/cargo/../things[name='A']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -913,11 +913,11 @@ TEST_CASE("Get request of one list item where name contains \"", "[get]")
     gnmi::GetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test:test-state/things[name='to-cpe1\"']/counter", "6");
+    sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='to-cpe1\"']/counter", "6");
     sr_sess->applyChanges();
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='to-cpe1\"']", request.add_path());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='to-cpe1\"']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -933,11 +933,11 @@ TEST_CASE("Get request of one list item where name contains \"", "[get]")
     CHECK_THAT(update.val().json_ietf_val(),
                Equals("{\"name\":\"to-cpe1\\\"\",\"counter\":\"6\"}"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test:test-state/things[name='to-cpe1\"']"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='to-cpe1\"']"));
     CHECK(!response.notification().Get(0).atomic());
 
     // clean up
-    sr_sess->deleteItem("/gnmi-server-test:test-state/things[name='to-cpe1\"']");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='to-cpe1\"']");
     sr_sess->applyChanges();
 }
 
@@ -977,7 +977,7 @@ TEST_CASE("Get request with openconfig origin and qualified names", "[get-origin
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']/counter", request.add_path(),
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']/counter", request.add_path(),
                   "openconfig");
 
     auto status = gnmi_client->Get(&ctx, request, &response);
@@ -1020,7 +1020,7 @@ TEST_CASE("Get request with rfc7951 origin and bare names", "[get-origin]")
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1031,7 +1031,7 @@ TEST_CASE("Get request with unsupported origin", "[get-origin]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", request.add_path(), "frob");
+    xpath_to_path("/sysrepo-gnxi-test:test-state", request.add_path(), "frob");
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::UNIMPLEMENTED);
@@ -1045,7 +1045,7 @@ TEST_CASE("Get request with origin in both prefix and path", "[get-origin]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state", request.mutable_prefix());
+    xpath_to_path("/sysrepo-gnxi-test:test-state", request.mutable_prefix());
     xpath_to_path("/things[name='A']", request.add_path());
 
     auto status = gnmi_client->Get(&ctx, request, &response);
@@ -1061,7 +1061,7 @@ TEST_CASE("Get request with origin and target in prefix", "[get-origin]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='A']", request.mutable_prefix(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']", request.mutable_prefix(), "");
     request.mutable_prefix()->set_origin("rfc7951");
     request.mutable_prefix()->set_target("example");
     xpath_to_path("/counter", request.add_path(), "");
@@ -1083,7 +1083,7 @@ TEST_CASE("Get request with origin and target in prefix", "[get-origin]")
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test:test-state/things[name='A']/counter"));
+               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1094,12 +1094,12 @@ TEST_CASE("Get request with paths of different origins", "[get-origin]")
     gnmi::GetResponse response;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
-                     "98");
+    sr_sess->setItem(
+        "/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "98");
     sr_sess->applyChanges();
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
+    xpath_to_path("/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
                   request.add_path());
     xpath_to_path("/test-state/things[name='A']/counter", request.add_path(), "");
 
@@ -1113,7 +1113,7 @@ TEST_CASE("Get request with paths of different origins", "[get-origin]")
     auto update = response.notification().Get(0).update().Get(0);
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']"
+               Equals("/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']"
                       "/score"));
     CHECK_THAT(update.val().json_ietf_val(), Equals("98"));
 
@@ -1124,7 +1124,7 @@ TEST_CASE("Get request with paths of different origins", "[get-origin]")
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
 
     // clean up
-    sr_sess->deleteItem("/gnmi-server-test-wine:wines");
+    sr_sess->deleteItem("/sysrepo-gnxi-test-wine:wines");
     sr_sess->applyChanges();
 }
 
@@ -1156,7 +1156,7 @@ TEST_CASE("Get request with ambiguous bare element name", "[get-origin]")
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(), Contains("ambiguous path element \"test2\""));
-    CHECK_THAT(status.error_message(), Contains("gnmi-server-test:test2"));
+    CHECK_THAT(status.error_message(), Contains("sysrepo-gnxi-test:test2"));
     CHECK_THAT(status.error_message(), Contains("sysrepo-gnxi-test-clash:test2"));
 }
 
@@ -1255,7 +1255,7 @@ TEST_CASE("Get request with wildcard key value", "[get-origin]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='*']/counter", request.add_path(), "");
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='*']/counter", request.add_path(), "");
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -1289,7 +1289,7 @@ TEST_CASE("Get request with wildcard in prefix", "[get-origin]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test:test-state/things[name='*']", request.mutable_prefix());
+    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='*']", request.mutable_prefix());
     xpath_to_path("/counter", request.add_path(), "");
 
     auto status = gnmi_client->Get(&ctx, request, &response);
@@ -1308,8 +1308,8 @@ TEST_CASE("Get request with wildcard in prefix", "[get-origin]")
     }
     // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK(counters == std::set<std::string>{"\"1\"", "\"2\""});
-    CHECK(paths == std::set<std::string>{"/gnmi-server-test:test-state/things[name='A']/counter",
-                                         "/gnmi-server-test:test-state/things[name='B']/counter"});
+    CHECK(paths == std::set<std::string>{"/sysrepo-gnxi-test:test-state/things[name='A']/counter",
+                                         "/sysrepo-gnxi-test:test-state/things[name='B']/counter"});
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1339,12 +1339,12 @@ TEST_CASE("Get request from a module under a different origin", "[get-origin]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/gnmi-server-test-wine:wines", request.add_path(), "openconfig");
+    xpath_to_path("/sysrepo-gnxi-test-wine:wines", request.add_path(), "openconfig");
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("module \"gnmi-server-test-wine\" is under origin \"rfc7951\" and cannot "
+               Equals("module \"sysrepo-gnxi-test-wine\" is under origin \"rfc7951\" and cannot "
                       "be addressed under origin \"openconfig\""));
 }
 
@@ -1370,8 +1370,8 @@ TEST_CASE("Top-level Get request excludes data of other origins", "[get-origin]"
     bool found = false;
 
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
-    sr_sess->setItem("/gnmi-server-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
-                     "98");
+    sr_sess->setItem(
+        "/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "98");
     sr_sess->applyChanges();
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
@@ -1399,6 +1399,6 @@ TEST_CASE("Top-level Get request excludes data of other origins", "[get-origin]"
     CHECK(!response.notification().Get(0).atomic());
 
     // clean up
-    sr_sess->deleteItem("/gnmi-server-test-wine:wines");
+    sr_sess->deleteItem("/sysrepo-gnxi-test-wine:wines");
     sr_sess->applyChanges();
 }

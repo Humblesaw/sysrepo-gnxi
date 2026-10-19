@@ -40,7 +40,7 @@
         "password": "$6$SaltForAlice$B0mGKNyu8MnxZe9IkjoaJIgqqWFVyNWyD9QIrTyp2j0mMBKEOiFiVq3EXn6eI4RLKMuy6Wr8sLWvJ0IZ266hj/",
         "acl": [
           {
-            "module": "gnmi-server-test",
+            "module": "sysrepo-gnxi-test",
             "access": "rw"
           }
         ]
@@ -50,7 +50,7 @@
         "password": "$5$SaltForBob$N8GciXki/e36uKpWqk6NCjQIoOEWOcSNVw15dmbktM9",
         "acl": [
           {
-            "module": "gnmi-server-test",
+            "module": "sysrepo-gnxi-test",
             "access": "ro"
           },
           {

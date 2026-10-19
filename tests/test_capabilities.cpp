@@ -43,10 +43,10 @@ TEST_CASE("Capability request", "[caps]")
     CHECK(response.supported_encodings().Get(0) == gnmi::Encoding::JSON_IETF);
     for (auto m : response.supported_models())
     {
-        if (!m.name().compare("gnmi-server-test"))
+        if (!m.name().compare("sysrepo-gnxi-test"))
         {
             CHECK_THAT(m.version(), Equals("2021-02-10"));
-            CHECK_THAT(m.organization(), Equals(""));
+            CHECK_THAT(m.organization(), Equals("CESNET, z.s.p.o."));
             found = true;
             break;
         }
