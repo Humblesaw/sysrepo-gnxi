@@ -81,7 +81,7 @@ std::unordered_set<std::string> collect_xpath_mods(const libyang::Context &ly_ct
     return ly_mod_set;
 }
 
-DataSubscribe::DataSubscribe(sysrepo::Session sess) : data_sess(sess) {}
+DataSubscribe::DataSubscribe(sysrepo::Session sess) : data_sess_(sess) {}
 
 /*
  * Similar to sysrepo::Subscribe::module_change_subscribe
@@ -93,17 +93,17 @@ DataSubscribe::DataSubscribe(sysrepo::Session sess) : data_sess(sess) {}
 void DataSubscribe::data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath,
                                           uint32_t priority, sysrepo::SubscribeOptions opts)
 {
-    for (const auto &mod : collect_xpath_mods(data_sess.getContext(), xpath))
+    for (const auto &mod : collect_xpath_mods(data_sess_.getContext(), xpath))
     {
         try
         {
-            if (sub)
+            if (sub_)
             {
-                sub->onModuleChange(mod, cb, xpath, priority, opts);
+                sub_->onModuleChange(mod, cb, xpath, priority, opts);
             }
             else
             {
-                sub = data_sess.onModuleChange(mod, cb, xpath, priority, opts);
+                sub_ = data_sess_.onModuleChange(mod, cb, xpath, priority, opts);
             }
         }
         catch (sysrepo::ErrorWithCode &err)

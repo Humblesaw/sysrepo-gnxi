@@ -70,7 +70,7 @@ class DataSubscribe
                                sysrepo::SubscribeOptions opts = sysrepo::SubscribeOptions::Default);
 
   private:
-    std::optional<sysrepo::Subscription> sub;
+    std::optional<sysrepo::Subscription> sub_;
     /* The session is also available in the base class, but it is private so is duplicated here */
-    sysrepo::Session data_sess;
+    sysrepo::Session data_sess_;
 };

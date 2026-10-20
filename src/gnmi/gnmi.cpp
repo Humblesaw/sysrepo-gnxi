@@ -36,7 +36,7 @@ static std::mutex server_context_mutex;
 class ServerContextHolder
 {
   public:
-    ServerContextHolder(grpc::ServerContext *ctx) : ctx(ctx)
+    ServerContextHolder(grpc::ServerContext *ctx) : ctx_(ctx)
     {
         const std::lock_guard<std::mutex> lock(server_context_mutex);
         server_contexts.insert(ctx);
@@ -44,14 +44,14 @@ class ServerContextHolder
     ~ServerContextHolder()
     {
         const std::lock_guard<std::mutex> lock(server_context_mutex);
-        server_contexts.erase(ctx);
+        server_contexts.erase(ctx_);
     }
 
   private:
-    grpc::ServerContext *ctx;
+    grpc::ServerContext *ctx_;
 };
 
-void GNMIService::TryCancelAll(void)
+void GNMIService::try_cancel_all(void)
 {
     const std::lock_guard<std::mutex> lock(server_context_mutex);
     // forbid any new RPCs by indicating we are shutting down
@@ -79,7 +79,7 @@ grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetReque
         "Set",
         [&]
         {
-            impl::Set rpc(sr_con.sessionStart(sysrepo::Datastore::Running), commit_state, *auth_);
+            impl::Set rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), commit_state_, *auth_);
             return rpc.run(context, request, response);
         });
 
@@ -110,7 +110,7 @@ grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetReque
         "Get",
         [&]
         {
-            impl::Get rpc(sr_con.sessionStart(sysrepo::Datastore::Running), *auth_);
+            impl::Get rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), *auth_);
             return rpc.run(context, request, response);
         });
 
@@ -147,7 +147,7 @@ grpc::Status GNMIService::Subscribe(
         "Subscribe",
         [&]
         {
-            impl::Subscribe rpc(sr_con.sessionStart(sysrepo::Datastore::Running), *auth_);
+            impl::Subscribe rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), *auth_);
             return rpc.run(context, stream);
         });
 

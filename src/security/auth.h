@@ -40,8 +40,8 @@ class Auth
   public:
     enum class Access
     {
-        ReadOnly,
-        ReadWrite,
+        READ_ONLY,
+        READ_WRITE,
     };
 
     /**
@@ -123,8 +123,8 @@ class Auth
      * @param[in] modules Names of the modules used in the operation.
      * @param[in] permission Permission level needed to authorize the process (read/write).
      */
-    void authorize(sysrepo::Session &sess, const std::string &username,
-                   const std::unordered_set<std::string> &modules, Access permission) const;
+    void authorize_(sysrepo::Session &sess, const std::string &username,
+                    const std::unordered_set<std::string> &modules, Access permission) const;
 };
 
 class UserPassAuthenticator final : public grpc::AuthMetadataProcessor

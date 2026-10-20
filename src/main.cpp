@@ -66,7 +66,7 @@ extern "C" void signal_handler(int signum)
     }
 }
 
-void SetupSignalHandler(void)
+void setup_signal_handler(void)
 {
     // Set up the signal handler
     if (pipe(g_state.pipefd) < 0)
@@ -104,7 +104,7 @@ static void wait_for_terminate(void)
     }
 
     SLOG_DEBUG("Shutting down due to ", strsignal(signal), " signal");
-    GNMIService::TryCancelAll();
+    GNMIService::try_cancel_all();
     // deadline set to 100 ms so that we do not have to wait during shutdown
     g_state.server->Shutdown(std::chrono::system_clock::now() + std::chrono::milliseconds(100));
 }
@@ -165,7 +165,7 @@ static std::vector<libyang::DataNode> config_values(sysrepo::Session &sess,
  * @param[in] sess Sysrepo session.
  * @return gRPC listen URIs, e.g. 127.0.0.1:50051 or unix:/path.
  */
-static std::vector<std::string> loadBindAddrs(sysrepo::Session &sess)
+static std::vector<std::string> load_bind_addrs(sysrepo::Session &sess)
 {
     std::vector<std::string> addrs;
 
@@ -228,7 +228,7 @@ static std::vector<std::string> loadBindAddrs(sysrepo::Session &sess)
  * @param[in] sess Sysrepo session.
  * @return TLS material wrapped into PEM.
  */
-static Auth::TlsMaterial loadTlsConfig(sysrepo::Session &sess)
+static Auth::TlsMaterial load_tls_config(sysrepo::Session &sess)
 {
     Auth::TlsMaterial tls;
 
@@ -293,8 +293,8 @@ static Auth::TlsMaterial loadTlsConfig(sysrepo::Session &sess)
     return tls;
 }
 
-void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs,
-               std::shared_ptr<Auth> auth)
+void run_server(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs,
+                std::shared_ptr<Auth> auth)
 {
     std::shared_ptr<grpc::ServerCredentials> cred = auth->credentials();
     GNMIService gnmi(sr_conn, auth); // gNMI Service
@@ -306,7 +306,7 @@ void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bin
     }
     builder.RegisterService(&gnmi);
 #ifdef GNXI_SERVICE_ENABLED
-    YANG_RPCService yang_rpc(sr_conn); // gNXI Service is only compiled in when enabled
+    YangRpcService yang_rpc(sr_conn); // gNXI Service is only compiled in when enabled
     builder.RegisterService(&yang_rpc);
 #endif
     g_state.server = builder.BuildAndStart();
@@ -327,7 +327,7 @@ void RunServer(sysrepo::Connection &sr_conn, const std::vector<std::string> &bin
     SLOG_INFO("Server exited");
 }
 
-const char *USAGE = R"(Usage:
+constexpr const char *USAGE = R"(Usage:
   sysrepo-gnxi [-l LOG_LEVEL]
   sysrepo-gnxi -f [-l LOG_LEVEL]
 
@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    SetupSignalHandler();
+    setup_signal_handler();
 
     try
     {
@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
         {
             // read server configuration
             auto sess = sr_conn.sessionStart(sysrepo::Datastore::Running);
-            bind_addrs = loadBindAddrs(sess);
+            bind_addrs = load_bind_addrs(sess);
             if (bind_addrs.empty())
             {
                 throw std::runtime_error("no listen endpoint configured "
@@ -403,14 +403,14 @@ int main(int argc, char *argv[])
             }
             if (!insecure)
             {
-                tls = loadTlsConfig(sess);
+                tls = load_tls_config(sess);
             }
             // session terminates
         }
 
         auto auth = std::make_shared<Auth>(insecure, sr_conn, tls);
 
-        RunServer(sr_conn, bind_addrs, auth);
+        run_server(sr_conn, bind_addrs, auth);
     }
     catch (const std::exception &exc)
     {

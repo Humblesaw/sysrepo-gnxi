@@ -1608,17 +1608,17 @@ TEST_CASE("Set request root delete is constrained to origin", "[set-origin]")
     update->mutable_val()->set_json_ietf_val("89");
     xpath_to_path("/sysrepo-gnxi-test:test2/enabled", update2->mutable_path(), "");
     update2->mutable_val()->set_json_ietf_val("true");
-    grpc::ClientContext seedCtx;
-    auto status = gnmi_client->Set(&seedCtx, request, &response);
+    grpc::ClientContext seed_ctx;
+    auto status = gnmi_client->Set(&seed_ctx, request, &response);
     CHECK(status.ok());
 
     // deleting the whole root under the default origin leaves annotated data
-    gnmi::SetRequest deleteRequest;
-    gnmi::SetResponse deleteResponse;
-    xpath_to_path("/", deleteRequest.add_delete_(), "");
-    grpc::ClientContext deleteCtx;
-    auto deleteStatus = gnmi_client->Set(&deleteCtx, deleteRequest, &deleteResponse);
-    CHECK(deleteStatus.ok());
+    gnmi::SetRequest delete_request;
+    gnmi::SetResponse delete_response;
+    xpath_to_path("/", delete_request.add_delete_(), "");
+    grpc::ClientContext delete_ctx;
+    auto delete_status = gnmi_client->Set(&delete_ctx, delete_request, &delete_response);
+    CHECK(delete_status.ok());
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     CHECK(sr_sess->getData("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score")
@@ -1626,12 +1626,12 @@ TEST_CASE("Set request root delete is constrained to origin", "[set-origin]")
     CHECK(!sr_sess->getData("/sysrepo-gnxi-test:test2/enabled").has_value());
 
     // deleting the whole root under rfc7951 deletes everything
-    gnmi::SetRequest deleteRequest2;
-    gnmi::SetResponse deleteResponse2;
-    xpath_to_path("/", deleteRequest2.add_delete_());
-    grpc::ClientContext deleteCtx2;
-    deleteStatus = gnmi_client->Set(&deleteCtx2, deleteRequest2, &deleteResponse2);
-    CHECK(deleteStatus.ok());
+    gnmi::SetRequest delete_request2;
+    gnmi::SetResponse delete_response2;
+    xpath_to_path("/", delete_request2.add_delete_());
+    grpc::ClientContext delete_ctx2;
+    delete_status = gnmi_client->Set(&delete_ctx2, delete_request2, &delete_response2);
+    CHECK(delete_status.ok());
     CHECK(!sr_sess->getData("/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score")
                .has_value());
 }
@@ -1675,18 +1675,18 @@ TEST_CASE("Set request delete with prefix", "[set-origin]")
     update->mutable_val()->set_json_ietf_val("\"clash\"");
     xpath_to_path("/sysrepo-gnxi-test:test/things[name='D']/description", update2->mutable_path());
     update2->mutable_val()->set_json_ietf_val("\"clash\"");
-    grpc::ClientContext seedCtx;
-    auto status = gnmi_client->Set(&seedCtx, request, &response);
+    grpc::ClientContext seed_ctx;
+    auto status = gnmi_client->Set(&seed_ctx, request, &response);
     CHECK(status.ok());
 
-    gnmi::SetRequest deleteRequest;
-    gnmi::SetResponse deleteResponse;
-    xpath_to_path("/sysrepo-gnxi-test:test/things[name='C']", deleteRequest.mutable_prefix());
-    xpath_to_path("/description", deleteRequest.add_delete_(), "");
-    grpc::ClientContext deleteCtx;
-    auto deleteStatus = gnmi_client->Set(&deleteCtx, deleteRequest, &deleteResponse);
-    CHECK(deleteStatus.ok());
-    CHECK(deleteResponse.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
+    gnmi::SetRequest delete_request;
+    gnmi::SetResponse delete_response;
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='C']", delete_request.mutable_prefix());
+    xpath_to_path("/description", delete_request.add_delete_(), "");
+    grpc::ClientContext delete_ctx;
+    auto delete_status = gnmi_client->Set(&delete_ctx, delete_request, &delete_response);
+    CHECK(delete_status.ok());
+    CHECK(delete_response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     CHECK(sr_sess->getData("/sysrepo-gnxi-test:test/things[name='C']").has_value());

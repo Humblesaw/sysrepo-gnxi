@@ -38,9 +38,9 @@ namespace impl
 class Get
 {
   public:
-    Get(sysrepo::Session sess, const Auth &auth) : sr_sess(sess), auth_(auth)
+    Get(sysrepo::Session sess, const Auth &auth) : sr_sess_(sess), auth_(auth)
     {
-        encodef = std::make_shared<Encode>(sr_sess);
+        encodef_ = std::make_shared<Encode>(sr_sess_);
     }
     ~Get() {}
 
@@ -48,17 +48,17 @@ class Get
                      gnmi::GetResponse *response);
 
   private:
-    grpc::Status BuildGetNotification(gnmi::Notification *notification, const gnmi::Path &prefix,
-                                      const gnmi::Path &path, gnmi::Encoding encoding,
-                                      gnmi::GetRequest_DataType dataType);
-    grpc::Status BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                                const std::string &fullpath, gnmi::Encoding encoding,
-                                const std::string &origin);
+    grpc::Status build_get_notification_(gnmi::Notification *notification, const gnmi::Path &prefix,
+                                         const gnmi::Path &path, gnmi::Encoding encoding,
+                                         gnmi::GetRequest_DataType data_type);
+    grpc::Status build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Update> *update_list,
+                                   const std::string &fullpath, gnmi::Encoding encoding,
+                                   const std::string &origin);
 
   private:
-    sysrepo::Session sr_sess;        // sysrepo session
-    std::shared_ptr<Encode> encodef; // support for json ietf encoding
-    const Auth &auth_;               // authentication/authorization data
+    sysrepo::Session sr_sess_;        // sysrepo session
+    std::shared_ptr<Encode> encodef_; // support for json ietf encoding
+    const Auth &auth_;                // authentication/authorization data
 };
 
 } // namespace impl

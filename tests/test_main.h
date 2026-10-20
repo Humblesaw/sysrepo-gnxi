@@ -94,7 +94,7 @@ class SetupServer
      *
      * @param[in] pid Id of a process to kill.
      */
-    static void stop(pid_t pid);
+    static void stop_(pid_t pid);
 
     /**
      * @brief Create a separate process and run server on it.
@@ -103,14 +103,14 @@ class SetupServer
      * @param[in] log_path Log path for server's stdout/stderr.
      * @return New process id.
      */
-    pid_t run_server(const std::vector<std::string> &args, const std::string &log_path);
+    pid_t run_server_(const std::vector<std::string> &args, const std::string &log_path);
 
     /**
      * @brief Wait for server to start listening on the unix socket.
      *
      * @param[in] sock_path Socket to check.
      */
-    static void wait_for_unix(const std::string &sock_path);
+    static void wait_for_unix_(const std::string &sock_path);
 
     /**
      * @brief Wait for server to start listening on specific port on host.
@@ -118,7 +118,7 @@ class SetupServer
      * @param[in] host Host address.
      * @param[in] port Host port.
      */
-    static void wait_for_tcp(const std::string &host, uint16_t port);
+    static void wait_for_tcp_(const std::string &host, uint16_t port);
 
     static constexpr const char *HOST = "127.0.0.1";
     static constexpr uint16_t PORT = 50052;

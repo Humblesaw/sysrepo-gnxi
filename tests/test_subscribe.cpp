@@ -2227,8 +2227,8 @@ TEST_CASE("Subscribe (stream on-change) root path excludes other origins", "[sub
 
     // read the initial data notifications until the synchronization response,
     // collecting the paths of all updates and deletes
-    bool sawTestState = false;
-    bool sawWines = false;
+    bool saw_test_state = false;
+    bool saw_wines = false;
     bool synced = false;
     while (rw->Read(&response))
     {
@@ -2244,11 +2244,11 @@ TEST_CASE("Subscribe (stream on-change) root path excludes other origins", "[sub
             auto path = path_to_xpath(update.path());
             if (path.rfind("/test-state", 0) == 0)
             {
-                sawTestState = true;
+                saw_test_state = true;
             }
             if (path.rfind("/wines", 0) == 0)
             {
-                sawWines = true;
+                saw_wines = true;
             }
         }
         for (const auto &del : response.update().delete_())
@@ -2256,13 +2256,13 @@ TEST_CASE("Subscribe (stream on-change) root path excludes other origins", "[sub
             auto path = path_to_xpath(del);
             if (path.rfind("/wines", 0) == 0)
             {
-                sawWines = true;
+                saw_wines = true;
             }
         }
     }
     CHECK(synced);
-    CHECK(sawTestState);
-    CHECK(!sawWines);
+    CHECK(saw_test_state);
+    CHECK(!saw_wines);
 
     // cancel
     ctx.TryCancel();

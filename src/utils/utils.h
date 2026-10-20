@@ -54,14 +54,14 @@ inline uint64_t get_time_nanosec()
  * @param[in] name Module name to check.
  * @return True if the module is private, false otherwise.
  */
-inline bool isPrivateModule(const std::string &name)
+inline bool is_private_module(const std::string &name)
 {
-    static const std::unordered_set<std::string> private_modules = {
+    static const std::unordered_set<std::string> PRIVATE_MODULES = {
         "sysrepo",         "sysrepo-gnxi-server", "sysrepo-gnxi-users",
         "ietf-keystore",   "ietf-truststore",     "ietf-crypto-types",
         "ietf-tls-server", "ietf-tls-common",     "iana-tls-cipher-suite-algs",
     };
-    return private_modules.contains(name);
+    return PRIVATE_MODULES.contains(name);
 }
 
 /**

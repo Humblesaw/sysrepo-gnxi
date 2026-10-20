@@ -47,9 +47,9 @@ class GNMIService final : public gnmi::gNMI::Service
      * the RPC handlers.
      */
     GNMIService(sysrepo::Connection conn, std::shared_ptr<Auth> auth)
-        : sr_con(conn), auth_(std::move(auth))
+        : sr_con_(conn), auth_(std::move(auth))
     {
-        commit_state = std::make_shared<impl::Commit>(conn.sessionStart());
+        commit_state_ = std::make_shared<impl::Commit>(conn.sessionStart());
     }
 
     /**
@@ -100,10 +100,10 @@ class GNMIService final : public gnmi::gNMI::Service
      * @brief Cancel all in-flight RPCs and reject any new RPCs (shutdown).
      *
      */
-    static void TryCancelAll(void);
+    static void try_cancel_all(void);
 
   private:
-    sysrepo::Connection sr_con;  // sysrepo connection
+    sysrepo::Connection sr_con_; // sysrepo connection
     std::shared_ptr<Auth> auth_; // authentication/authorization data
-    std::shared_ptr<impl::Commit> commit_state;
+    std::shared_ptr<impl::Commit> commit_state_;
 };

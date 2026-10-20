@@ -41,7 +41,7 @@ class Commit
 {
   public:
     // default rollback timeout for the Commit confirmed extension
-    static constexpr int64_t default_rollback_secs = 600;
+    static constexpr int64_t DEFAULT_ROLLBACK_SECS = 600;
 
     Commit(sysrepo::Session sess);
     ~Commit();

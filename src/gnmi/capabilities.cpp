@@ -52,11 +52,11 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
         "Capabilities",
         [&]() -> grpc::Status
         {
-            auto sess = sr_con.sessionStart();
+            auto sess = sr_con_.sessionStart();
 
             for (auto module : sess.getContext().modules())
             {
-                if (module.implemented() && !isPrivateModule(module.name()))
+                if (module.implemented() && !is_private_module(module.name()))
                 {
                     auto model = response->add_supported_models();
                     model->set_name(module.name());

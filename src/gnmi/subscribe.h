@@ -42,9 +42,9 @@ class Scheduler;
 class Subscribe
 {
   public:
-    Subscribe(sysrepo::Session sess, const Auth &auth) : sr_sess(sess), auth_(auth)
+    Subscribe(sysrepo::Session sess, const Auth &auth) : sr_sess_(sess), auth_(auth)
     {
-        encodef = std::make_shared<Encode>(sr_sess);
+        encodef_ = std::make_shared<Encode>(sr_sess_);
     }
     ~Subscribe() {}
 
@@ -53,47 +53,48 @@ class Subscribe
         grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
 
     void
-    streamWorker(grpc::ServerContext *context, gnmi::SubscribeRequest request,
-                 grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
-                 Scheduler &scheduler);
-    void triggerSampleUpdate(
+    stream_worker(grpc::ServerContext *context, gnmi::SubscribeRequest request,
+                  grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
+                  Scheduler &scheduler);
+    void trigger_sample_update(
         grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> &sub,
         grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
         gnmi::Encoding encoding, const gnmi::Path &prefix);
-    grpc::Status BuildSubscribeNotification(gnmi::Notification *notification,
-                                            const gnmi::SubscriptionList &request,
-                                            bool *sample = nullptr);
-    grpc::Status BuildSubscribeNotificationForChanges(gnmi::Notification *notification,
-                                                      const gnmi::SubscriptionList &request,
-                                                      std::string &xpath, std::string origin,
-                                                      sysrepo::Session session);
+    grpc::Status build_subscribe_notification(gnmi::Notification *notification,
+                                              const gnmi::SubscriptionList &request,
+                                              bool *sample = nullptr);
+    grpc::Status build_subscribe_notification_for_changes(gnmi::Notification *notification,
+                                                          const gnmi::SubscriptionList &request,
+                                                          std::string &xpath, std::string origin,
+                                                          sysrepo::Session session);
     // To synchronize write access to the stream
-    void Write(grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
+    void write(grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
                gnmi::SubscribeResponse response);
 
   private:
-    grpc::Status BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                                 std::string fullpath, gnmi::Encoding encoding, std::string origin);
-    grpc::Status registerStreamOnChange(
+    grpc::Status build_subs_update_(google::protobuf::RepeatedPtrField<gnmi::Update> *update_list,
+                                    std::string fullpath, gnmi::Encoding encoding,
+                                    std::string origin);
+    grpc::Status register_stream_on_change_(
         gnmi::SubscribeRequest &request, gnmi::Subscription sub,
         grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
         Scheduler &scheduler, std::shared_ptr<DataSubscribe> sr_sub,
         std::vector<SrModuleOnChangeParams> &params_vec);
+    grpc::Status handle_stream_(
+        grpc::ServerContext *context, gnmi::SubscribeRequest request,
+        grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
     grpc::Status
-    handleStream(grpc::ServerContext *context, gnmi::SubscribeRequest request,
+    handle_once_(gnmi::SubscribeRequest request,
                  grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
     grpc::Status
-    handleOnce(gnmi::SubscribeRequest request,
-               grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
-    grpc::Status
-    handlePoll(gnmi::SubscribeRequest request,
-               grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
+    handle_poll_(gnmi::SubscribeRequest request,
+                 grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
 
   private:
-    sysrepo::Session sr_sess;        // sysrepo session
-    std::shared_ptr<Encode> encodef; // support for json ietf encoding
-    const Auth &auth_;               // authentication/authorization data
-    std::recursive_mutex stream_mutex;
+    sysrepo::Session sr_sess_;        // sysrepo session
+    std::shared_ptr<Encode> encodef_; // support for json ietf encoding
+    const Auth &auth_;                // authentication/authorization data
+    std::recursive_mutex stream_mutex_;
 };
 
 } // namespace impl

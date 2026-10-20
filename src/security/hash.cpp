@@ -69,9 +69,9 @@ class CryptData
 {
   public:
     CryptData()
-        : m_data(static_cast<struct crypt_data *>(std::calloc(1, sizeof(struct crypt_data))))
+        : m_data_(static_cast<struct crypt_data *>(std::calloc(1, sizeof(struct crypt_data))))
     {
-        if (!m_data)
+        if (!m_data_)
         {
             throw std::runtime_error("calloc failed");
         }
@@ -79,17 +79,17 @@ class CryptData
 
     ~CryptData()
     {
-        OPENSSL_cleanse(m_data, sizeof(struct crypt_data));
-        std::free(m_data);
+        OPENSSL_cleanse(m_data_, sizeof(struct crypt_data));
+        std::free(m_data_);
     }
 
     CryptData(const CryptData &) = delete;
     CryptData &operator=(const CryptData &) = delete;
 
-    struct crypt_data *get() { return m_data; }
+    struct crypt_data *get() { return m_data_; }
 
   private:
-    struct crypt_data *m_data;
+    struct crypt_data *m_data_;
 };
 
 /**

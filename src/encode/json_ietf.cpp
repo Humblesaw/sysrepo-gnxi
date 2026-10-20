@@ -33,7 +33,7 @@
  * CRUD - UPDATE *
  *****************/
 
-std::string stripJSONObjectValue(const std::string &object)
+std::string strip_json_object_value(const std::string &object)
 {
     std::string result = object;
     bool name_begin = false;
@@ -98,7 +98,7 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
     {
         try
         {
-            auto ctx = sr_sess.getContext();
+            auto ctx = sr_sess_.getContext();
             return ctx.parseData(data, libyang::DataFormat::JSON,
                                  libyang::ParseOptions::ParseOnly | libyang::ParseOptions::Strict,
                                  std::nullopt);
@@ -111,7 +111,7 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
             // sysrepo, which would later report them as errors of an unrelated operation.
             // Nothing else can use the context between the parse and here, so this
             // clears only the errors caused by the parse itself.
-            auto ctx = sr_sess.getContext();
+            auto ctx = sr_sess_.getContext();
             ctx.cleanAllErrors();
             throw std::runtime_error("failed to parse data for \"" + xpath + "\": " + exc.what());
         }
@@ -120,15 +120,15 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
     // Create a node tree according to the xpath and data value.
     try
     {
-        auto ctx = sr_sess.getContext();
+        auto ctx = sr_sess_.getContext();
         std::optional<libyang::DataNode> node = std::nullopt;
         switch (purpose)
         {
-        case EncodePurpose::Set:
+        case EncodePurpose::SET:
             return ctx.parseValueFragment(
                 xpath, data, libyang::DataFormat::JSON, std::nullopt,
                 libyang::ParseOptions::JsonNull | libyang::ParseOptions::Strict, std::nullopt);
-        case EncodePurpose::Rpc:
+        case EncodePurpose::RPC:
             // If xpath is not a path, this throws error (one node expected)
             node = ctx.newPath2(xpath).createdNode;
             if (node.has_value())
@@ -151,7 +151,7 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
         SLOG_DEBUG("Input data: ", data);
         // Don't leave the error lying around on the context otherwise sysrepo may pick it up on
         // an unrelated operation
-        auto ctx = sr_sess.getContext();
+        auto ctx = sr_sess_.getContext();
         ctx.cleanAllErrors();
         throw std::runtime_error("failed to parse data for \"" + xpath + "\": " + exc.what());
     }
@@ -177,7 +177,7 @@ std::string Encode::json_encode(libyang::DataNode node)
         {
             throw std::runtime_error("Failed to print the leaf data node in JSON.");
         }
-        data = stripJSONObjectValue(printed.value());
+        data = strip_json_object_value(printed.value());
     }
     else
     {

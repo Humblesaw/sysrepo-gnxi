@@ -38,8 +38,8 @@ namespace impl
 
 enum class UpdateOp
 {
-    Merge,
-    Replace
+    MERGE,
+    REPLACE
 };
 
 /**
@@ -50,9 +50,9 @@ class Set
 {
   public:
     Set(sysrepo::Session running_sess, std::shared_ptr<Commit> commit_state, const Auth &auth)
-        : sr_sess(running_sess), commit_state(commit_state), auth_(auth)
+        : sr_sess_(running_sess), commit_state_(commit_state), auth_(auth)
     {
-        encodef = std::make_shared<Encode>(sr_sess);
+        encodef_ = std::make_shared<Encode>(sr_sess_);
     }
     ~Set() {}
 
@@ -60,19 +60,19 @@ class Set
                      gnmi::SetResponse *response);
 
   private:
-    grpc::Status handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
-                              const gnmi::Path &prefix, UpdateOp op);
+    grpc::Status handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out,
+                                const gnmi::Path &prefix, UpdateOp op);
 
-    sysrepo::Session sr_sess;             // sysrepo running datastore session
-    std::shared_ptr<Encode> encodef;      // support for json ietf encoding
-    std::shared_ptr<Commit> commit_state; // commit confirm state
-    const Auth &auth_;                    // authentication/authorization data
+    sysrepo::Session sr_sess_;             // sysrepo running datastore session
+    std::shared_ptr<Encode> encodef_;      // support for json ietf encoding
+    std::shared_ptr<Commit> commit_state_; // commit confirm state
+    const Auth &auth_;                     // authentication/authorization data
 
-    std::optional<libyang::DataNode> deleteTree;  // delete tree
-    std::optional<libyang::DataNode> purgeTree;   // purge tree
-    std::optional<libyang::DataNode> replaceTree; // replace tree
-    std::optional<libyang::DataNode> updateTree;  // update tree
-    UpdateTransaction xact;                       // transaction tree
+    std::optional<libyang::DataNode> delete_tree_;  // delete tree
+    std::optional<libyang::DataNode> purge_tree_;   // purge tree
+    std::optional<libyang::DataNode> replace_tree_; // replace tree
+    std::optional<libyang::DataNode> update_tree_;  // update tree
+    UpdateTransaction xact_;                        // transaction tree
 };
 
 } // namespace impl

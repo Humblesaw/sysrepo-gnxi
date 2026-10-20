@@ -45,16 +45,16 @@
 class SessionDsSwitcher
 {
   public:
-    SessionDsSwitcher(sysrepo::Session sess, sysrepo::Datastore ds) : sr_sess(sess)
+    SessionDsSwitcher(sysrepo::Session sess, sysrepo::Datastore ds) : sr_sess_(sess)
     {
-        orig_ds = sr_sess.activeDatastore();
-        sr_sess.switchDatastore(ds);
+        orig_ds_ = sr_sess_.activeDatastore();
+        sr_sess_.switchDatastore(ds);
     }
-    ~SessionDsSwitcher() { sr_sess.switchDatastore(orig_ds); }
+    ~SessionDsSwitcher() { sr_sess_.switchDatastore(orig_ds_); }
 
   private:
-    sysrepo::Session sr_sess;
-    sysrepo::Datastore orig_ds;
+    sysrepo::Session sr_sess_;
+    sysrepo::Datastore orig_ds_;
 };
 
 /*
@@ -62,8 +62,8 @@ class SessionDsSwitcher
  */
 enum class EncodePurpose
 {
-    Set,
-    Rpc,
+    SET,
+    RPC,
 };
 
 /*
@@ -73,7 +73,7 @@ enum class EncodePurpose
 class Encode
 {
   public:
-    Encode(sysrepo::Session sess) : sr_sess(sess) {}
+    Encode(sysrepo::Session sess) : sr_sess_(sess) {}
 
     /* Supported Encodings */
     enum Supported
@@ -91,5 +91,5 @@ class Encode
     std::string json_encode(libyang::DataNode node);
 
   private:
-    sysrepo::Session sr_sess;
+    sysrepo::Session sr_sess_;
 };

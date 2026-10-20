@@ -35,14 +35,14 @@
 namespace impl
 {
 
-grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                                 const std::string &fullpath, gnmi::Encoding encoding,
-                                 const std::string &origin)
+grpc::Status Get::build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Update> *update_list,
+                                    const std::string &fullpath, gnmi::Encoding encoding,
+                                    const std::string &origin)
 {
     try
     {
         /* Get multiple subtree for YANG lists or one for other YANG types */
-        auto sr_trees = sr_sess.getData(fullpath);
+        auto sr_trees = sr_sess_.getData(fullpath);
         /* The path not (yet) existing isn't an error, so just return an empty set */
         if (!sr_trees.has_value())
         {
@@ -51,17 +51,18 @@ grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update
         for (auto n : sr_trees->findXPath(fullpath))
         {
             // root and wildcard paths may span modules of other origins
-            if (!gnxi::dataNodeInOrigin(n, origin))
+            if (!gnxi::data_node_in_origin(n, origin))
             {
                 continue;
             }
-            auto update = updateList->Add();
-            gnxi::dataNodeToGnmiPath(n, gnxi::formatForOrigin(origin), *update->mutable_path());
+            auto update = update_list->Add();
+            gnxi::data_node_to_gnmi_path(n, gnxi::format_for_origin(origin),
+                                         *update->mutable_path());
             update->mutable_path()->set_origin(origin);
-            auto status = encodef->encode(encoding, n, update->mutable_val());
+            auto status = encodef_->encode(encoding, n, update->mutable_val());
             if (!status.ok())
             {
-                updateList->Clear();
+                update_list->Clear();
                 return status;
             }
         }
@@ -69,13 +70,13 @@ grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update
     catch (sysrepo::ErrorWithCode &exc)
     {
         SLOG_ERROR("Failed getting items from sysrepo: ", exc.what());
-        updateList->Clear();
+        update_list->Clear();
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
     }
     catch (const std::runtime_error &exc)
     {
         SLOG_DEBUG("Path not found or not evaluable: \"", fullpath, "\": ", exc.what());
-        updateList->Clear();
+        update_list->Clear();
         return grpc::Status(grpc::StatusCode::NOT_FOUND, exc.what());
     }
 
@@ -89,12 +90,13 @@ grpc::Status Get::BuildGetUpdate(google::protobuf::RepeatedPtrField<gnmi::Update
  * There can still be multiple paths in GetResponse if requested path
  * is a directory path.
  */
-grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const gnmi::Path &prefix,
-                                       const gnmi::Path &path, gnmi::Encoding encoding,
-                                       gnmi::GetRequest_DataType dataType)
+grpc::Status Get::build_get_notification_(gnmi::Notification *notification,
+                                          const gnmi::Path &prefix, const gnmi::Path &path,
+                                          gnmi::Encoding encoding,
+                                          gnmi::GetRequest_DataType data_type)
 {
     /* Data elements that have changed values */
-    google::protobuf::RepeatedPtrField<gnmi::Update> *updateList = notification->mutable_update();
+    google::protobuf::RepeatedPtrField<gnmi::Update> *update_list = notification->mutable_update();
     auto ds = sysrepo::Datastore::Operational;
 
     /* Get time since epoch in milliseconds */
@@ -104,8 +106,8 @@ grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const g
     std::string fullpath;
     try
     {
-        origin = gnxi::resolveOrigin(prefix, path);
-        fullpath = gnxi::gnmiToXPath(sr_sess.getContext(), prefix, path);
+        origin = gnxi::resolve_origin(prefix, path);
+        fullpath = gnxi::gnmi_to_xpath(sr_sess_.getContext(), prefix, path);
     }
     catch (const grpc::Status &status)
     {
@@ -127,16 +129,16 @@ grpc::Status Get::BuildGetNotification(gnmi::Notification *notification, const g
         notification->mutable_prefix()->set_origin(origin);
     }
 
-    if (dataType == gnmi::GetRequest_DataType_CONFIG)
+    if (data_type == gnmi::GetRequest_DataType_CONFIG)
         ds = sysrepo::Datastore::Running;
 
-    SessionDsSwitcher ds_switch(sr_sess, ds);
+    SessionDsSwitcher ds_switch(sr_sess_, ds);
 
-    return BuildGetUpdate(updateList, fullpath, encoding, origin);
+    return build_get_update_(update_list, fullpath, encoding, origin);
 }
 
 /* Verify request fields are correct */
-static inline grpc::Status verifyGetRequest(const gnmi::GetRequest *request)
+static inline grpc::Status verify_get_request(const gnmi::GetRequest *request)
 {
     auto status = gnmi_check_encoding(request->encoding());
     if (!status.ok())
@@ -169,11 +171,11 @@ static inline grpc::Status verifyGetRequest(const gnmi::GetRequest *request)
 grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
                       gnmi::GetResponse *response)
 {
-    google::protobuf::RepeatedPtrField<gnmi::Notification> *notificationList;
+    google::protobuf::RepeatedPtrField<gnmi::Notification> *notification_list;
     gnmi::Notification *notification;
     grpc::Status status;
 
-    status = verifyGetRequest(req);
+    status = verify_get_request(req);
     if (!status.ok())
         return status;
 
@@ -186,18 +188,18 @@ grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
     {
         paths.push_back(p);
     }
-    auth_.authorize(context, sr_sess,
+    auth_.authorize(context, sr_sess_,
                     req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
-                    Auth::Access::ReadOnly);
+                    Auth::Access::READ_ONLY);
 
     /* Run through all paths */
-    notificationList = response->mutable_notification();
+    notification_list = response->mutable_notification();
     for (const auto &path : req->path())
     {
-        notification = notificationList->Add();
+        notification = notification_list->Add();
 
-        status =
-            BuildGetNotification(notification, req->prefix(), path, req->encoding(), req->type());
+        status = build_get_notification_(notification, req->prefix(), path, req->encoding(),
+                                         req->type());
         if (!status.ok())
         {
             SLOG_WARN("Failed building get notification: ", status.error_message());

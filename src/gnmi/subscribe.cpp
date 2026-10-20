@@ -54,17 +54,17 @@ constexpr auto MIN_SAMPLE_INTERVAL = std::chrono::milliseconds(200);
 } // namespace
 
 grpc::Status
-Subscribe::BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *updateList,
-                           std::string fullpath, gnmi::Encoding encoding, std::string origin)
+Subscribe::build_subs_update_(google::protobuf::RepeatedPtrField<gnmi::Update> *update_list,
+                              std::string fullpath, gnmi::Encoding encoding, std::string origin)
 {
     gnmi::Update *update;
 
-    SessionDsSwitcher ds_switch(sr_sess, sysrepo::Datastore::Operational);
+    SessionDsSwitcher ds_switch(sr_sess_, sysrepo::Datastore::Operational);
 
     try
     {
         /* Get multiple subtree for YANG lists or one for other YANG types */
-        std::optional<libyang::DataNode> sr_trees = sr_sess.getData(fullpath.c_str());
+        std::optional<libyang::DataNode> sr_trees = sr_sess_.getData(fullpath.c_str());
 
         /* The path not (yet) existing isn't an error, so just return an empty set */
         if (!sr_trees.has_value())
@@ -75,31 +75,32 @@ Subscribe::BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *upd
         for (libyang::DataNode n : sr_trees->findXPath(fullpath))
         {
             // root and wildcard paths may span modules of other origins
-            if (!gnxi::dataNodeInOrigin(n, origin))
+            if (!gnxi::data_node_in_origin(n, origin))
             {
                 continue;
             }
-            update = updateList->Add();
-            gnxi::dataNodeToGnmiPath(n, gnxi::formatForOrigin(origin), *update->mutable_path());
+            update = update_list->Add();
+            gnxi::data_node_to_gnmi_path(n, gnxi::format_for_origin(origin),
+                                         *update->mutable_path());
             update->mutable_path()->set_origin(origin);
-            grpc::Status status = encodef->encode(encoding, n, update->mutable_val());
+            grpc::Status status = encodef_->encode(encoding, n, update->mutable_val());
             if (!status.ok())
             {
-                updateList->Clear();
+                update_list->Clear();
                 return status;
             }
         }
     }
     catch (sysrepo::ErrorWithCode &exc)
     {
-        updateList->Clear();
+        update_list->Clear();
         SLOG_ERROR("Failed getting items from sysrepo: ", exc.what());
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
     }
     catch (const std::runtime_error &exc)
     {
         SLOG_DEBUG("Path not found or not evaluable: \"", fullpath, "\": ", exc.what());
-        updateList->Clear();
+        update_list->Clear();
         return grpc::Status(grpc::StatusCode::NOT_FOUND, exc.what());
     }
 
@@ -115,11 +116,11 @@ Subscribe::BuildSubsUpdate(google::protobuf::RepeatedPtrField<gnmi::Update> *upd
  * @param request the SubscriptionList from SubscribeRequest to answer to.
  * @param sample indicates whether there is at least 1 sample subscr
  */
-grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notification,
-                                                   const gnmi::SubscriptionList &request,
-                                                   bool *sample)
+grpc::Status Subscribe::build_subscribe_notification(gnmi::Notification *notification,
+                                                     const gnmi::SubscriptionList &request,
+                                                     bool *sample)
 {
-    google::protobuf::RepeatedPtrField<gnmi::Update> *updateList = notification->mutable_update();
+    google::protobuf::RepeatedPtrField<gnmi::Update> *update_list = notification->mutable_update();
     grpc::Status status;
 
     /* Check if only updates should be sent */
@@ -160,9 +161,10 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
         std::string origin;
         try
         {
-            origin = gnxi::resolveOrigin(request.prefix(), sub.path());
-            auto fullpath = gnxi::gnmiToXPath(sr_sess.getContext(), request.prefix(), sub.path());
-            status = BuildSubsUpdate(updateList, fullpath, request.encoding(), origin);
+            origin = gnxi::resolve_origin(request.prefix(), sub.path());
+            auto fullpath =
+                gnxi::gnmi_to_xpath(sr_sess_.getContext(), request.prefix(), sub.path());
+            status = build_subs_update_(update_list, fullpath, request.encoding(), origin);
         }
         catch (const grpc::Status &path_status)
         {
@@ -202,15 +204,14 @@ grpc::Status Subscribe::BuildSubscribeNotification(gnmi::Notification *notificat
  * @param origin The (normalized) origin the subscription was made under
  * @param session The sysrepo session for the update
  */
-grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification *notification,
-                                                             const gnmi::SubscriptionList &request,
-                                                             std::string &xpath, std::string origin,
-                                                             sysrepo::Session session)
+grpc::Status Subscribe::build_subscribe_notification_for_changes(
+    gnmi::Notification *notification, const gnmi::SubscriptionList &request, std::string &xpath,
+    std::string origin, sysrepo::Session session)
 {
-    auto updateList = notification->mutable_update();
-    auto deleteList = notification->mutable_delete_();
+    auto update_list = notification->mutable_update();
+    auto delete_list = notification->mutable_delete_();
     grpc::Status status;
-    auto format = gnxi::formatForOrigin(origin);
+    auto format = gnxi::format_for_origin(origin);
 
     /* Check if only updates should be sent */
     if (request.updates_only())
@@ -260,7 +261,7 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
             last_change = std::make_pair(change.node.path(), change.operation);
 
             // the subscription (module) may span data of other origins
-            if (!gnxi::dataNodeInOrigin(change.node, origin))
+            if (!gnxi::data_node_in_origin(change.node, origin))
             {
                 continue;
             }
@@ -277,15 +278,15 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
             // > contents within the update field.
             if (change.operation != sysrepo::ChangeOperation::Created)
             {
-                auto path_p = deleteList->Add();
-                gnxi::dataNodeToGnmiPath(change.node, format, *path_p);
+                auto path_p = delete_list->Add();
+                gnxi::data_node_to_gnmi_path(change.node, format, *path_p);
                 path_p->set_origin(origin);
             }
             if (change.operation != sysrepo::ChangeOperation::Deleted)
             {
-                auto update = updateList->Add();
+                auto update = update_list->Add();
 
-                gnxi::dataNodeToGnmiPath(change.node, format, *update->mutable_path());
+                gnxi::data_node_to_gnmi_path(change.node, format, *update->mutable_path());
                 update->mutable_path()->set_origin(origin);
                 // Remove all of the attributes from nodes which we don't need and may confuse
                 // parsers of the JSON when using that encoding.
@@ -293,7 +294,7 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
                 //             static_cast<uint32_t>(libyang::DuplicationOptions::Recursive);
                 // auto node =
                 // change.node.duplicate(static_cast<libyang::DuplicationOptions>(opts));
-                status = encodef->encode(request.encoding(), change.node, update->mutable_val());
+                status = encodef_->encode(request.encoding(), change.node, update->mutable_val());
                 if (!status.ok())
                     return status;
             }
@@ -315,25 +316,25 @@ grpc::Status Subscribe::BuildSubscribeNotificationForChanges(gnmi::Notification 
     return grpc::Status::OK;
 }
 
-void Subscribe::triggerSampleUpdate(
+void Subscribe::trigger_sample_update(
     grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> &sub,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
     gnmi::Encoding encoding, const gnmi::Path &prefix)
 {
     gnmi::SubscribeResponse response;
-    gnmi::SubscriptionList updateList;
+    gnmi::SubscriptionList update_list;
 
     // Add the subscription entry to the subscription list
-    updateList.add_subscription()->CopyFrom(*sub);
+    update_list.add_subscription()->CopyFrom(*sub);
     // Propagate the encoding of the original subscription list
-    updateList.set_encoding(encoding);
+    update_list.set_encoding(encoding);
     // Propagate the prefix of the original subscription list - both the data
     // fetch and the emitted paths depend on it
-    *updateList.mutable_prefix() = prefix;
+    *update_list.mutable_prefix() = prefix;
 
     if (!context->IsCancelled())
     {
-        grpc::Status status = BuildSubscribeNotification(response.mutable_update(), updateList);
+        grpc::Status status = build_subscribe_notification(response.mutable_update(), update_list);
         if (!status.ok())
         {
             // This is a hack to allow the Read in the parent thread to return,
@@ -343,7 +344,7 @@ void Subscribe::triggerSampleUpdate(
             //   status.error_message().c_str(), nullptr);
             return;
         }
-        Write(stream, response);
+        write(stream, response);
         response.Clear();
     }
 }
@@ -373,72 +374,72 @@ class Scheduler
     /* sample subscription is evoked after a set duration */
     std::priority_queue<SampleSubscriptionEvent, std::vector<SampleSubscriptionEvent>,
                         std::greater<SampleSubscriptionEvent>>
-        sample_queue;
+        sample_queue_;
 
     /* on-change subscriptions are evoked immediately on change */
-    std::queue<std::function<void()>> change_queue;
-    std::mutex queue_mutex;
-    std::condition_variable cv;
-    std::atomic<bool> running{true};
+    std::queue<std::function<void()>> change_queue_;
+    std::mutex queue_mutex_;
+    std::condition_variable cv_;
+    std::atomic<bool> running_{true};
 
   public:
     // queue a sample subscription event for a timed execution
     void schedule_sample(std::chrono::steady_clock::time_point expiry, std::coroutine_handle<> h)
     {
         {
-            std::lock_guard<std::mutex> lock(queue_mutex);
-            sample_queue.push({expiry, h});
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            sample_queue_.push({expiry, h});
         }
-        cv.notify_one(); // wake up subscription event queue
+        cv_.notify_one(); // wake up subscription event queue
     }
 
     // queue an on-change subscription event for immediate execution
     void schedule_change(std::function<void()> task)
     {
         {
-            std::lock_guard<std::mutex> lock(queue_mutex);
-            change_queue.push(std::move(task));
+            std::lock_guard<std::mutex> lock(queue_mutex_);
+            change_queue_.push(std::move(task));
         }
-        cv.notify_one(); // wake up subscription event queue
+        cv_.notify_one(); // wake up subscription event queue
     }
 
     // finish the scheduling
     void stop()
     {
-        running = false;
-        cv.notify_all(); // notify all subscription events and return to the caller
+        running_ = false;
+        cv_.notify_all(); // notify all subscription events and return to the caller
     }
 
     void run()
     {
-        while (running)
+        while (running_)
         {
             std::function<void()> change_task;
             std::coroutine_handle<> sample_task;
 
             {
-                std::unique_lock<std::mutex> lock(queue_mutex);
+                std::unique_lock<std::mutex> lock(queue_mutex_);
 
                 // wait for: subscription event or stream to cancel
-                cv.wait(lock, [this]
-                        { return !sample_queue.empty() || !change_queue.empty() || !running; });
+                cv_.wait(lock, [this]
+                         { return !sample_queue_.empty() || !change_queue_.empty() || !running_; });
 
                 // stream cancelled, finish work
-                if (!running)
+                if (!running_)
                 {
                     break;
                 }
 
                 // on-change (immediate) subscription events
-                if (!change_queue.empty())
+                if (!change_queue_.empty())
                 {
-                    change_task = std::move(change_queue.front());
-                    change_queue.pop();
+                    change_task = std::move(change_queue_.front());
+                    change_queue_.pop();
                 }
                 // sample (timed) subscription events
-                else if (!sample_queue.empty())
+                else if (!sample_queue_.empty())
                 {
-                    const SampleSubscriptionEvent &event = sample_queue.top();
+                    const SampleSubscriptionEvent &event = sample_queue_.top();
                     std::chrono::time_point now = std::chrono::steady_clock::now();
 
                     // wait for the timer to expire
@@ -446,24 +447,24 @@ class Scheduler
                     {
                         // cancel at a specified time point or handle on-change subscription or
                         // stream cancellation
-                        cv.wait_until(lock, event.expiry,
-                                      [this] { return !change_queue.empty() || !running; });
+                        cv_.wait_until(lock, event.expiry,
+                                       [this] { return !change_queue_.empty() || !running_; });
 
                         // on-change subscription interrupted, so resolve it!
-                        if (!change_queue.empty())
+                        if (!change_queue_.empty())
                         {
                             continue;
                         }
 
                         // stream cancelled, finish work
-                        if (!running)
+                        if (!running_)
                         {
                             break;
                         }
                     }
 
                     // dequeue the subscription event
-                    sample_queue.pop();
+                    sample_queue_.pop();
                     sample_task = event.handle;
                 }
             } // unlocks mutex
@@ -480,11 +481,11 @@ class Scheduler
         }
 
         // destroy pending subscription events
-        std::lock_guard<std::mutex> lock(queue_mutex);
-        while (!sample_queue.empty())
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        while (!sample_queue_.empty())
         {
-            auto event = sample_queue.top();
-            sample_queue.pop();
+            auto event = sample_queue_.top();
+            sample_queue_.pop();
             event.handle.destroy();
         }
 
@@ -492,7 +493,7 @@ class Scheduler
     }
 };
 
-struct async_sleep
+struct AsyncSleep
 {
     Scheduler &scheduler;
     std::chrono::nanoseconds duration;
@@ -522,7 +523,7 @@ struct Task
     };
 };
 
-Task sampleSubscription(
+Task sample_subscription(
     Scheduler &scheduler, std::chrono::nanoseconds duration, Subscribe *subscribe,
     grpc::ServerContext *context, std::shared_ptr<gnmi::Subscription> sub,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
@@ -531,12 +532,12 @@ Task sampleSubscription(
     while (true)
     {
         // suspend, the scheduler will resume you after the time duration
-        co_await async_sleep{scheduler, duration};
-        subscribe->triggerSampleUpdate(context, sub, stream, encoding, prefix);
+        co_await AsyncSleep{scheduler, duration};
+        subscribe->trigger_sample_update(context, sub, stream, encoding, prefix);
     }
 }
 
-void Subscribe::streamWorker(
+void Subscribe::stream_worker(
     grpc::ServerContext *context, gnmi::SubscribeRequest request,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
     Scheduler &scheduler)
@@ -547,9 +548,9 @@ void Subscribe::streamWorker(
         switch (sub->mode())
         {
         case gnmi::SAMPLE:
-            sampleSubscription(scheduler, std::chrono::nanoseconds{sub->sample_interval()}, this,
-                               context, sub, stream, request.subscribe().encoding(),
-                               request.subscribe().prefix());
+            sample_subscription(scheduler, std::chrono::nanoseconds{sub->sample_interval()}, this,
+                                context, sub, stream, request.subscribe().encoding(),
+                                request.subscribe().prefix());
             break;
         default:
             break;
@@ -561,12 +562,12 @@ void Subscribe::streamWorker(
     SLOG_DEBUG("Subscription stream worker exiting");
 }
 
-static void streamWorkerThread(
+static void stream_worker_thread(
     Subscribe *sub, grpc::ServerContext *context, gnmi::SubscribeRequest &request,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
     Scheduler &scheduler)
 {
-    sub->streamWorker(context, request, stream, scheduler);
+    sub->stream_worker(context, request, stream, scheduler);
 }
 
 class SrModuleOnChangeParams
@@ -588,9 +589,9 @@ class SrModuleOnChangeParams
     std::string origin;
 };
 
-sysrepo::ErrorCode srModuleOnChange(sysrepo::Session session, std::string_view module_name,
-                                    std::string_view xpath, sysrepo::Event event,
-                                    uint32_t request_id, const SrModuleOnChangeParams &params)
+sysrepo::ErrorCode sr_module_on_change(sysrepo::Session session, std::string_view module_name,
+                                       std::string_view xpath, sysrepo::Event event,
+                                       uint32_t request_id, const SrModuleOnChangeParams &params)
 {
     grpc::Status status;
     auto response = std::make_shared<gnmi::SubscribeResponse>();
@@ -601,7 +602,7 @@ sysrepo::ErrorCode srModuleOnChange(sysrepo::Session session, std::string_view m
 
     std::string changes_path(xpath);
 
-    status = params.subscribe->BuildSubscribeNotificationForChanges(
+    status = params.subscribe->build_subscribe_notification_for_changes(
         response->mutable_update(), params.request->subscribe(), changes_path, params.origin,
         session);
     if (!status.ok())
@@ -613,12 +614,12 @@ sysrepo::ErrorCode srModuleOnChange(sysrepo::Session session, std::string_view m
     auto sub = params.subscribe;
     auto stream = params.stream;
 
-    params.scheduler.schedule_change([sub, stream, response] { sub->Write(stream, *response); });
+    params.scheduler.schedule_change([sub, stream, response] { sub->write(stream, *response); });
 
     return sysrepo::ErrorCode::Ok;
 }
 
-grpc::Status Subscribe::registerStreamOnChange(
+grpc::Status Subscribe::register_stream_on_change_(
     gnmi::SubscribeRequest &request, gnmi::Subscription sub,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
     Scheduler &scheduler, std::shared_ptr<DataSubscribe> sr_sub,
@@ -628,9 +629,9 @@ grpc::Status Subscribe::registerStreamOnChange(
     std::string fullpath;
     try
     {
-        origin = gnxi::resolveOrigin(request.subscribe().prefix(), sub.path());
+        origin = gnxi::resolve_origin(request.subscribe().prefix(), sub.path());
         fullpath =
-            gnxi::gnmiToXPath(sr_sess.getContext(), request.subscribe().prefix(), sub.path());
+            gnxi::gnmi_to_xpath(sr_sess_.getContext(), request.subscribe().prefix(), sub.path());
     }
     catch (const grpc::Status &status)
     {
@@ -651,8 +652,8 @@ grpc::Status Subscribe::registerStreamOnChange(
                          uint32_t request_id)
             {
                 (void)sub_id;
-                return srModuleOnChange(session, module_name, xpath.value(), event, request_id,
-                                        params_ref);
+                return sr_module_on_change(session, module_name, xpath.value(), event, request_id,
+                                           params_ref);
             },
             fullpath.c_str(), 0,
             sysrepo::SubscribeOptions::Passive | sysrepo::SubscribeOptions::DoneOnly |
@@ -671,7 +672,7 @@ grpc::Status Subscribe::registerStreamOnChange(
  * Handles SubscribeRequest messages with STREAM subscription mode by
  * periodically sending updates to the client.
  */
-grpc::Status Subscribe::handleStream(
+grpc::Status Subscribe::handle_stream_(
     grpc::ServerContext *context, gnmi::SubscribeRequest request,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream)
 {
@@ -734,7 +735,7 @@ grpc::Status Subscribe::handleStream(
 
     // Get the initial data only for sample subscriptions
     bool sample = false;
-    status = BuildSubscribeNotification(response.mutable_update(), request.subscribe(), &sample);
+    status = build_subscribe_notification(response.mutable_update(), request.subscribe(), &sample);
     if (!status.ok())
     {
         return status;
@@ -745,15 +746,15 @@ grpc::Status Subscribe::handleStream(
     // the on-change subscriptions are registered with sysrepo on this
     // session, which must be switched to the Operational datastore (running
     // configuration plus state data) so that gNMI streams expose both
-    SessionDsSwitcher ds_switch(sr_sess, sysrepo::Datastore::Operational);
-    auto sr_sub = std::make_shared<DataSubscribe>(sr_sess);
+    SessionDsSwitcher ds_switch(sr_sess_, sysrepo::Datastore::Operational);
+    auto sr_sub = std::make_shared<DataSubscribe>(sr_sess_);
 
     if (sample)
     {
         SLOG_DEBUG("Sending initial update for sample subscriptions with size:",
                    response.update().update_size());
         // Sends a first Notification message that updates all sample subcriptions
-        Write(stream, response);
+        write(stream, response);
     }
     for (int i = 0; i < request.subscribe().subscription_size(); i++)
     {
@@ -764,7 +765,8 @@ grpc::Status Subscribe::handleStream(
             SLOG_DEBUG("Subscribe (stream sample) ", sub.path().ShortDebugString());
             break;
         case gnmi::ON_CHANGE:
-            status = registerStreamOnChange(request, sub, stream, scheduler, sr_sub, params_vec);
+            status =
+                register_stream_on_change_(request, sub, stream, scheduler, sr_sub, params_vec);
             if (!status.ok())
             {
                 return status;
@@ -790,12 +792,12 @@ grpc::Status Subscribe::handleStream(
             gnmi::SubscribeResponse response;
             response.set_sync_response(true);
             SLOG_DEBUG("Sending sync response");
-            Write(stream, response);
+            write(stream, response);
         });
 
     // Start a worker thread for SAMPLE and ON_CHANGE notifications (the
     // only modes left - TARGET_DEFINED is rejected above).
-    std::thread thread = std::thread(streamWorkerThread, this, context, std::ref(request), stream,
+    std::thread thread = std::thread(stream_worker_thread, this, context, std::ref(request), stream,
                                      std::ref(scheduler));
 
     try
@@ -829,11 +831,11 @@ grpc::Status Subscribe::handleStream(
     }
 }
 
-void Subscribe::Write(
+void Subscribe::write(
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream,
     gnmi::SubscribeResponse response)
 {
-    const std::lock_guard<std::recursive_mutex> lock(stream_mutex);
+    const std::lock_guard<std::recursive_mutex> lock(stream_mutex_);
     stream->Write(response);
 }
 
@@ -841,7 +843,7 @@ void Subscribe::Write(
  * Handles SubscribeRequest messages with ONCE subscription mode by updating
  * all the Subscriptions once, sending a SYNC message, then closing the RPC.
  */
-grpc::Status Subscribe::handleOnce(
+grpc::Status Subscribe::handle_once_(
     gnmi::SubscribeRequest request,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream)
 {
@@ -849,19 +851,19 @@ grpc::Status Subscribe::handleOnce(
 
     // Sends a Notification message that updates all Subcriptions once
     gnmi::SubscribeResponse response;
-    status = BuildSubscribeNotification(response.mutable_update(), request.subscribe());
+    status = build_subscribe_notification(response.mutable_update(), request.subscribe());
     if (!status.ok())
     {
         return status;
     }
 
-    Write(stream, response);
+    write(stream, response);
     response.Clear();
 
     // Sends a message that indicates that initial synchronization
     // has completed, i.e. each Subscription has been updated once
     response.set_sync_response(true);
-    Write(stream, response);
+    write(stream, response);
     response.Clear();
 
     return grpc::Status::OK;
@@ -871,7 +873,7 @@ grpc::Status Subscribe::handleOnce(
  * Handles SubscribeRequest messages with POLL subscription mode by updating
  * all the Subscriptions each time a Poll request is received.
  */
-grpc::Status Subscribe::handlePoll(
+grpc::Status Subscribe::handle_poll_(
     gnmi::SubscribeRequest request,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream)
 {
@@ -887,12 +889,12 @@ grpc::Status Subscribe::handlePoll(
             // Sends a Notification message that updates all Subcriptions once
             gnmi::SubscribeResponse response;
             status =
-                BuildSubscribeNotification(response.mutable_update(), subscription.subscribe());
+                build_subscribe_notification(response.mutable_update(), subscription.subscribe());
             if (!status.ok())
             {
                 return status;
             }
-            Write(stream, response);
+            write(stream, response);
             response.Clear();
 
             // Reference 3.5.2.3:
@@ -900,7 +902,7 @@ grpc::Status Subscribe::handlePoll(
             // SubscribeResponse message with the sync_response field set to true MUST be
             // generated."
             response.set_sync_response(true);
-            Write(stream, response);
+            write(stream, response);
             break;
         }
         case request.kSubscribe:
@@ -972,19 +974,19 @@ Subscribe::run(grpc::ServerContext *context,
         paths.push_back(s.path());
     }
 
-    auth_.authorize(context, sr_sess,
+    auth_.authorize(context, sr_sess_,
                     request.subscribe().has_prefix() ? std::optional(request.subscribe().prefix())
                                                      : std::nullopt,
-                    paths, Auth::Access::ReadOnly);
+                    paths, Auth::Access::READ_ONLY);
 
     switch (request.subscribe().mode())
     {
     case gnmi::SubscriptionList_Mode_STREAM:
-        return handleStream(context, request, stream);
+        return handle_stream_(context, request, stream);
     case gnmi::SubscriptionList_Mode_ONCE:
-        return handleOnce(request, stream);
+        return handle_once_(request, stream);
     case gnmi::SubscriptionList_Mode_POLL:
-        return handlePoll(request, stream);
+        return handle_poll_(request, stream);
     default:
         SLOG_WARN("Unknown subscription mode");
         return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unknown subscription mode");

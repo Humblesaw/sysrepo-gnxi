@@ -39,7 +39,7 @@
 #include "security/hash.h"
 #include "utils/utils.h"
 
-const char *USAGE = R"(Usage:
+constexpr const char *USAGE = R"(Usage:
   sysrepo-gnxi-users add --name NAME --password PASS [--hash ALGO]
                          [--permissions MOD:PERM[,MOD:PERM...]]
   sysrepo-gnxi-users edit --name NAME [--password PASS [--hash ALGO]]
@@ -250,7 +250,7 @@ std::vector<std::string> sysrepo_modules()
     std::vector<std::string> result;
     for (const auto &mod : conn.sessionStart().getContext().modules())
     {
-        if (mod.implemented() && mod.name() != "sysrepo" && !isPrivateModule(mod.name()))
+        if (mod.implemented() && mod.name() != "sysrepo" && !is_private_module(mod.name()))
         {
             result.push_back(mod.name());
         }

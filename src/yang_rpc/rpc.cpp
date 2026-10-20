@@ -52,13 +52,13 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
 
         // the yang_rpc path is always standalone, no prefix can be given
         const gnmi::Path no_prefix;
-        auto xpath = gnxi::gnmiToXPath(sr_sess.getContext(), no_prefix, request->path());
+        auto xpath = gnxi::gnmi_to_xpath(sr_sess_.getContext(), no_prefix, request->path());
 
         // reject any access to private modules
-        auto mods = collect_xpath_mods(sr_sess.getContext(), xpath.c_str());
+        auto mods = collect_xpath_mods(sr_sess_.getContext(), xpath.c_str());
         for (const auto &mod : mods)
         {
-            if (isPrivateModule(mod))
+            if (is_private_module(mod))
             {
                 SLOG_ERROR("RPC access denied to private module '", mod, "'");
                 return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
@@ -66,7 +66,7 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
             }
         }
 
-        auto [status, input_node] = encodef->decode(xpath, request->input(), EncodePurpose::Rpc);
+        auto [status, input_node] = encodef_->decode(xpath, request->input(), EncodePurpose::RPC);
         if (!status.ok())
         {
             SLOG_WARN("Rpc input value error: ", status.error_message());
@@ -74,14 +74,14 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
         }
 
         SLOG_INFO("Invoking RPC '", xpath, "'");
-        auto output_node = sr_sess.sendRPC(input_node.value());
+        auto output_node = sr_sess_.sendRPC(input_node.value());
 
         response->set_timestamp(get_time_nanosec());
 
         if (output_node.has_value())
         {
-            status = encodef->encode(request->encoding(), output_node.value(),
-                                     response->mutable_output());
+            status = encodef_->encode(request->encoding(), output_node.value(),
+                                      response->mutable_output());
             if (!status.ok())
             {
                 SLOG_ERROR("Rpc output value error: ", status.error_message());

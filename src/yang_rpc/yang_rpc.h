@@ -33,14 +33,14 @@
  * actions over gRPC.
  *
  */
-class YANG_RPCService final : public yang_rpc::YANG_RPC::Service
+class YangRpcService final : public yang_rpc::YANG_RPC::Service
 {
   public:
-    YANG_RPCService(sysrepo::Connection conn) : sr_con(conn) {}
+    YangRpcService(sysrepo::Connection conn) : sr_con_(conn) {}
 
     grpc::Status Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
                      yang_rpc::RpcResponse *response);
 
   private:
-    sysrepo::Connection sr_con; // sysrepo connection
+    sysrepo::Connection sr_con_; // sysrepo connection
 };

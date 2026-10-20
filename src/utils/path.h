@@ -54,7 +54,7 @@ inline constexpr const char *ORIGIN_EXTENSION_NAME = "origin";
  *
  * @throws grpc::Status INVALID_ARGUMENT or UNIMPLEMENTED.
  */
-std::string resolveOrigin(const gnmi::Path &prefix, const gnmi::Path &path);
+std::string resolve_origin(const gnmi::Path &prefix, const gnmi::Path &path);
 
 /**
  * @brief Convert a gNMI prefix + path pair into an XPath addressing the sysrepo
@@ -73,15 +73,15 @@ std::string resolveOrigin(const gnmi::Path &prefix, const gnmi::Path &path);
  *
  * @throws grpc::Status INVALID_ARGUMENT or UNIMPLEMENTED.
  */
-std::string gnmiToXPath(const libyang::Context &ctx, const gnmi::Path &prefix,
-                        const gnmi::Path &path);
+std::string gnmi_to_xpath(const libyang::Context &ctx, const gnmi::Path &prefix,
+                          const gnmi::Path &path);
 
 /**
  * @brief Get the origin the module is bound to via oc-ext:origin, if any.
  *
  * A module without the annotation belongs to every origin.
  */
-std::optional<std::string> moduleOrigin(const libyang::Module &module);
+std::optional<std::string> module_origin(const libyang::Module &module);
 
 /**
  * @brief Check whether the data node belongs to data addressable under the
@@ -90,19 +90,19 @@ std::optional<std::string> moduleOrigin(const libyang::Module &module);
  * Per gNMI spec 2.7.2 the origin is inherited from the root entity, so the
  * module of the top-level ancestor decides.
  */
-bool dataNodeInOrigin(const libyang::DataNode &node, const std::string &origin);
+bool data_node_in_origin(const libyang::DataNode &node, const std::string &origin);
 
 // name format of emitted paths
 enum class PathFormat
 {
-    Bare,      // openconfig convention: local element names
-    Qualified, // RFC 7951 convention: module-qualified names
+    BARE,      // openconfig convention: local element names
+    QUALIFIED, // RFC 7951 convention: module-qualified names
 };
 
 /**
  * @brief Get the path name format matching the given (normalized) origin.
  */
-PathFormat formatForOrigin(const std::string &origin);
+PathFormat format_for_origin(const std::string &origin);
 
 /**
  * @brief Convert the path of a data node into a gNMI path.
@@ -110,5 +110,5 @@ PathFormat formatForOrigin(const std::string &origin);
  * Keys of list instances are taken from the data, so arbitrary key values are
  * preserved exactly.
  */
-void dataNodeToGnmiPath(const libyang::DataNode &node, PathFormat format, gnmi::Path &out);
+void data_node_to_gnmi_path(const libyang::DataNode &node, PathFormat format, gnmi::Path &out);
 } // namespace gnxi

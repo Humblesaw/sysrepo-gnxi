@@ -37,13 +37,13 @@ namespace impl
 class Rpc
 {
   public:
-    Rpc(sysrepo::Session sess) : sr_sess(sess) { encodef = std::make_shared<Encode>(sr_sess); }
+    Rpc(sysrepo::Session sess) : sr_sess_(sess) { encodef_ = std::make_shared<Encode>(sr_sess_); }
 
     grpc::Status run(const yang_rpc::RpcRequest *req, yang_rpc::RpcResponse *response);
 
   private:
-    sysrepo::Session sr_sess;        // sysrepo session
-    std::shared_ptr<Encode> encodef; // support for json ietf encoding
+    sysrepo::Session sr_sess_;        // sysrepo session
+    std::shared_ptr<Encode> encodef_; // support for json ietf encoding
 };
 
 } // namespace impl

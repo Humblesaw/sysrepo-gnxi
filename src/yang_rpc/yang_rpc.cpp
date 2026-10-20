@@ -24,8 +24,8 @@
 #include "rpc.h"
 #include <utils/utils.h>
 
-grpc::Status YANG_RPCService::Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
-                                  yang_rpc::RpcResponse *response)
+grpc::Status YangRpcService::Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
+                                 yang_rpc::RpcResponse *response)
 {
     if (rpc_shutting_down.load())
     {
@@ -50,7 +50,7 @@ grpc::Status YANG_RPCService::Rpc(grpc::ServerContext *context, const yang_rpc::
         rpc_catch_exceptions("Rpc",
                              [&]
                              {
-                                 impl::Rpc rpc(sr_con.sessionStart(sysrepo::Datastore::Running));
+                                 impl::Rpc rpc(sr_con_.sessionStart(sysrepo::Datastore::Running));
                                  return rpc.run(request, response);
                              });
 

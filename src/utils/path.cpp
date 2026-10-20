@@ -37,7 +37,7 @@ namespace
  * data tree (RPCs, actions, notifications and the structural choice/case
  * nodes cannot).
  */
-bool isDataNode(const libyang::SchemaNode &node)
+bool is_data_node(const libyang::SchemaNode &node)
 {
     switch (node.nodeType())
     {
@@ -58,18 +58,18 @@ bool isDataNode(const libyang::SchemaNode &node)
  * node of the given name directly below the (possibly choice/case-obscured)
  * top level.
  */
-bool subtreeHasTopNode(const libyang::SchemaNode &node, const std::string &name)
+bool subtree_has_top_node(const libyang::SchemaNode &node, const std::string &name)
 {
     for (const auto &child : node.immediateChildren())
     {
-        if (isDataNode(child) && child.name() == name)
+        if (is_data_node(child) && child.name() == name)
         {
             return true;
         }
         if (child.nodeType() == libyang::NodeType::Choice ||
             child.nodeType() == libyang::NodeType::Case)
         {
-            if (subtreeHasTopNode(child, name))
+            if (subtree_has_top_node(child, name))
             {
                 return true;
             }
@@ -83,18 +83,18 @@ bool subtreeHasTopNode(const libyang::SchemaNode &node, const std::string &name)
  * (descends through top-level choices and cases, includes top-level RPCs,
  * nested actions are addressed through their parent data nodes).
  */
-bool moduleHasTopNode(const libyang::Module &module, const std::string &name)
+bool module_has_top_node(const libyang::Module &module, const std::string &name)
 {
     for (const auto &child : module.immediateChildren())
     {
-        if (isDataNode(child) && child.name() == name)
+        if (is_data_node(child) && child.name() == name)
         {
             return true;
         }
         if (child.nodeType() == libyang::NodeType::Choice ||
             child.nodeType() == libyang::NodeType::Case)
         {
-            if (subtreeHasTopNode(child, name))
+            if (subtree_has_top_node(child, name))
             {
                 return true;
             }
@@ -113,10 +113,10 @@ bool moduleHasTopNode(const libyang::Module &module, const std::string &name)
 /**
  * @brief Check whether the module's data is addressable under the origin.
  */
-bool originContainsModule(const std::string &origin, const libyang::Module &module)
+bool origin_contains_module(const std::string &origin, const libyang::Module &module)
 {
-    auto moduleOrigin = gnxi::moduleOrigin(module);
-    return !moduleOrigin.has_value() || *moduleOrigin == origin;
+    auto module_origin = gnxi::module_origin(module);
+    return !module_origin.has_value() || *module_origin == origin;
 }
 
 /**
@@ -124,15 +124,15 @@ bool originContainsModule(const std::string &origin, const libyang::Module &modu
  *
  * @throws grpc::Status INVALID_ARGUMENT.
  */
-void checkModuleOrigin(const std::string &origin, const libyang::Module &module)
+void check_module_origin(const std::string &origin, const libyang::Module &module)
 {
-    if (originContainsModule(origin, module))
+    if (origin_contains_module(origin, module))
     {
         return;
     }
     throw grpc::Status(grpc::INVALID_ARGUMENT,
                        "module \"" + module.name() + "\" is under origin \"" +
-                           *gnxi::moduleOrigin(module) +
+                           *gnxi::module_origin(module) +
                            "\" and cannot be addressed under origin \"" + origin + "\"");
 }
 
@@ -145,37 +145,37 @@ void checkModuleOrigin(const std::string &origin, const libyang::Module &module)
  *
  * @throws grpc::Status INVALID_ARGUMENT.
  */
-std::string resolveTopName(const libyang::Context &ctx, const std::string &name,
-                           const std::string &origin)
+std::string resolve_top_name(const libyang::Context &ctx, const std::string &name,
+                             const std::string &origin)
 {
     auto separator = name.find(':');
     if (separator != std::string::npos)
     {
-        auto moduleName = name.substr(0, separator);
+        auto module_name = name.substr(0, separator);
         auto node = name.substr(separator + 1);
-        auto module = ctx.getModuleImplemented(moduleName);
+        auto module = ctx.getModuleImplemented(module_name);
         if (!module.has_value())
         {
-            throw grpc::Status(grpc::INVALID_ARGUMENT, "unknown module \"" + moduleName + "\"");
+            throw grpc::Status(grpc::INVALID_ARGUMENT, "unknown module \"" + module_name + "\"");
         }
-        if (!moduleHasTopNode(*module, node))
+        if (!module_has_top_node(*module, node))
         {
-            throw grpc::Status(grpc::INVALID_ARGUMENT, "module \"" + moduleName +
+            throw grpc::Status(grpc::INVALID_ARGUMENT, "module \"" + module_name +
                                                            "\" has no top-level node \"" + node +
                                                            "\"");
         }
-        checkModuleOrigin(origin, *module);
+        check_module_origin(origin, *module);
         return name;
     }
 
     std::vector<std::string> candidates;
     for (const auto &module : ctx.modules())
     {
-        if (!module.implemented() || !originContainsModule(origin, module))
+        if (!module.implemented() || !origin_contains_module(origin, module))
         {
             continue;
         }
-        if (moduleHasTopNode(module, name))
+        if (module_has_top_node(module, name))
         {
             candidates.push_back(module.name() + ":" + name);
         }
@@ -209,7 +209,7 @@ std::string resolveTopName(const libyang::Context &ctx, const std::string &name,
  *
  * @throws grpc::Status INVALID_ARGUMENT.
  */
-void appendKeyPredicates(std::string &xpath, const gnmi::PathElem &elem)
+void append_key_predicates(std::string &xpath, const gnmi::PathElem &elem)
 {
     for (const auto &key : elem.key())
     {
@@ -238,7 +238,7 @@ void appendKeyPredicates(std::string &xpath, const gnmi::PathElem &elem)
 }
 } // namespace
 
-std::string resolveOrigin(const gnmi::Path &prefix, const gnmi::Path &path)
+std::string resolve_origin(const gnmi::Path &prefix, const gnmi::Path &path)
 {
     std::string origin;
     if (!prefix.origin().empty())
@@ -266,16 +266,16 @@ std::string resolveOrigin(const gnmi::Path &prefix, const gnmi::Path &path)
     return origin;
 }
 
-std::string gnmiToXPath(const libyang::Context &ctx, const gnmi::Path &prefix,
-                        const gnmi::Path &path)
+std::string gnmi_to_xpath(const libyang::Context &ctx, const gnmi::Path &prefix,
+                          const gnmi::Path &path)
 {
-    auto origin = resolveOrigin(prefix, path);
+    auto origin = resolve_origin(prefix, path);
 
     std::string xpath;
     bool first = true;
     // set after a multi-level wildcard ("...") - its "//" already ends with the
     // separator of the element that follows
-    bool separatorPending = false;
+    bool separator_pending = false;
 
     for (const auto *part : {&prefix, &path})
     {
@@ -292,11 +292,11 @@ std::string gnmiToXPath(const libyang::Context &ctx, const gnmi::Path &prefix,
                 throw grpc::Status(grpc::INVALID_ARGUMENT, "path element with an empty name");
             }
 
-            if (!separatorPending)
+            if (!separator_pending)
             {
                 xpath += '/';
             }
-            separatorPending = false;
+            separator_pending = false;
             if (name == "*")
             {
                 xpath += '*';
@@ -305,12 +305,12 @@ std::string gnmiToXPath(const libyang::Context &ctx, const gnmi::Path &prefix,
             {
                 // multi-level wildcard, like XPath "//"
                 xpath += '/';
-                separatorPending = true;
+                separator_pending = true;
             }
             else
             {
-                xpath += first ? resolveTopName(ctx, name, origin) : name;
-                appendKeyPredicates(xpath, elem);
+                xpath += first ? resolve_top_name(ctx, name, origin) : name;
+                append_key_predicates(xpath, elem);
             }
             first = false;
         }
@@ -319,7 +319,7 @@ std::string gnmiToXPath(const libyang::Context &ctx, const gnmi::Path &prefix,
     return xpath.empty() ? ROOT_XPATH : xpath;
 }
 
-std::optional<std::string> moduleOrigin(const libyang::Module &module)
+std::optional<std::string> module_origin(const libyang::Module &module)
 {
     for (const auto &instance : module.extensionInstances())
     {
@@ -333,22 +333,22 @@ std::optional<std::string> moduleOrigin(const libyang::Module &module)
     return std::nullopt;
 }
 
-bool dataNodeInOrigin(const libyang::DataNode &node, const std::string &origin)
+bool data_node_in_origin(const libyang::DataNode &node, const std::string &origin)
 {
     auto root = node;
     while (auto parent = root.parent())
     {
         root = *parent;
     }
-    return originContainsModule(origin, root.schema().module());
+    return origin_contains_module(origin, root.schema().module());
 }
 
-PathFormat formatForOrigin(const std::string &origin)
+PathFormat format_for_origin(const std::string &origin)
 {
-    return origin == "rfc7951" ? PathFormat::Qualified : PathFormat::Bare;
+    return origin == "rfc7951" ? PathFormat::QUALIFIED : PathFormat::BARE;
 }
 
-void dataNodeToGnmiPath(const libyang::DataNode &node, PathFormat format, gnmi::Path &out)
+void data_node_to_gnmi_path(const libyang::DataNode &node, PathFormat format, gnmi::Path &out)
 {
     std::vector<libyang::DataNode> chain;
     for (std::optional<libyang::DataNode> current = node; current.has_value();
@@ -357,14 +357,14 @@ void dataNodeToGnmiPath(const libyang::DataNode &node, PathFormat format, gnmi::
         chain.push_back(*current);
     }
 
-    std::optional<std::string> previousModule;
+    std::optional<std::string> previous_module;
     for (auto it = chain.rbegin(); it != chain.rend(); ++it)
     {
         auto schema = it->schema();
         auto module = schema.module().name();
         auto elem = out.add_elem();
-        if (format == PathFormat::Qualified &&
-            (!previousModule.has_value() || *previousModule != module))
+        if (format == PathFormat::QUALIFIED &&
+            (!previous_module.has_value() || *previous_module != module))
         {
             elem->set_name(module + ":" + schema.name());
         }
@@ -382,7 +382,7 @@ void dataNodeToGnmiPath(const libyang::DataNode &node, PathFormat format, gnmi::
                 }
             }
         }
-        previousModule = module;
+        previous_module = module;
     }
 }
 } // namespace gnxi

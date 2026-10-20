@@ -129,8 +129,8 @@ void Auth::authenticate(sysrepo::Session &sess, const std::string &username,
     throw std::runtime_error("invalid username or password");
 }
 
-void Auth::authorize(sysrepo::Session &sess, const std::string &username,
-                     const std::unordered_set<std::string> &modules, Access permission) const
+void Auth::authorize_(sysrepo::Session &sess, const std::string &username,
+                      const std::unordered_set<std::string> &modules, Access permission) const
 {
     // an empty set of modules means the operation matches no schema nodes
     // (e.g. a non-existent path), so there is nothing to authorize
@@ -177,8 +177,8 @@ void Auth::authorize(sysrepo::Session &sess, const std::string &username,
                 std::string acc = acc_node->asTerm().valueStr();
 
                 // need read/write or read-only permission
-                if ((permission == Auth::Access::ReadWrite && acc == "rw") ||
-                    (permission == Auth::Access::ReadOnly && (acc == "rw" || acc == "ro")))
+                if ((permission == Auth::Access::READ_WRITE && acc == "rw") ||
+                    (permission == Auth::Access::READ_ONLY && (acc == "rw" || acc == "ro")))
                 {
                     modules_authorized.insert(mod);
                     continue;
@@ -244,7 +244,7 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
         const gnmi::Path &path_prefix = prefix.value_or(empty_prefix);
         for (auto &path : paths)
         {
-            xpaths.push_back(gnxi::gnmiToXPath(sess.getContext(), path_prefix, path));
+            xpaths.push_back(gnxi::gnmi_to_xpath(sess.getContext(), path_prefix, path));
         }
     }
     catch (const grpc::Status &status)
@@ -268,7 +268,7 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
         // reject any access to private modules
         for (const auto &mod : mods)
         {
-            if (isPrivateModule(mod))
+            if (is_private_module(mod))
             {
                 SLOG_ERROR("Authorization failed (private module): User ", name,
                            " attempted access to private module '", mod, "'.");
@@ -278,7 +278,7 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
         }
 
         // authorize the remaining modules against the user's ACL
-        authorize(sess, name, mods, permission);
+        authorize_(sess, name, mods, permission);
     }
 }
 

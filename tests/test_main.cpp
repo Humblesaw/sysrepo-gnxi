@@ -322,7 +322,7 @@ SetupServer server;
 
 SetupServer::~SetupServer()
 {
-    stop(server_pid_);
+    stop_(server_pid_);
     // the log is kept
 }
 
@@ -345,7 +345,7 @@ void SetupServer::launch(const std::string &test_name, bool debug, bool secure)
         apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "secure.json", "");
         server_args_ = {"-l", "4"};
         server_label_ = "mTLS";
-        server_pid_ = run_server(server_args_, server_log_);
+        server_pid_ = run_server_(server_args_, server_log_);
     }
     else
     {
@@ -362,7 +362,7 @@ void SetupServer::launch(const std::string &test_name, bool debug, bool secure)
                      sock_.string());
         server_args_ = {"-f", "-l", "4"};
         server_label_ = "Insecure";
-        server_pid_ = run_server(server_args_, server_log_);
+        server_pid_ = run_server_(server_args_, server_log_);
     }
 }
 
@@ -370,11 +370,11 @@ void SetupServer::wait_ready()
 {
     if (secure_)
     {
-        wait_for_tcp(HOST, PORT);
+        wait_for_tcp_(HOST, PORT);
     }
     else
     {
-        wait_for_unix(sock_.string());
+        wait_for_unix_(sock_.string());
     }
 }
 
@@ -385,7 +385,7 @@ void SetupServer::restart()
         throw std::runtime_error("restart() requires a running insecure server");
     }
 
-    stop(server_pid_);
+    stop_(server_pid_);
     server_pid_ = -1;
 
     // use a fresh socket path for the restarted server: a gRPC channel to
@@ -399,8 +399,8 @@ void SetupServer::restart()
     apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json",
                  sock_.string());
 
-    server_pid_ = run_server(server_args_, server_log_);
-    wait_for_unix(sock_.string());
+    server_pid_ = run_server_(server_args_, server_log_);
+    wait_for_unix_(sock_.string());
 
     // fresh client channel to the restarted server
     auto channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
@@ -411,7 +411,7 @@ void SetupServer::restart()
 #endif
 }
 
-void SetupServer::stop(pid_t pid)
+void SetupServer::stop_(pid_t pid)
 {
     if (pid > 0)
     {
@@ -421,7 +421,7 @@ void SetupServer::stop(pid_t pid)
     }
 }
 
-pid_t SetupServer::run_server(const std::vector<std::string> &args, const std::string &log_path)
+pid_t SetupServer::run_server_(const std::vector<std::string> &args, const std::string &log_path)
 {
     int pipefd[2] = {-1, -1};
     if (debug_)
@@ -486,7 +486,7 @@ pid_t SetupServer::run_server(const std::vector<std::string> &args, const std::s
         if (write(pipefd[1], &buf, 1) != 1)
         {
             perror("write");
-            stop(pid);
+            stop_(pid);
             throw std::runtime_error("failed to signal child");
         }
         close(pipefd[1]);
@@ -495,7 +495,7 @@ pid_t SetupServer::run_server(const std::vector<std::string> &args, const std::s
     return pid;
 }
 
-void SetupServer::wait_for_unix(const std::string &sock_path)
+void SetupServer::wait_for_unix_(const std::string &sock_path)
 {
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (std::chrono::steady_clock::now() < deadline)
@@ -518,7 +518,7 @@ void SetupServer::wait_for_unix(const std::string &sock_path)
     throw std::runtime_error("Insecure server (unix socket) did not become ready within 10s");
 }
 
-void SetupServer::wait_for_tcp(const std::string &host, uint16_t port)
+void SetupServer::wait_for_tcp_(const std::string &host, uint16_t port)
 {
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (std::chrono::steady_clock::now() < deadline)
@@ -556,8 +556,8 @@ class SetupSysrepo
 
         sr_sess = sr_conn.sessionStart();
 
-        sub = sr_sess->onModuleChange("sysrepo-gnxi-test", module_change_cb,
-                                      "/sysrepo-gnxi-test:test2/custom-error");
+        sub_ = sr_sess->onModuleChange("sysrepo-gnxi-test", module_change_cb,
+                                       "/sysrepo-gnxi-test:test2/custom-error");
 
         // operational data for the Get/Subscribe tests
         sr_sess->switchDatastore(sysrepo::Datastore::Operational);
@@ -568,15 +568,15 @@ class SetupSysrepo
         sr_sess->setItem("/sysrepo-gnxi-test:test-state/cargo", "");
         sr_sess->applyChanges();
 
-        sub->onRPCAction("/sysrepo-gnxi-test:clear-stats", clear_stats_rpc_cb, 0,
-                         sysrepo::SubscribeOptions::Default);
-        sub->onRPCAction("/sysrepo-gnxi-test:action-test/action-test", action_test_cb, 0,
-                         sysrepo::SubscribeOptions::Default);
+        sub_->onRPCAction("/sysrepo-gnxi-test:clear-stats", clear_stats_rpc_cb, 0,
+                          sysrepo::SubscribeOptions::Default);
+        sub_->onRPCAction("/sysrepo-gnxi-test:action-test/action-test", action_test_cb, 0,
+                          sysrepo::SubscribeOptions::Default);
     };
 
     ~SetupSysrepo()
     {
-        sub.reset();
+        sub_.reset();
         // don't hold onto sr_sess forever.
         sr_sess.reset();
     }
@@ -586,7 +586,7 @@ class SetupSysrepo
     SetupSysrepo &operator=(const SetupSysrepo &) = delete;
 
   private:
-    std::optional<sysrepo::Subscription> sub;
+    std::optional<sysrepo::Subscription> sub_;
 };
 
 class SetupTests
@@ -603,17 +603,17 @@ class SetupTests
         }
 
         // namespace per-binary so tests can run in parallel
-        repo_path = std::string(TESTS_WORKING_DIR) + "/" + test_name + "-repository";
-        sr_shm_path = std::string(TESTS_WORKING_DIR) + "/" + test_name + "-shm";
-        prepare_sysrepo_dirs(repo_path, sr_shm_path);
+        repo_path_ = std::string(TESTS_WORKING_DIR) + "/" + test_name + "-repository";
+        sr_shm_path_ = std::string(TESTS_WORKING_DIR) + "/" + test_name + "-shm";
+        prepare_sysrepo_dirs(repo_path_, sr_shm_path_);
 
-        if (setenv("SYSREPO_REPOSITORY_PATH", repo_path.c_str(), 0))
+        if (setenv("SYSREPO_REPOSITORY_PATH", repo_path_.c_str(), 0))
         {
             throw std::runtime_error("Failed to setenv SYSREPO_REPOSITORY_PATH " +
                                      std::string(strerror(errno)));
         }
 
-        if (setenv("SYSREPO_SHM_DIR", sr_shm_path.c_str(), 0))
+        if (setenv("SYSREPO_SHM_DIR", sr_shm_path_.c_str(), 0))
         {
             throw std::runtime_error("Failed to setenv SYSREPO_SHM_DIR " +
                                      std::string(strerror(errno)));
@@ -629,11 +629,11 @@ class SetupTests
         fprintf(stderr,
                 "Running tests with \nSYSREPO_REPOSITORY_PATH=%s\n"
                 "SYSREPO_SHM_DIR=%s\nSR_ENV_RUN_TESTS=1\n",
-                repo_path.c_str(), sr_shm_path.c_str());
+                repo_path_.c_str(), sr_shm_path_.c_str());
     }
 
   private:
-    std::string repo_path, sr_shm_path;
+    std::string repo_path_, sr_shm_path_;
 };
 
 int main(int argc, char *argv[])
@@ -663,8 +663,8 @@ int main(int argc, char *argv[])
 
     try
     {
-        SetupTests _setup_tests(test_name);
-        SetupSysrepo _setup_sysrepo;
+        SetupTests setup_tests(test_name);
+        SetupSysrepo setup_sysrepo;
 
 #ifdef AUTH_MTLS_ENABLED
         // this binary tests the secure (mTLS) server

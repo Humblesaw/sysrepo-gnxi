@@ -39,24 +39,24 @@ namespace impl
 
 static const char *update_op_str(UpdateOp op)
 {
-    return op == UpdateOp::Replace ? "replace" : "merge";
+    return op == UpdateOp::REPLACE ? "replace" : "merge";
 }
 
-grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
-                               const gnmi::Path &prefix, UpdateOp op)
+grpc::Status Set::handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out,
+                                 const gnmi::Path &prefix, UpdateOp op)
 {
     // Parse request
     if (!in.has_path() || !in.has_val())
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Update is missing path or value");
 
-    auto origin = gnxi::resolveOrigin(prefix, in.path());
-    std::string fullpath = gnxi::gnmiToXPath(sr_sess.getContext(), prefix, in.path());
+    auto origin = gnxi::resolve_origin(prefix, in.path());
+    std::string fullpath = gnxi::gnmi_to_xpath(sr_sess_.getContext(), prefix, in.path());
     SLOG_DEBUG("Update (", update_op_str(op), ") ", fullpath);
 
-    auto ly_ctx = sr_sess.getContext();
+    auto ly_ctx = sr_sess_.getContext();
     auto ietf_nc_mod = ly_ctx.getModuleImplemented("ietf-netconf").value();
 
-    if (fullpath != gnxi::ROOT_XPATH && op == UpdateOp::Replace)
+    if (fullpath != gnxi::ROOT_XPATH && op == UpdateOp::REPLACE)
     {
         // Replacing a list or leaf-list means we should delete all previous entries
 
@@ -91,11 +91,11 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
                 del_node->newMeta(sr_mod, "sysrepo:operation", "purge");
             }
 
-            xact.merge(purgeTree, parent);
+            xact_.merge(purge_tree_, parent);
         }
     }
 
-    auto [status, top_level] = encodef->decode(fullpath, in.val(), EncodePurpose::Set);
+    auto [status, top_level] = encodef_->decode(fullpath, in.val(), EncodePurpose::SET);
 
     if (!status.ok())
         return status;
@@ -105,7 +105,7 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
         // root updates may span modules - all of them must belong to the origin
         for (auto n = top_level; n.has_value(); n = n->nextSibling())
         {
-            if (!gnxi::dataNodeInOrigin(*n, origin))
+            if (!gnxi::data_node_in_origin(*n, origin))
             {
                 throw grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                                    "update data under origin \"" + origin +
@@ -113,19 +113,19 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
             }
         }
 
-        if (op == UpdateOp::Replace)
+        if (op == UpdateOp::REPLACE)
         {
             // The gNMI semantics are that a replace at the top-level should cause all data node
             // not provided to be removed. However, sysrepo semantics are that only the provided
             // nodes are replaced. Therefore, request that everything not being replaced is deleted.
 
-            auto del_root = sr_sess.getData(fullpath, 1);
+            auto del_root = sr_sess_.getData(fullpath, 1);
             // Walk all siblings not in update and add delete node to them
             for (auto n = std::optional<libyang::DataNode>(del_root); n.has_value();
                  n = n->nextSibling())
             {
                 // data of other origins is not part of this replace
-                if (!gnxi::dataNodeInOrigin(*n, origin))
+                if (!gnxi::data_node_in_origin(*n, origin))
                 {
                     continue;
                 }
@@ -154,7 +154,7 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
                 if (!is_replace_node)
                 {
                     n->newMeta(ietf_nc_mod, "ietf-netconf:operation", "remove");
-                    xact.merge(deleteTree, n);
+                    xact_.merge(delete_tree_, n);
                 }
             }
         }
@@ -166,13 +166,13 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
             n->newMeta(ietf_nc_mod, "ietf-netconf:operation", update_op_str(op));
         }
 
-        if (op == UpdateOp::Replace)
+        if (op == UpdateOp::REPLACE)
         {
-            xact.merge(replaceTree, top_level);
+            xact_.merge(replace_tree_, top_level);
         }
         else
         {
-            xact.merge(updateTree, top_level);
+            xact_.merge(update_tree_, top_level);
         }
     }
     else
@@ -194,13 +194,13 @@ grpc::Status Set::handleUpdate(const gnmi::Update &in, gnmi::UpdateResult *out,
             SLOG_DEBUG(update_op_str(op), " path: ", edit_node.path());
         }
 
-        if (op == UpdateOp::Replace)
+        if (op == UpdateOp::REPLACE)
         {
-            xact.merge(replaceTree, top_level);
+            xact_.merge(replace_tree_, top_level);
         }
         else
         {
-            xact.merge(updateTree, top_level);
+            xact_.merge(update_tree_, top_level);
         }
     }
 
@@ -237,18 +237,18 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         {
         case gnmi_ext::Commit::kCommit:
         {
-            int64_t rollback_secs = Commit::default_rollback_secs;
+            int64_t rollback_secs = Commit::DEFAULT_ROLLBACK_SECS;
             if (commit_ext->commit().has_rollback_duration())
                 rollback_secs = commit_ext->commit().rollback_duration().seconds();
-            auto status = commit_state->request_setup(commit_ext->id(), rollback_secs,
-                                                      auth_.username(context));
+            auto status = commit_state_->request_setup(commit_ext->id(), rollback_secs,
+                                                       auth_.username(context));
             if (!status.ok())
                 return status;
             break;
         }
         case gnmi_ext::Commit::kConfirm:
         {
-            auto status = commit_state->confirm(commit_ext->id(), auth_.username(context));
+            auto status = commit_state_->confirm(commit_ext->id(), auth_.username(context));
             if (!status.ok())
                 return status;
             response->set_timestamp(get_time_nanosec());
@@ -256,7 +256,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         }
         case gnmi_ext::Commit::kCancel:
         {
-            auto status = commit_state->cancel(commit_ext->id(), auth_.username(context));
+            auto status = commit_state_->cancel(commit_ext->id(), auth_.username(context));
             if (!status.ok())
                 return status;
             response->set_timestamp(get_time_nanosec());
@@ -267,8 +267,8 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             int64_t rollback_secs = 0;
             if (commit_ext->set_rollback_duration().has_rollback_duration())
                 rollback_secs = commit_ext->set_rollback_duration().rollback_duration().seconds();
-            auto status = commit_state->set_rollback_duration(commit_ext->id(), rollback_secs,
-                                                              auth_.username(context));
+            auto status = commit_state_->set_rollback_duration(commit_ext->id(), rollback_secs,
+                                                               auth_.username(context));
             if (!status.ok())
                 return status;
             response->set_timestamp(get_time_nanosec());
@@ -282,7 +282,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
 
     // a plain Set while a rollback counter is running
     // must fail with FAILED_PRECONDITION
-    if (!commit_ext && commit_state->get_wait_confirm())
+    if (!commit_ext && commit_state_->get_wait_confirm())
     {
         return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                             "previous Set has to be confirmed");
@@ -307,13 +307,13 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             paths.push_back(r.path());
         }
         // TODO add union_replace authorization
-        auth_.authorize(context, sr_sess,
+        auth_.authorize(context, sr_sess_,
                         request->has_prefix() ? std::optional(request->prefix()) : std::nullopt,
-                        paths, Auth::Access::ReadWrite);
+                        paths, Auth::Access::READ_WRITE);
     }
     catch (const grpc::Status &auth_status)
     {
-        commit_state->clear();
+        commit_state_->clear();
         return auth_status;
     }
 
@@ -325,7 +325,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
 
     if (request->delete__size() > 0)
     {
-        auto ly_ctx = sr_sess.getContext();
+        auto ly_ctx = sr_sess_.getContext();
         auto ietf_nc_mod = ly_ctx.getModuleImplemented("ietf-netconf").value();
         auto sr_mod = ly_ctx.getModuleImplemented("sysrepo").value();
 
@@ -340,8 +340,8 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             std::string fullpath;
             try
             {
-                auto origin = gnxi::resolveOrigin(request->prefix(), delpath);
-                fullpath = gnxi::gnmiToXPath(ly_ctx, request->prefix(), delpath);
+                auto origin = gnxi::resolve_origin(request->prefix(), delpath);
+                fullpath = gnxi::gnmi_to_xpath(ly_ctx, request->prefix(), delpath);
                 del_paths.insert(fullpath);
                 if (fullpath == gnxi::ROOT_XPATH)
                 {
@@ -351,7 +351,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             catch (const grpc::Status &status)
             {
                 SLOG_WARN("Invalid delete path: ", status.error_message());
-                commit_state->clear();
+                commit_state_->clear();
                 return status;
             }
 
@@ -371,7 +371,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 // mixed with edit_batch, so retrieve just the nodes referenced by
                 // the xpath and no deeper to avoid it being any more expensive
                 // than it has to be
-                auto del_root = sr_sess.getData(fullpath, 0);
+                auto del_root = sr_sess_.getData(fullpath, 0);
                 if (!del_root.has_value())
                     throw std::runtime_error("xpath \"" + fullpath + "\" not found");
 
@@ -384,7 +384,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                         bool in_origin = false;
                         for (const auto &origin : del_root_origins)
                         {
-                            if (gnxi::dataNodeInOrigin(n, origin))
+                            if (gnxi::data_node_in_origin(n, origin))
                             {
                                 in_origin = true;
                                 break;
@@ -433,12 +433,12 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 // only contains the top-level ancestors of the matched nodes, so
                 // the siblings merged along are ancestors of marked (or otherwise
                 // already existing) data only.
-                xact.merge(deleteTree, del_root);
+                xact_.merge(delete_tree_, del_root);
             }
             catch (const sysrepo::Error &exc)
             {
                 SLOG_WARN("Failed to delete \"", fullpath, "\": ", exc.what());
-                commit_state->clear();
+                commit_state_->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
             catch (const std::runtime_error &exc)
@@ -450,7 +450,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             catch (const std::exception &exc)
             {
                 SLOG_WARN("Failed to delete \"", fullpath, "\": ", exc.what());
-                commit_state->clear();
+                commit_state_->clear();
                 return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
             }
         }
@@ -461,10 +461,10 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         gnmi::UpdateResult res;
         try
         {
-            auto status = handleUpdate(repl, &res, request->prefix(), UpdateOp::Replace);
+            auto status = handle_update_(repl, &res, request->prefix(), UpdateOp::REPLACE);
             if (!status.ok())
             {
-                commit_state->clear();
+                commit_state_->clear();
                 return status;
             }
 
@@ -474,25 +474,25 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         catch (const grpc::Status &status)
         {
             SLOG_WARN("Replace failed: ", status.error_message());
-            commit_state->clear();
+            commit_state_->clear();
             return status;
         }
         catch (const sysrepo::Error &exc)
         {
             SLOG_ERROR("Replace failed: ", exc.what());
-            commit_state->clear();
+            commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
         catch (const std::runtime_error &exc)
         {
             SLOG_WARN("Replace failed: ", exc.what());
-            commit_state->clear();
+            commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
         catch (const std::exception &exc)
         { // Any other exception
             SLOG_ERROR("Replace failed: ", exc.what());
-            commit_state->clear();
+            commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
     }
@@ -501,7 +501,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
     if (request->union_replace_size() > 0)
     {
         SLOG_WARN("Unsupported union_replace in SetRequest");
-        commit_state->clear();
+        commit_state_->clear();
         return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "union_replace not supported");
     }
 
@@ -510,10 +510,10 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         gnmi::UpdateResult res;
         try
         {
-            auto status = handleUpdate(upd, &res, request->prefix(), UpdateOp::Merge);
+            auto status = handle_update_(upd, &res, request->prefix(), UpdateOp::MERGE);
             if (!status.ok())
             {
-                commit_state->clear();
+                commit_state_->clear();
                 return status;
             }
 
@@ -523,55 +523,55 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         catch (const grpc::Status &status)
         {
             SLOG_WARN("Update failed: ", status.error_message());
-            commit_state->clear();
+            commit_state_->clear();
             return status;
         }
         catch (const sysrepo::Error &exc)
         {
             SLOG_ERROR("Update failed: ", exc.what());
-            commit_state->clear();
+            commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
         catch (const std::runtime_error &exc)
         {
             SLOG_WARN("Update failed: ", exc.what());
-            commit_state->clear();
+            commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
         catch (const std::exception &exc)
         { // Any other exception
             SLOG_ERROR("Update failed: ", exc.what());
-            commit_state->clear();
+            commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
     }
 
-    xact.push(deleteTree);
-    xact.push(purgeTree);
-    xact.push(replaceTree);
-    xact.push(updateTree);
+    xact_.push(delete_tree_);
+    xact_.push(purge_tree_);
+    xact_.push(replace_tree_);
+    xact_.push(update_tree_);
 
     try
     {
         /* edit final tree batch */
-        if (xact.final_tree.has_value())
-            sr_sess.editBatch(xact.final_tree.value(), sysrepo::DefaultOperation::Merge);
+        if (xact_.final_tree.has_value())
+            sr_sess_.editBatch(xact_.final_tree.value(), sysrepo::DefaultOperation::Merge);
 
         /* if this fails, we can still revert the changes */
-        sr_sess.applyChanges();
+        sr_sess_.applyChanges();
 
         if (!commit_ext)
         {
             /* copy the prepared configuration to Startup (has to succeed) */
-            SessionDsSwitcher ds_switch(sr_sess, sysrepo::Datastore::Startup);
-            sr_sess.copyConfig(sysrepo::Datastore::Running);
+            SessionDsSwitcher ds_switch(sr_sess_, sysrepo::Datastore::Startup);
+            sr_sess_.copyConfig(sysrepo::Datastore::Running);
         }
     }
     catch (const sysrepo::Error &exc)
     {
-        commit_state->clear();
+        commit_state_->clear();
         std::string err_str;
-        auto errors = sr_sess.getErrors();
+        auto errors = sr_sess_.getErrors();
         if (errors.size())
         {
             err_str = errors[0].errorMessage;
@@ -581,14 +581,14 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
             err_str = exc.what();
         }
         SLOG_ERROR("commit error: ", err_str);
-        sr_sess.discardChanges();
+        sr_sess_.discardChanges();
         return grpc::Status(grpc::StatusCode::ABORTED, err_str);
     }
     catch (const std::exception &exc)
     {
-        commit_state->clear();
+        commit_state_->clear();
         SLOG_ERROR(exc.what());
-        sr_sess.discardChanges();
+        sr_sess_.discardChanges();
         return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
     }
 
@@ -600,7 +600,7 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
     // start the confirm timer (timeout callback)
     if (commit_ext)
     {
-        commit_state->request_finish();
+        commit_state_->request_finish();
     }
     return grpc::Status::OK;
 }
