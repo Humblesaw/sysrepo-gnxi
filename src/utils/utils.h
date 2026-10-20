@@ -57,9 +57,15 @@ inline uint64_t get_time_nanosec()
 inline bool is_private_module(const std::string &name)
 {
     static const std::unordered_set<std::string> PRIVATE_MODULES = {
-        "sysrepo",         "sysrepo-gnxi-server", "sysrepo-gnxi-users",
-        "ietf-keystore",   "ietf-truststore",     "ietf-crypto-types",
-        "ietf-tls-server", "ietf-tls-common",     "iana-tls-cipher-suite-algs",
+        "sysrepo",
+        "sysrepo-gnxi-server",
+        "sysrepo-gnxi-users",
+        "ietf-keystore",
+        "ietf-truststore",
+        "ietf-crypto-types",
+        "ietf-tls-server",
+        "ietf-tls-common",
+        "iana-tls-cipher-suite-algs",
     };
     return PRIVATE_MODULES.contains(name);
 }

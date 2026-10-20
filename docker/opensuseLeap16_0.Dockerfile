@@ -4,6 +4,7 @@ FROM opensuse/leap:16.0
 RUN zypper update -y \
     && zypper install -y -t pattern devel_basis devel_C_C++ \
     && zypper install -y git cmake pcre2-devel systemd-devel grpc-devel protobuf-devel libopenssl-devel \
+    && (zypper install -y clang-format || zypper install -y clang) \
     && zypper clean -a \
     && echo "/usr/local/lib64" > /etc/ld.so.conf.d/local.conf
 

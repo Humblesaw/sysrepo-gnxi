@@ -64,7 +64,9 @@ TEST_CASE("Top-level Get request", "[get]")
         auto path = path_to_xpath(it.path());
         std::cout << "found path: " << path << std::endl;
         if (path.compare("/sysrepo-gnxi-test:test-state"))
+        {
             continue;
+        }
         found = true;
         CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
               gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -95,7 +97,9 @@ static void single_get()
     {
         auto path = path_to_xpath(it.path());
         if (path.compare("/sysrepo-gnxi-test:test-state"))
+        {
             continue;
+        }
         found = true;
         CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
               gnmi::TypedValue::ValueCase::kJsonIetfVal);
@@ -509,8 +513,8 @@ TEST_CASE("Get request of one leaf where parent name contains /", "[get]")
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']/counter",
-                  request.add_path());
+    xpath_to_path(
+        "/sysrepo-gnxi-test:test-state/things[name='Gigabit5/0/0']/counter", request.add_path());
 
     const gnmi::Path reqpath = request.path(0);
     CHECK(reqpath.elem_size() == 3);
@@ -677,8 +681,8 @@ TEST_CASE("Get request from list with composite key ", "[get-composite-key]")
     sr_sess->applyChanges();
 
     // prepare a get request for that entry
-    xpath_to_path("/sysrepo-gnxi-test:test3/complex-list[name='foo'][type='bar']",
-                  request.add_path());
+    xpath_to_path(
+        "/sysrepo-gnxi-test:test3/complex-list[name='foo'][type='bar']", request.add_path());
 
     // check parsing of the xpath_to_path() function
     const gnmi::Path reqpath = request.path(0);
@@ -715,8 +719,8 @@ TEST_CASE("Get request from list with composite key ", "[get-composite-key]")
     sr_sess->applyChanges();
 }
 
-TEST_CASE("Get request from list with composite key having slashes ",
-          "[get-composite-key-with-slashes]")
+TEST_CASE(
+    "Get request from list with composite key having slashes ", "[get-composite-key-with-slashes]")
 {
     grpc::ClientContext ctx;
     gnmi::GetRequest request;
@@ -755,8 +759,8 @@ TEST_CASE("Get request from list with composite key having slashes ",
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
-    CHECK_THAT(json,
-               Equals("{\"type\":\"bar/cat/fish\",\"name\":\"foo/dog/sausage\",\"data\":\"baz\"}"));
+    CHECK_THAT(
+        json, Equals("{\"type\":\"bar/cat/fish\",\"name\":\"foo/dog/sausage\",\"data\":\"baz\"}"));
     auto resppath = response.notification().Get(0).update().Get(0).path();
     CHECK(resppath.elem_size() == 2);
     CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test:test3"));
@@ -770,8 +774,9 @@ TEST_CASE("Get request from list with composite key having slashes ",
         "/sysrepo-gnxi-test:test3/complex-list[type='bar/cat/fish'][name='foo/dog/sausage']");
     sr_sess->applyChanges();
 }
+
 TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
-          "[get-composite-key-with-quotes]")
+    "[get-composite-key-with-quotes]")
 {
     grpc::ClientContext ctx;
     gnmi::GetRequest request;
@@ -781,7 +786,7 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
     sr_sess->setItem("/sysrepo-gnxi-test:test3/complex-list[type='bar/cat/fish'][name='quotes: \", "
                      "blah blah']/data",
-                     "baz");
+        "baz");
     sr_sess->applyChanges();
 
     // prepare a get request for that entry
@@ -810,8 +815,7 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
-    CHECK_THAT(
-        json,
+    CHECK_THAT(json,
         Equals(
             "{\"type\":\"bar/cat/fish\",\"name\":\"quotes: \\\", blah blah\",\"data\":\"baz\"}"));
     auto resppath = response.notification().Get(0).update().Get(0).path();
@@ -902,8 +906,8 @@ TEST_CASE("Get request with relative path", "[get-neg]")
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(),
-               Equals("gNMI paths MUST be absolute, \"..\" is not allowed"));
+    CHECK_THAT(
+        status.error_message(), Equals("gNMI paths MUST be absolute, \"..\" is not allowed"));
 }
 
 TEST_CASE("Get request of one list item where name contains \"", "[get]")
@@ -930,10 +934,10 @@ TEST_CASE("Get request of one list item where name contains \"", "[get]")
     auto update = response.notification().Get(0).update().Get(0);
     CHECK(update.val().value_case() == gnmi::TypedValue::ValueCase::kJsonIetfVal);
     // the double quote is preserved in the value, escaped as per JSON (RFC 8259 §7)
-    CHECK_THAT(update.val().json_ietf_val(),
-               Equals("{\"name\":\"to-cpe1\\\"\",\"counter\":\"6\"}"));
+    CHECK_THAT(
+        update.val().json_ietf_val(), Equals("{\"name\":\"to-cpe1\\\"\",\"counter\":\"6\"}"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/sysrepo-gnxi-test:test-state/things[name='to-cpe1\"']"));
+        Equals("/sysrepo-gnxi-test:test-state/things[name='to-cpe1\"']"));
     CHECK(!response.notification().Get(0).atomic());
 
     // clean up
@@ -977,8 +981,8 @@ TEST_CASE("Get request with openconfig origin and qualified names", "[get-origin
     gnmi::GetResponse response;
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
-    xpath_to_path("/sysrepo-gnxi-test:test-state/things[name='A']/counter", request.add_path(),
-                  "openconfig");
+    xpath_to_path(
+        "/sysrepo-gnxi-test:test-state/things[name='A']/counter", request.add_path(), "openconfig");
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.ok());
@@ -1020,7 +1024,7 @@ TEST_CASE("Get request with rfc7951 origin and bare names", "[get-origin]")
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
+        Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1051,7 +1055,7 @@ TEST_CASE("Get request with origin in both prefix and path", "[get-origin]")
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("origin must not be specified in both prefix and path (gNMI spec 2.7)"));
+        Equals("origin must not be specified in both prefix and path (gNMI spec 2.7)"));
 }
 
 TEST_CASE("Get request with origin and target in prefix", "[get-origin]")
@@ -1083,7 +1087,7 @@ TEST_CASE("Get request with origin and target in prefix", "[get-origin]")
     CHECK_THAT(update.val().json_ietf_val(), Equals("\"1\""));
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
+        Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1100,7 +1104,7 @@ TEST_CASE("Get request with paths of different origins", "[get-origin]")
 
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path("/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score",
-                  request.add_path());
+        request.add_path());
     xpath_to_path("/test-state/things[name='A']/counter", request.add_path(), "");
 
     auto status = gnmi_client->Get(&ctx, request, &response);
@@ -1113,8 +1117,8 @@ TEST_CASE("Get request with paths of different origins", "[get-origin]")
     auto update = response.notification().Get(0).update().Get(0);
     CHECK_THAT(update.path().origin(), Equals("rfc7951"));
     CHECK_THAT(path_to_xpath(update.path()),
-               Equals("/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']"
-                      "/score"));
+        Equals("/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']"
+               "/score"));
     CHECK_THAT(update.val().json_ietf_val(), Equals("98"));
 
     update = response.notification().Get(1).update().Get(0);
@@ -1140,8 +1144,8 @@ TEST_CASE("Get request with relative element in prefix", "[get]")
 
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
-    CHECK_THAT(status.error_message(),
-               Equals("gNMI paths MUST be absolute, \"..\" is not allowed"));
+    CHECK_THAT(
+        status.error_message(), Equals("gNMI paths MUST be absolute, \"..\" is not allowed"));
 }
 
 TEST_CASE("Get request with ambiguous bare element name", "[get-origin]")
@@ -1244,7 +1248,7 @@ TEST_CASE("Get request with multi-level wildcard", "[get-origin]")
     // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK(counters == std::set<std::string>{"\"1\"", "\"2\""});
     CHECK(paths == std::set<std::string>{"/test-state/things[name='A']/counter",
-                                         "/test-state/things[name='B']/counter"});
+                       "/test-state/things[name='B']/counter"});
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1278,7 +1282,7 @@ TEST_CASE("Get request with wildcard key value", "[get-origin]")
     // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK(counters == std::set<std::string>{"\"1\"", "\"2\""});
     CHECK(paths == std::set<std::string>{"/test-state/things[name='A']/counter",
-                                         "/test-state/things[name='B']/counter"});
+                       "/test-state/things[name='B']/counter"});
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1309,7 +1313,7 @@ TEST_CASE("Get request with wildcard in prefix", "[get-origin]")
     // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK(counters == std::set<std::string>{"\"1\"", "\"2\""});
     CHECK(paths == std::set<std::string>{"/sysrepo-gnxi-test:test-state/things[name='A']/counter",
-                                         "/sysrepo-gnxi-test:test-state/things[name='B']/counter"});
+                       "/sysrepo-gnxi-test:test-state/things[name='B']/counter"});
     CHECK(!response.notification().Get(0).atomic());
 }
 
@@ -1329,7 +1333,7 @@ TEST_CASE("Get request with key value containing both quote characters", "[get-o
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("key \"name\" value contains both quote characters: a'b\"c"));
+        Equals("key \"name\" value contains both quote characters: a'b\"c"));
 }
 
 TEST_CASE("Get request from a module under a different origin", "[get-origin]")
@@ -1344,8 +1348,8 @@ TEST_CASE("Get request from a module under a different origin", "[get-origin]")
     auto status = gnmi_client->Get(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
     CHECK_THAT(status.error_message(),
-               Equals("module \"sysrepo-gnxi-test-wine\" is under origin \"rfc7951\" and cannot "
-                      "be addressed under origin \"openconfig\""));
+        Equals("module \"sysrepo-gnxi-test-wine\" is under origin \"rfc7951\" and cannot "
+               "be addressed under origin \"openconfig\""));
 }
 
 TEST_CASE("Get request with bare name of a module under a different origin", "[get-origin]")

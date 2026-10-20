@@ -36,8 +36,7 @@ namespace impl
 {
 
 grpc::Status Get::build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Update> *update_list,
-                                    const std::string &fullpath, gnmi::Encoding encoding,
-                                    const std::string &origin)
+    const std::string &fullpath, gnmi::Encoding encoding, const std::string &origin)
 {
     try
     {
@@ -56,8 +55,8 @@ grpc::Status Get::build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Upd
                 continue;
             }
             auto update = update_list->Add();
-            gnxi::data_node_to_gnmi_path(n, gnxi::format_for_origin(origin),
-                                         *update->mutable_path());
+            gnxi::data_node_to_gnmi_path(
+                n, gnxi::format_for_origin(origin), *update->mutable_path());
             update->mutable_path()->set_origin(origin);
             auto status = encodef_->encode(encoding, n, update->mutable_val());
             if (!status.ok())
@@ -91,9 +90,8 @@ grpc::Status Get::build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Upd
  * is a directory path.
  */
 grpc::Status Get::build_get_notification_(gnmi::Notification *notification,
-                                          const gnmi::Path &prefix, const gnmi::Path &path,
-                                          gnmi::Encoding encoding,
-                                          gnmi::GetRequest_DataType data_type)
+    const gnmi::Path &prefix, const gnmi::Path &path, gnmi::Encoding encoding,
+    gnmi::GetRequest_DataType data_type)
 {
     /* Data elements that have changed values */
     google::protobuf::RepeatedPtrField<gnmi::Update> *update_list = notification->mutable_update();
@@ -130,7 +128,9 @@ grpc::Status Get::build_get_notification_(gnmi::Notification *notification,
     }
 
     if (data_type == gnmi::GetRequest_DataType_CONFIG)
+    {
         ds = sysrepo::Datastore::Running;
+    }
 
     SessionDsSwitcher ds_switch(sr_sess_, ds);
 
@@ -142,14 +142,16 @@ static inline grpc::Status verify_get_request(const gnmi::GetRequest *request)
 {
     auto status = gnmi_check_encoding(request->encoding());
     if (!status.ok())
+    {
         return status;
+    }
 
     if (!GetRequest_DataType_IsValid(request->type()))
     {
-        SLOG_WARN("Invalid Data Type in Get Request ",
-                  gnmi::GetRequest_DataType_Name(request->type()));
-        return grpc::Status(grpc::StatusCode::UNIMPLEMENTED,
-                            gnmi::GetRequest_DataType_Name(request->type()));
+        SLOG_WARN(
+            "Invalid Data Type in Get Request ", gnmi::GetRequest_DataType_Name(request->type()));
+        return grpc::Status(
+            grpc::StatusCode::UNIMPLEMENTED, gnmi::GetRequest_DataType_Name(request->type()));
     }
 
     if (request->use_models_size() > 0)
@@ -168,8 +170,8 @@ static inline grpc::Status verify_get_request(const gnmi::GetRequest *request)
 }
 
 /* Implement gNMI Get RPC */
-grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
-                      gnmi::GetResponse *response)
+grpc::Status Get::run(
+    grpc::ServerContext *context, const gnmi::GetRequest *req, gnmi::GetResponse *response)
 {
     google::protobuf::RepeatedPtrField<gnmi::Notification> *notification_list;
     gnmi::Notification *notification;
@@ -177,10 +179,12 @@ grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
 
     status = verify_get_request(req);
     if (!status.ok())
+    {
         return status;
+    }
 
     SLOG_DEBUG("GetRequest DataType ", gnmi::GetRequest::DataType_Name(req->type()),
-               ", GetRequest Encoding ", gnmi::Encoding_Name(req->encoding()));
+        ", GetRequest Encoding ", gnmi::Encoding_Name(req->encoding()));
 
     // authorize
     std::vector<gnmi::Path> paths;
@@ -189,8 +193,8 @@ grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
         paths.push_back(p);
     }
     auth_.authorize(context, sr_sess_,
-                    req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
-                    Auth::Access::READ_ONLY);
+        req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
+        Auth::Access::READ_ONLY);
 
     /* Run through all paths */
     notification_list = response->mutable_notification();
@@ -198,8 +202,8 @@ grpc::Status Get::run(grpc::ServerContext *context, const gnmi::GetRequest *req,
     {
         notification = notification_list->Add();
 
-        status = build_get_notification_(notification, req->prefix(), path, req->encoding(),
-                                         req->type());
+        status = build_get_notification_(
+            notification, req->prefix(), path, req->encoding(), req->type());
         if (!status.ok())
         {
             SLOG_WARN("Failed building get notification: ", status.error_message());

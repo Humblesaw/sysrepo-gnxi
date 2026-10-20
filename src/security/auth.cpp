@@ -85,8 +85,8 @@ std::string Auth::username(grpc::ServerContext *ctx) const
     return std::string(vals[0].data(), vals[0].length());
 }
 
-void Auth::authenticate(sysrepo::Session &sess, const std::string &username,
-                        const std::string &password) const
+void Auth::authenticate(
+    sysrepo::Session &sess, const std::string &username, const std::string &password) const
 {
     // insecure mode == no authentication
     if (insecure_)
@@ -130,7 +130,7 @@ void Auth::authenticate(sysrepo::Session &sess, const std::string &username,
 }
 
 void Auth::authorize_(sysrepo::Session &sess, const std::string &username,
-                      const std::unordered_set<std::string> &modules, Access permission) const
+    const std::unordered_set<std::string> &modules, Access permission) const
 {
     // an empty set of modules means the operation matches no schema nodes
     // (e.g. a non-existent path), so there is nothing to authorize
@@ -189,8 +189,7 @@ void Auth::authorize_(sysrepo::Session &sess, const std::string &username,
                     SLOG_ERROR("Authorization failed (insufficient permissions): User " + username +
                                " has been denied " + acc + " access to " + mod + ".");
                     throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                                       "User " + username + " has been denied " + acc +
-                                           " access to " + mod + ".");
+                        "User " + username + " has been denied " + acc + " access to " + mod + ".");
                 }
             }
 
@@ -206,7 +205,7 @@ void Auth::authorize_(sysrepo::Session &sess, const std::string &username,
     {
         SLOG_ERROR("Authorization failed (user database problem): ", exc.what());
         throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                           "Authorization failed: " + std::string(exc.what()));
+            "Authorization failed: " + std::string(exc.what()));
     }
 
     // authorized only if every used module has been covered by an ACL entry
@@ -217,18 +216,17 @@ void Auth::authorize_(sysrepo::Session &sess, const std::string &username,
             if (!modules_authorized.contains(mod))
             {
                 SLOG_ERROR("Authorization failed (module not in ACL): User '", username,
-                           "' lacks an ACL entry for module '", mod, "'.");
+                    "' lacks an ACL entry for module '", mod, "'.");
                 throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                                   "User " + username + " lacks an ACL entry for module '" + mod +
-                                       "'.");
+                    "User " + username + " lacks an ACL entry for module '" + mod + "'.");
             }
         }
     }
 }
 
 void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
-                     const std::optional<gnmi::Path> &prefix, const std::vector<gnmi::Path> &paths,
-                     Access permission) const
+    const std::optional<gnmi::Path> &prefix, const std::vector<gnmi::Path> &paths,
+    Access permission) const
 {
     // insecure mode == no authorization
     if (insecure_)
@@ -271,9 +269,9 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
             if (is_private_module(mod))
             {
                 SLOG_ERROR("Authorization failed (private module): User ", name,
-                           " attempted access to private module '", mod, "'.");
+                    " attempted access to private module '", mod, "'.");
                 throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                                   "Access to module '" + mod + "' is forbidden.");
+                    "Access to module '" + mod + "' is forbidden.");
             }
         }
 
@@ -283,9 +281,8 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
 }
 
 grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
-                                            grpc::AuthContext *context,
-                                            OutputMetadata *consumed_auth_metadata,
-                                            OutputMetadata *response_metadata)
+    grpc::AuthContext *context, OutputMetadata *consumed_auth_metadata,
+    OutputMetadata *response_metadata)
 {
     (void)response_metadata;
 
@@ -301,9 +298,9 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
     }
 
     std::string username(auth_metadata.find("username")->second.data(),
-                         auth_metadata.find("username")->second.length());
+        auth_metadata.find("username")->second.length());
     std::string password(auth_metadata.find("password")->second.data(),
-                         auth_metadata.find("password")->second.length());
+        auth_metadata.find("password")->second.length());
     auto cleanse = [&username, &password]()
     {
         OPENSSL_cleanse(username.data(), username.size());

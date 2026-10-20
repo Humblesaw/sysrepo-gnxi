@@ -117,8 +117,8 @@ static void wait_for_terminate(void)
  * @param[in] what Description of the leaf.
  * @return Leaf value.
  */
-static std::string config_value(sysrepo::Session &sess, const std::string &path,
-                                const std::string &what)
+static std::string config_value(
+    sysrepo::Session &sess, const std::string &path, const std::string &what)
 {
     auto data = sess.getData(path);
     if (!data.has_value())
@@ -141,8 +141,8 @@ static std::string config_value(sysrepo::Session &sess, const std::string &path,
  * @param[in] xpath XPath to find.
  * @return Matching nodes.
  */
-static std::vector<libyang::DataNode> config_values(sysrepo::Session &sess,
-                                                    const std::string &xpath)
+static std::vector<libyang::DataNode> config_values(
+    sysrepo::Session &sess, const std::string &xpath)
 {
     auto data = sess.getData(xpath);
     if (!data.has_value())
@@ -233,46 +233,43 @@ static Auth::TlsMaterial load_tls_config(sysrepo::Session &sess)
     Auth::TlsMaterial tls;
 
     // the referenced key/certificate/bag names fluctuate, read them first
-    std::string key_name =
-        config_value(sess,
-                     "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
-                     "central-keystore-reference/asymmetric-key",
-                     "TLS server identity asymmetric-key reference");
-    std::string cert_name =
-        config_value(sess,
-                     "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
-                     "central-keystore-reference/certificate",
-                     "TLS server identity certificate reference");
-    std::string bag_name =
-        config_value(sess,
-                     "/sysrepo-gnxi-server:server/tls/client-authentication/ca-certs/"
-                     "central-truststore-reference",
-                     "TLS client authentication CA-certs truststore reference");
+    std::string key_name = config_value(sess,
+        "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
+        "central-keystore-reference/asymmetric-key",
+        "TLS server identity asymmetric-key reference");
+    std::string cert_name = config_value(sess,
+        "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
+        "central-keystore-reference/certificate",
+        "TLS server identity certificate reference");
+    std::string bag_name = config_value(sess,
+        "/sysrepo-gnxi-server:server/tls/client-authentication/ca-certs/"
+        "central-truststore-reference",
+        "TLS client authentication CA-certs truststore reference");
 
     // private key of the server identity
     std::string key_path =
         "/ietf-keystore:keystore/asymmetric-keys/asymmetric-key[name='" + key_name + "']";
-    tls.private_key_pem = pem_wrap_private_key(
-        config_value(sess, key_path + "/cleartext-private-key",
-                     "cleartext-private-key of asymmetric-key '" + key_name + "'"),
-        config_value(sess, key_path + "/private-key-format",
-                     "private-key-format of asymmetric-key '" + key_name + "'"));
+    tls.private_key_pem =
+        pem_wrap_private_key(config_value(sess, key_path + "/cleartext-private-key",
+                                 "cleartext-private-key of asymmetric-key '" + key_name + "'"),
+            config_value(sess, key_path + "/private-key-format",
+                "private-key-format of asymmetric-key '" + key_name + "'"));
 
     // server certificate chain - the referenced certificate first, then the
     // remaining certificates of the same asymmetric key (intermediates)
-    tls.certificate_pem = pem_wrap_certificate(config_value(
-        sess, key_path + "/certificates/certificate[name='" + cert_name + "']/cert-data",
+    tls.certificate_pem = pem_wrap_certificate(config_value(sess,
+        key_path + "/certificates/certificate[name='" + cert_name + "']/cert-data",
         "certificate '" + cert_name + "' of asymmetric-key '" + key_name + "'"));
-    for (auto node : config_values(sess, key_path + "/certificates/certificate[not(name='" +
-                                             cert_name + "')]/cert-data"))
+    for (auto node : config_values(
+             sess, key_path + "/certificates/certificate[not(name='" + cert_name + "')]/cert-data"))
     {
         tls.certificate_pem += "\n" + pem_wrap_certificate(node.asTerm().valueStr());
     }
 
     // CA certificates for client verification
     for (auto node :
-         config_values(sess, "/ietf-truststore:truststore/certificate-bags/certificate-bag[name='" +
-                                 bag_name + "']/certificate/cert-data"))
+        config_values(sess, "/ietf-truststore:truststore/certificate-bags/certificate-bag[name='" +
+                                bag_name + "']/certificate/cert-data"))
     {
         if (!tls.ca_certificate_pem.empty())
         {
@@ -282,19 +279,19 @@ static Auth::TlsMaterial load_tls_config(sysrepo::Session &sess)
     }
     if (tls.ca_certificate_pem.empty())
     {
-        throw std::runtime_error("certificate-bag '" + bag_name +
-                                 "' not found or contains no certificates");
+        throw std::runtime_error(
+            "certificate-bag '" + bag_name + "' not found or contains no certificates");
     }
 
     SLOG_INFO("TLS configuration loaded from sysrepo "
               "(key: ",
-              key_name, ", cert: ", cert_name, ", CA bag: ", bag_name, ")");
+        key_name, ", cert: ", cert_name, ", CA bag: ", bag_name, ")");
 
     return tls;
 }
 
 void run_server(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs,
-                std::shared_ptr<Auth> auth)
+    std::shared_ptr<Auth> auth)
 {
     std::shared_ptr<grpc::ServerCredentials> cred = auth->credentials();
     GNMIService gnmi(sr_conn, auth); // gNMI Service
@@ -351,9 +348,8 @@ int main(int argc, char *argv[])
     bool insecure = false;
 
     static struct option long_options[] = {{"help", no_argument, 0, 'h'},
-                                           {"force-insecure", no_argument, 0, 'f'},
-                                           {"log-level", required_argument, 0, 'l'},
-                                           {0, 0, 0, 0}};
+        {"force-insecure", no_argument, 0, 'f'}, {"log-level", required_argument, 0, 'l'},
+        {0, 0, 0, 0}};
 
     while ((c = getopt_long(argc, argv, "hfl:", long_options, &option_index)) != -1)
     {

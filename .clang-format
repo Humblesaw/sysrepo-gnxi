@@ -18,3 +18,14 @@ SpacesBeforeTrailingComments: 1
 SpaceBeforeParens: ControlStatements
 
 Cpp11BracedListStyle: true
+
+AlignAfterOpenBracket: DontAlign   # fixed-indent continuations instead of paren alignment
+IndentPPDirectives: AfterHash      # indent nested preprocessor directives after '#'
+EmptyLineBeforeAccessModifier: Always # blank line before every access modifier
+
+InsertBraces: true
+InsertNewlineAtEOF: true
+MaxEmptyLinesToKeep: 2
+SeparateDefinitionBlocks: Always
+RemoveSemicolon: true
+RemoveParentheses: ReturnStatement

@@ -42,12 +42,14 @@ static const char *update_op_str(UpdateOp op)
     return op == UpdateOp::REPLACE ? "replace" : "merge";
 }
 
-grpc::Status Set::handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out,
-                                 const gnmi::Path &prefix, UpdateOp op)
+grpc::Status Set::handle_update_(
+    const gnmi::Update &in, gnmi::UpdateResult *out, const gnmi::Path &prefix, UpdateOp op)
 {
     // Parse request
     if (!in.has_path() || !in.has_val())
+    {
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Update is missing path or value");
+    }
 
     auto origin = gnxi::resolve_origin(prefix, in.path());
     std::string fullpath = gnxi::gnmi_to_xpath(sr_sess_.getContext(), prefix, in.path());
@@ -98,7 +100,9 @@ grpc::Status Set::handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out
     auto [status, top_level] = encodef_->decode(fullpath, in.val(), EncodePurpose::SET);
 
     if (!status.ok())
+    {
         return status;
+    }
 
     if (fullpath == gnxi::ROOT_XPATH)
     {
@@ -108,8 +112,8 @@ grpc::Status Set::handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out
             if (!gnxi::data_node_in_origin(*n, origin))
             {
                 throw grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
-                                   "update data under origin \"" + origin +
-                                       "\" must not contain data of other origins");
+                    "update data under origin \"" + origin +
+                        "\" must not contain data of other origins");
             }
         }
 
@@ -121,8 +125,7 @@ grpc::Status Set::handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out
 
             auto del_root = sr_sess_.getData(fullpath, 1);
             // Walk all siblings not in update and add delete node to them
-            for (auto n = std::optional<libyang::DataNode>(del_root); n.has_value();
-                 n = n->nextSibling())
+            for (auto n = del_root; n.has_value(); n = n->nextSibling())
             {
                 // data of other origins is not part of this replace
                 if (!gnxi::data_node_in_origin(*n, origin))
@@ -183,9 +186,9 @@ grpc::Status Set::handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out
         if (set.empty())
         {
             SLOG_ERROR("Decoded fragment contains no node matching ", fullpath,
-                       " - internal inconsistency (the data was already schema-validated)");
-            throw std::runtime_error("internal error: no node found for xpath \"" + fullpath +
-                                     "\"");
+                " - internal inconsistency (the data was already schema-validated)");
+            throw std::runtime_error(
+                "internal error: no node found for xpath \"" + fullpath + "\"");
         }
 
         for (auto edit_node : set)
@@ -210,8 +213,8 @@ grpc::Status Set::handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out
     return status;
 }
 
-grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *request,
-                      gnmi::SetResponse *response)
+grpc::Status Set::run(
+    grpc::ServerContext *context, const gnmi::SetRequest *request, gnmi::SetResponse *response)
 {
     std::vector<gnmi::UpdateResult> results;
 
@@ -239,18 +242,24 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         {
             int64_t rollback_secs = Commit::DEFAULT_ROLLBACK_SECS;
             if (commit_ext->commit().has_rollback_duration())
+            {
                 rollback_secs = commit_ext->commit().rollback_duration().seconds();
-            auto status = commit_state_->request_setup(commit_ext->id(), rollback_secs,
-                                                       auth_.username(context));
+            }
+            auto status = commit_state_->request_setup(
+                commit_ext->id(), rollback_secs, auth_.username(context));
             if (!status.ok())
+            {
                 return status;
+            }
             break;
         }
         case gnmi_ext::Commit::kConfirm:
         {
             auto status = commit_state_->confirm(commit_ext->id(), auth_.username(context));
             if (!status.ok())
+            {
                 return status;
+            }
             response->set_timestamp(get_time_nanosec());
             return grpc::Status::OK;
         }
@@ -258,7 +267,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         {
             auto status = commit_state_->cancel(commit_ext->id(), auth_.username(context));
             if (!status.ok())
+            {
                 return status;
+            }
             response->set_timestamp(get_time_nanosec());
             return grpc::Status::OK;
         }
@@ -266,17 +277,21 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         {
             int64_t rollback_secs = 0;
             if (commit_ext->set_rollback_duration().has_rollback_duration())
+            {
                 rollback_secs = commit_ext->set_rollback_duration().rollback_duration().seconds();
-            auto status = commit_state_->set_rollback_duration(commit_ext->id(), rollback_secs,
-                                                               auth_.username(context));
+            }
+            auto status = commit_state_->set_rollback_duration(
+                commit_ext->id(), rollback_secs, auth_.username(context));
             if (!status.ok())
+            {
                 return status;
+            }
             response->set_timestamp(get_time_nanosec());
             return grpc::Status::OK;
         }
         case gnmi_ext::Commit::ACTION_NOT_SET:
-            return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
-                                "commit extension has no action");
+            return grpc::Status(
+                grpc::StatusCode::INVALID_ARGUMENT, "commit extension has no action");
         }
     }
 
@@ -284,8 +299,8 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
     // must fail with FAILED_PRECONDITION
     if (!commit_ext && commit_state_->get_wait_confirm())
     {
-        return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
-                            "previous Set has to be confirmed");
+        return grpc::Status(
+            grpc::StatusCode::FAILED_PRECONDITION, "previous Set has to be confirmed");
     }
 
     // authorize
@@ -308,8 +323,8 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
         }
         // TODO add union_replace authorization
         auth_.authorize(context, sr_sess_,
-                        request->has_prefix() ? std::optional(request->prefix()) : std::nullopt,
-                        paths, Auth::Access::READ_WRITE);
+            request->has_prefix() ? std::optional(request->prefix()) : std::nullopt, paths,
+            Auth::Access::READ_WRITE);
     }
     catch (const grpc::Status &auth_status)
     {
@@ -373,7 +388,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                 // than it has to be
                 auto del_root = sr_sess_.getData(fullpath, 0);
                 if (!del_root.has_value())
+                {
                     throw std::runtime_error("xpath \"" + fullpath + "\" not found");
+                }
 
                 if (fullpath == gnxi::ROOT_XPATH)
                 {
@@ -407,7 +424,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
                     // node
                     auto set = del_root->findXPath(fullpath);
                     if (set.empty())
+                    {
                         throw std::runtime_error("xpath \"" + fullpath + "\" not found");
+                    }
 
                     for (auto n : set)
                     {
@@ -555,7 +574,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
     {
         /* edit final tree batch */
         if (xact_.final_tree.has_value())
+        {
             sr_sess_.editBatch(xact_.final_tree.value(), sysrepo::DefaultOperation::Merge);
+        }
 
         /* if this fails, we can still revert the changes */
         sr_sess_.applyChanges();
@@ -593,7 +614,9 @@ grpc::Status Set::run(grpc::ServerContext *context, const gnmi::SetRequest *requ
     }
 
     for (const auto &r : results)
+    {
         *(response->add_response()) = r;
+    }
 
     response->set_timestamp(get_time_nanosec());
 

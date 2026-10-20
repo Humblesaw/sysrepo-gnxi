@@ -95,8 +95,8 @@ class Auth
      * @param[in] username Username to authenticate.
      * @param[in] password Password to authenticate.
      */
-    void authenticate(sysrepo::Session &sess, const std::string &username,
-                      const std::string &password) const;
+    void authenticate(
+        sysrepo::Session &sess, const std::string &username, const std::string &password) const;
 
     /**
      * @brief Authorize an operation against known users. Throw on error.
@@ -108,8 +108,8 @@ class Auth
      * @param[in] permission Permission level needed to authorize the process (read/write).
      */
     void authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
-                   const std::optional<gnmi::Path> &prefix, const std::vector<gnmi::Path> &paths,
-                   Access permission) const;
+        const std::optional<gnmi::Path> &prefix, const std::vector<gnmi::Path> &paths,
+        Access permission) const;
 
   private:
     bool insecure_;
@@ -124,7 +124,7 @@ class Auth
      * @param[in] permission Permission level needed to authorize the process (read/write).
      */
     void authorize_(sysrepo::Session &sess, const std::string &username,
-                    const std::unordered_set<std::string> &modules, Access permission) const;
+        const std::unordered_set<std::string> &modules, Access permission) const;
 };
 
 class UserPassAuthenticator final : public grpc::AuthMetadataProcessor
@@ -134,11 +134,11 @@ class UserPassAuthenticator final : public grpc::AuthMetadataProcessor
         : auth_(auth), conn_(std::move(conn))
     {
     }
+
     ~UserPassAuthenticator() {}
 
     grpc::Status Process(const InputMetadata &auth_metadata, grpc::AuthContext *context,
-                         OutputMetadata *consumed_auth_metadata,
-                         OutputMetadata *response_metadata) override;
+        OutputMetadata *consumed_auth_metadata, OutputMetadata *response_metadata) override;
 
   private:
     const Auth &auth_;

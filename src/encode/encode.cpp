@@ -26,8 +26,8 @@
 #include <proto/gnmi.grpc.pb.h>
 #include <tuple>
 
-std::tuple<grpc::Status, std::optional<libyang::DataNode>>
-Encode::decode(const std::string &xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose)
+std::tuple<grpc::Status, std::optional<libyang::DataNode>> Encode::decode(
+    const std::string &xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose)
 {
     switch (reqval.value_case())
     {
@@ -78,13 +78,13 @@ Encode::decode(const std::string &xpath, const gnmi::TypedValue &reqval, EncodeP
     case gnmi::TypedValue::ValueCase::kJsonIetfVal:
         try
         {
-            return std::make_tuple(grpc::Status::OK,
-                                   json_decode(xpath, reqval.json_ietf_val(), purpose));
+            return std::make_tuple(
+                grpc::Status::OK, json_decode(xpath, reqval.json_ietf_val(), purpose));
         }
         catch (const std::runtime_error &err)
         {
-            return std::make_tuple(grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, err.what()),
-                                   std::nullopt);
+            return std::make_tuple(
+                grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, err.what()), std::nullopt);
         }
         break;
     case gnmi::TypedValue::ValueCase::kAsciiVal:
@@ -96,8 +96,8 @@ Encode::decode(const std::string &xpath, const gnmi::TypedValue &reqval, EncodeP
             grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Unsupported PROTOBUF BYTE Encoding"),
             std::nullopt);
     case gnmi::TypedValue::ValueCase::VALUE_NOT_SET:
-        return std::make_tuple(grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Value not set"),
-                               std::nullopt);
+        return std::make_tuple(
+            grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Value not set"), std::nullopt);
     default:
         return std::make_tuple(
             grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Unknown value type"), std::nullopt);

@@ -50,6 +50,7 @@ class SessionDsSwitcher
         orig_ds_ = sr_sess_.activeDatastore();
         sr_sess_.switchDatastore(ds);
     }
+
     ~SessionDsSwitcher() { sr_sess_.switchDatastore(orig_ds_); }
 
   private:
@@ -81,13 +82,13 @@ class Encode
         JSON_IETF = 0,
     };
 
-    std::tuple<grpc::Status, std::optional<libyang::DataNode>>
-    decode(const std::string &xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
+    std::tuple<grpc::Status, std::optional<libyang::DataNode>> decode(
+        const std::string &xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
     grpc::Status encode(gnmi::Encoding encoding, libyang::DataNode node, gnmi::TypedValue *val);
 
     /* JSON encoding */
-    std::optional<libyang::DataNode> json_decode(const std::string &xpath, const std::string &data,
-                                                 EncodePurpose purpose);
+    std::optional<libyang::DataNode> json_decode(
+        const std::string &xpath, const std::string &data, EncodePurpose purpose);
     std::string json_encode(libyang::DataNode node);
 
   private:

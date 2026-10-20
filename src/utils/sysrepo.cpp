@@ -31,8 +31,8 @@
 
 #include "utils/sysrepo.h"
 
-void UpdateTransaction::merge(std::optional<libyang::DataNode> &tree,
-                              std::optional<libyang::DataNode> &node)
+void UpdateTransaction::merge(
+    std::optional<libyang::DataNode> &tree, std::optional<libyang::DataNode> &node)
 {
     if (node.has_value())
     {
@@ -57,8 +57,8 @@ void UpdateTransaction::push(std::optional<libyang::DataNode> &tree)
     }
 }
 
-std::unordered_set<std::string> collect_xpath_mods(const libyang::Context &ly_ctx,
-                                                   const char *xpath)
+std::unordered_set<std::string> collect_xpath_mods(
+    const libyang::Context &ly_ctx, const char *xpath)
 {
     std::unordered_set<std::string> ly_mod_set;
     std::optional<libyang::SchemaNode> parent = std::nullopt;
@@ -91,7 +91,7 @@ DataSubscribe::DataSubscribe(sysrepo::Session sess) : data_sess_(sess) {}
  * 2. Subscribe::module_change_subscribe not providing user-supplied context to callback function.
  */
 void DataSubscribe::data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath,
-                                          uint32_t priority, sysrepo::SubscribeOptions opts)
+    uint32_t priority, sysrepo::SubscribeOptions opts)
 {
     for (const auto &mod : collect_xpath_mods(data_sess_.getContext(), xpath))
     {

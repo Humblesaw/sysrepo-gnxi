@@ -54,14 +54,15 @@ class Set
     {
         encodef_ = std::make_shared<Encode>(sr_sess_);
     }
+
     ~Set() {}
 
-    grpc::Status run(grpc::ServerContext *context, const gnmi::SetRequest *request,
-                     gnmi::SetResponse *response);
+    grpc::Status run(
+        grpc::ServerContext *context, const gnmi::SetRequest *request, gnmi::SetResponse *response);
 
   private:
-    grpc::Status handle_update_(const gnmi::Update &in, gnmi::UpdateResult *out,
-                                const gnmi::Path &prefix, UpdateOp op);
+    grpc::Status handle_update_(
+        const gnmi::Update &in, gnmi::UpdateResult *out, const gnmi::Path &prefix, UpdateOp op);
 
     sysrepo::Session sr_sess_;             // sysrepo running datastore session
     std::shared_ptr<Encode> encodef_;      // support for json ietf encoding

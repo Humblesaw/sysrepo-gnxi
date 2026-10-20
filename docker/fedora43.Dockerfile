@@ -5,7 +5,7 @@ FROM fedora:43
 RUN set -e; \
     dnf upgrade --refresh || (( $?==0 | $?==1 )); \
     dnf group install -y c-development development-tools || (( $?==0 | $?==1 )); \
-    dnf install -y cmake pcre2-devel systemd-devel grpc-devel protobuf-compiler protobuf-devel openssl-devel || (( $?==0 | $?==1 )); \
+    dnf install -y cmake pcre2-devel systemd-devel grpc-devel protobuf-compiler protobuf-devel openssl-devel clang-tools-extra || (( $?==0 | $?==1 )); \
     dnf clean all; \
     echo "/usr/local/lib64" > /etc/ld.so.conf.d/local.conf
 

@@ -103,7 +103,7 @@ static void sysrepo_log_cb(sr_log_level_t level, const char *message)
 }
 
 static void libyang_log_cb(LY_LOG_LEVEL level, const char *message, const char *data_path,
-                           const char *schema_path, uint64_t line)
+    const char *schema_path, uint64_t line)
 {
     (void)line;
     std::string path_message = "";

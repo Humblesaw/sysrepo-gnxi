@@ -73,8 +73,8 @@ std::string resolve_origin(const gnmi::Path &prefix, const gnmi::Path &path);
  *
  * @throws grpc::Status INVALID_ARGUMENT or UNIMPLEMENTED.
  */
-std::string gnmi_to_xpath(const libyang::Context &ctx, const gnmi::Path &prefix,
-                          const gnmi::Path &path);
+std::string gnmi_to_xpath(
+    const libyang::Context &ctx, const gnmi::Path &prefix, const gnmi::Path &path);
 
 /**
  * @brief Get the origin the module is bound to via oc-ext:origin, if any.

@@ -41,8 +41,8 @@
  *
  * Throws on unresolvable/malformed XPath (libyang::Error).
  */
-std::unordered_set<std::string> collect_xpath_mods(const libyang::Context &ly_ctx,
-                                                   const char *xpath);
+std::unordered_set<std::string> collect_xpath_mods(
+    const libyang::Context &ly_ctx, const char *xpath);
 
 class UpdateTransaction
 {
@@ -67,7 +67,7 @@ class DataSubscribe
   public:
     DataSubscribe(sysrepo::Session sess);
     void data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath, uint32_t priority = 0,
-                               sysrepo::SubscribeOptions opts = sysrepo::SubscribeOptions::Default);
+        sysrepo::SubscribeOptions opts = sysrepo::SubscribeOptions::Default);
 
   private:
     std::optional<sysrepo::Subscription> sub_;

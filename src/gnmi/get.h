@@ -42,18 +42,17 @@ class Get
     {
         encodef_ = std::make_shared<Encode>(sr_sess_);
     }
+
     ~Get() {}
 
-    grpc::Status run(grpc::ServerContext *context, const gnmi::GetRequest *req,
-                     gnmi::GetResponse *response);
+    grpc::Status run(
+        grpc::ServerContext *context, const gnmi::GetRequest *req, gnmi::GetResponse *response);
 
   private:
     grpc::Status build_get_notification_(gnmi::Notification *notification, const gnmi::Path &prefix,
-                                         const gnmi::Path &path, gnmi::Encoding encoding,
-                                         gnmi::GetRequest_DataType data_type);
+        const gnmi::Path &path, gnmi::Encoding encoding, gnmi::GetRequest_DataType data_type);
     grpc::Status build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Update> *update_list,
-                                   const std::string &fullpath, gnmi::Encoding encoding,
-                                   const std::string &origin);
+        const std::string &fullpath, gnmi::Encoding encoding, const std::string &origin);
 
   private:
     sysrepo::Session sr_sess_;        // sysrepo session

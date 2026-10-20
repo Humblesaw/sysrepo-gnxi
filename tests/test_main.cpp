@@ -63,7 +63,9 @@ void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin)
     }
 
     if (!xpath.compare("/"))
+    {
         return;
+    }
 
     auto start = 0u;
     auto end = xpath.find_first_of('/', start);
@@ -99,16 +101,22 @@ void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin)
 
                 // if 'end' fell on a slash '/' inside a key, move it on to next
                 if (key_start != std::string::npos)
+                {
                     end = xpath.find_first_of(']', key_start + 1);
+                }
             }
             // skip over the key & value
             start = value_end + 2;
             end = xpath.find_first_of('/', start);
         }
         else
+        {
             elem->mutable_name()->assign(xpath.substr(start, end - start));
+        }
         if (end == std::string::npos)
+        {
             break;
+        }
     }
 }
 
@@ -117,11 +125,15 @@ std::string path_to_xpath(const gnmi::Path &path)
     std::string str = "";
 
     if (path.elem_size() <= 0)
+    {
         return "/";
+    }
 
     if (path.origin().compare("rfc7951") && path.origin().compare("openconfig") &&
         path.origin().compare(""))
+    {
         return "bad-origin:" + path.origin();
+    }
 
     // iterate over the list of PathElem of a gNMI path
     for (auto &node : path.elem())
@@ -130,16 +142,17 @@ std::string path_to_xpath(const gnmi::Path &path)
         // the protobuf map has no defined iteration order, so the keys are
         // rendered sorted to make the result deterministic
         for (auto key : std::map<std::string, std::string>(node.key().begin(), node.key().end()))
+        {
             str += "[" + key.first + "='" + key.second + "']";
+        }
     }
 
     return str;
 }
 
 static sysrepo::ErrorCode module_change_cb(sysrepo::Session session, uint32_t sub_id,
-                                           std::string_view module_name,
-                                           std::optional<std::string_view> xpath,
-                                           sysrepo::Event event, uint32_t request_id)
+    std::string_view module_name, std::optional<std::string_view> xpath, sysrepo::Event event,
+    uint32_t request_id)
 {
     (void)session;
     (void)module_name;
@@ -157,9 +170,8 @@ static sysrepo::ErrorCode module_change_cb(sysrepo::Session session, uint32_t su
 }
 
 static sysrepo::ErrorCode clear_stats_rpc_cb(sysrepo::Session session, uint32_t sub_id,
-                                             std::string_view xpath, const libyang::DataNode input,
-                                             sysrepo::Event event, uint32_t request_id,
-                                             libyang::DataNode output)
+    std::string_view xpath, const libyang::DataNode input, sysrepo::Event event,
+    uint32_t request_id, libyang::DataNode output)
 {
     (void)session;
     (void)event;
@@ -183,9 +195,8 @@ static sysrepo::ErrorCode clear_stats_rpc_cb(sysrepo::Session session, uint32_t 
 }
 
 static sysrepo::ErrorCode action_test_cb(sysrepo::Session session, uint32_t sub_id,
-                                         std::string_view xpath, const libyang::DataNode input,
-                                         sysrepo::Event event, uint32_t request_id,
-                                         libyang::DataNode output)
+    std::string_view xpath, const libyang::DataNode input, sysrepo::Event event,
+    uint32_t request_id, libyang::DataNode output)
 {
     (void)session;
     (void)sub_id;
@@ -206,15 +217,15 @@ static sysrepo::ErrorCode action_test_cb(sysrepo::Session session, uint32_t sub_
  * @param[in] file JSON configuration file to apply.
  * @param[in] sock_path Socket path to substitute for the placeholder.
  */
-static void apply_config(sysrepo::Session &sess, const std::filesystem::path &file,
-                         const std::string &sock_path)
+static void apply_config(
+    sysrepo::Session &sess, const std::filesystem::path &file, const std::string &sock_path)
 {
     std::ifstream in(file);
     if (!in)
     {
         throw std::runtime_error("cannot open " + file.string());
     }
-    std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    auto data = std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 
     // replace path to the unix socket in configuration
     if (!sock_path.empty())
@@ -228,9 +239,8 @@ static void apply_config(sysrepo::Session &sess, const std::filesystem::path &fi
 
     // apply configuration
     auto tree = sess.getContext().parseData(data, libyang::DataFormat::JSON,
-                                            libyang::ParseOptions::ParseOnly |
-                                                libyang::ParseOptions::NoState |
-                                                libyang::ParseOptions::Strict);
+        libyang::ParseOptions::ParseOnly | libyang::ParseOptions::NoState |
+            libyang::ParseOptions::Strict);
     if (!tree.has_value())
     {
         throw std::runtime_error("no data parsed from " + file.string());
@@ -266,7 +276,7 @@ static void prepare_sysrepo_dirs(const std::string &repo_path, const std::string
         if (entry.path().extension() == ".yang")
         {
             std::filesystem::copy(entry.path(), yang_dst_dir / entry.path().filename(),
-                                  std::filesystem::copy_options::overwrite_existing);
+                std::filesystem::copy_options::overwrite_existing);
         }
     }
 }
@@ -282,8 +292,8 @@ static void install_test_modules(sysrepo::Connection &sr_conn)
     std::filesystem::path modules_dir{GNXI_SCHEMA_DIR};
 
     auto make_inst = [](const std::filesystem::path &dir, const std::string &file,
-                        std::vector<std::string> features = {},
-                        std::optional<mode_t> permissions = std::nullopt)
+                         std::vector<std::string> features = {},
+                         std::optional<mode_t> permissions = std::nullopt)
     {
         sysrepo::ModuleInstallation inst;
         inst.schema = dir / file;
@@ -303,14 +313,14 @@ static void install_test_modules(sysrepo::Connection &sr_conn)
         make_inst(modules_dir, "iana-crypt-hash@2014-08-06.yang"),
         make_inst(modules_dir, "iana-tls-cipher-suite-algs@2024-03-16.yang"),
         make_inst(modules_dir, "ietf-crypto-types@2024-10-10.yang",
-                  {"cleartext-private-keys", "one-asymmetric-key-format"}),
+            {"cleartext-private-keys", "one-asymmetric-key-format"}),
         make_inst(modules_dir, "ietf-keystore@2024-10-10.yang",
-                  {"central-keystore-supported", "asymmetric-keys"}),
+            {"central-keystore-supported", "asymmetric-keys"}),
         make_inst(modules_dir, "ietf-truststore@2024-10-10.yang",
-                  {"central-truststore-supported", "certificates"}),
+            {"central-truststore-supported", "certificates"}),
         make_inst(modules_dir, "ietf-tls-common@2024-10-10.yang"),
         make_inst(modules_dir, "ietf-tls-server@2024-10-10.yang",
-                  {"server-ident-x509-cert", "client-auth-supported", "client-auth-x509-cert"}),
+            {"server-ident-x509-cert", "client-auth-supported", "client-auth-x509-cert"}),
         make_inst(modules_dir, "sysrepo-gnxi-server.yang", {}, 0600),
         make_inst(modules_dir, "sysrepo-gnxi-users.yang", {}, 0600),
     };
@@ -358,8 +368,8 @@ void SetupServer::launch(const std::string &test_name, bool debug, bool secure)
         std::filesystem::remove(server_log_);
         insecure_addr = "unix:" + sock_.string();
 
-        apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json",
-                     sock_.string());
+        apply_config(
+            *sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json", sock_.string());
         server_args_ = {"-f", "-l", "4"};
         server_label_ = "Insecure";
         server_pid_ = run_server_(server_args_, server_log_);
@@ -396,8 +406,8 @@ void SetupServer::restart()
     insecure_addr = "unix:" + sock_.string();
 
     // point the server configuration at the new socket
-    apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json",
-                 sock_.string());
+    apply_config(
+        *sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "insecure.json", sock_.string());
 
     server_pid_ = run_server_(server_args_, server_log_);
     wait_for_unix_(sock_.string());
@@ -556,8 +566,8 @@ class SetupSysrepo
 
         sr_sess = sr_conn.sessionStart();
 
-        sub_ = sr_sess->onModuleChange("sysrepo-gnxi-test", module_change_cb,
-                                       "/sysrepo-gnxi-test:test2/custom-error");
+        sub_ = sr_sess->onModuleChange(
+            "sysrepo-gnxi-test", module_change_cb, "/sysrepo-gnxi-test:test2/custom-error");
 
         // operational data for the Get/Subscribe tests
         sr_sess->switchDatastore(sysrepo::Datastore::Operational);
@@ -569,10 +579,10 @@ class SetupSysrepo
         sr_sess->applyChanges();
 
         sub_->onRPCAction("/sysrepo-gnxi-test:clear-stats", clear_stats_rpc_cb, 0,
-                          sysrepo::SubscribeOptions::Default);
+            sysrepo::SubscribeOptions::Default);
         sub_->onRPCAction("/sysrepo-gnxi-test:action-test/action-test", action_test_cb, 0,
-                          sysrepo::SubscribeOptions::Default);
-    };
+            sysrepo::SubscribeOptions::Default);
+    }
 
     ~SetupSysrepo()
     {
@@ -609,27 +619,27 @@ class SetupTests
 
         if (setenv("SYSREPO_REPOSITORY_PATH", repo_path_.c_str(), 0))
         {
-            throw std::runtime_error("Failed to setenv SYSREPO_REPOSITORY_PATH " +
-                                     std::string(strerror(errno)));
+            throw std::runtime_error(
+                "Failed to setenv SYSREPO_REPOSITORY_PATH " + std::string(strerror(errno)));
         }
 
         if (setenv("SYSREPO_SHM_DIR", sr_shm_path_.c_str(), 0))
         {
-            throw std::runtime_error("Failed to setenv SYSREPO_SHM_DIR " +
-                                     std::string(strerror(errno)));
+            throw std::runtime_error(
+                "Failed to setenv SYSREPO_SHM_DIR " + std::string(strerror(errno)));
         }
 
         if (setenv("SR_ENV_RUN_TESTS", "1", 0))
         {
-            throw std::runtime_error("Failed to setenv SR_ENV_RUN_TESTS " +
-                                     std::string(strerror(errno)));
+            throw std::runtime_error(
+                "Failed to setenv SR_ENV_RUN_TESTS " + std::string(strerror(errno)));
         }
 
         // Print this so debugging is easier
         fprintf(stderr,
-                "Running tests with \nSYSREPO_REPOSITORY_PATH=%s\n"
-                "SYSREPO_SHM_DIR=%s\nSR_ENV_RUN_TESTS=1\n",
-                repo_path_.c_str(), sr_shm_path_.c_str());
+            "Running tests with \nSYSREPO_REPOSITORY_PATH=%s\n"
+            "SYSREPO_SHM_DIR=%s\nSR_ENV_RUN_TESTS=1\n",
+            repo_path_.c_str(), sr_shm_path_.c_str());
     }
 
   private:
@@ -677,9 +687,9 @@ int main(int argc, char *argv[])
         auto main_channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
         main_channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
         gnmi_client = gnmi::gNMI::NewStub(main_channel);
-#ifdef GNXI_SERVICE_ENABLED
+#    ifdef GNXI_SERVICE_ENABLED
         gnxi_client = yang_rpc::YANG_RPC::NewStub(main_channel);
-#endif
+#    endif
 #endif
 
         result = Catch::Session().run(argc, argv);

@@ -20,6 +20,12 @@ endif()
 # custom cmake modules
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMakeModules")
 
+# format targets only in debug builds
+include(SourceFormat)
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    source_format_enable(18.1.3)
+endif()
+
 # options
 option(ENABLE_TESTS "Build tests" OFF)
 option(ENABLE_COVERAGE "Build code coverage report from tests" OFF)
@@ -187,6 +193,12 @@ if (ENABLE_TESTS)
 
         target_link_libraries(${GNXI_TEST_NAME} gnxi_deps)
     endforeach()
+
+    # format check as a ctest test
+    if(SOURCE_FORMAT_ENABLED)
+        add_test(NAME format WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target format-check)
+    endif()
 endif()
 
 # COVERAGE TESTS
@@ -310,9 +322,6 @@ add_custom_target(uninstall
 # FORMAT
 ########
 
-add_custom_target(format
-    COMMAND clang-format -i ${GNXI_HEADERS} ${GNXI_SRC} src/main.cpp src/users.cpp
-            ${GNXI_TESTS} tests/test_main.cpp tests/test_main.h
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Formatting header and source files."
-    USES_TERMINAL)
+# source files to be covered by the 'format' target and the 'format-check' target run by ctest
+source_format(${GNXI_HEADERS} ${GNXI_SRC} src/main.cpp src/users.cpp
+              ${GNXI_TESTS} tests/test_main.cpp tests/test_main.h)

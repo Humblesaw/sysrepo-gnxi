@@ -170,10 +170,9 @@ Options parse_args(int argc, char *argv[])
         std::exit(-1);
     }
 
-    static struct option long_options[] = {
-        {"name", required_argument, 0, 'n'}, {"password", required_argument, 0, 'P'},
-        {"hash", required_argument, 0, 's'}, {"permissions", required_argument, 0, 'p'},
-        {"help", no_argument, 0, 'h'},       {0, 0, 0, 0}};
+    static struct option long_options[] = {{"name", required_argument, 0, 'n'},
+        {"password", required_argument, 0, 'P'}, {"hash", required_argument, 0, 's'},
+        {"permissions", required_argument, 0, 'p'}, {"help", no_argument, 0, 'h'}, {0, 0, 0, 0}};
 
     optind = 2; // skip program name and command
     int c;
@@ -301,7 +300,7 @@ void set_acl(sysrepo::Session &sess, const std::string &name, const Options &opt
         else
         {
             for (const auto &m :
-                 perm.module == "*" ? sysrepo_modules() : std::vector<std::string>{perm.module})
+                perm.module == "*" ? sysrepo_modules() : std::vector<std::string>{perm.module})
             {
                 add_acl(m, perm.access.c_str());
             }
@@ -395,14 +394,14 @@ std::vector<UserInfo> collect_users(sysrepo::Session &sess)
             for (auto entry : user.findXPath("acl"))
             {
                 u.acl.emplace_back(entry.findPath("module")->asTerm().valueStr(),
-                                   entry.findPath("access")->asTerm().valueStr());
+                    entry.findPath("access")->asTerm().valueStr());
             }
             std::sort(u.acl.begin(), u.acl.end());
             users.push_back(std::move(u));
         }
     }
     std::sort(users.begin(), users.end(),
-              [](const UserInfo &a, const UserInfo &b) { return a.name < b.name; });
+        [](const UserInfo &a, const UserInfo &b) { return a.name < b.name; });
     return users;
 }
 
@@ -420,8 +419,8 @@ void cmd_show(const Options &opts)
     // a specific user requested
     if (!opts.name.empty())
     {
-        auto it = std::find_if(users.begin(), users.end(),
-                               [&](const UserInfo &u) { return u.name == opts.name; });
+        auto it = std::find_if(
+            users.begin(), users.end(), [&](const UserInfo &u) { return u.name == opts.name; });
         if (it == users.end())
         {
             throw std::runtime_error("User '" + opts.name + "' not found in sysrepo");

@@ -89,8 +89,8 @@ std::string strip_json_object_value(const std::string &object)
  * Parse a message encoded in JSON IETF and set fields in sysrepo.
  * @param data Input data encoded in JSON
  */
-std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
-                                                     const std::string &data, EncodePurpose purpose)
+std::optional<libyang::DataNode> Encode::json_decode(
+    const std::string &xpath, const std::string &data, EncodePurpose purpose)
 {
     /* get request */
     // TODO "/*" is a bad sign that this is a set/get request for all data, rewrite it
@@ -100,8 +100,7 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
         {
             auto ctx = sr_sess_.getContext();
             return ctx.parseData(data, libyang::DataFormat::JSON,
-                                 libyang::ParseOptions::ParseOnly | libyang::ParseOptions::Strict,
-                                 std::nullopt);
+                libyang::ParseOptions::ParseOnly | libyang::ParseOptions::Strict, std::nullopt);
         }
         catch (const std::exception &exc)
         {
@@ -125,16 +124,15 @@ std::optional<libyang::DataNode> Encode::json_decode(const std::string &xpath,
         switch (purpose)
         {
         case EncodePurpose::SET:
-            return ctx.parseValueFragment(
-                xpath, data, libyang::DataFormat::JSON, std::nullopt,
+            return ctx.parseValueFragment(xpath, data, libyang::DataFormat::JSON, std::nullopt,
                 libyang::ParseOptions::JsonNull | libyang::ParseOptions::Strict, std::nullopt);
         case EncodePurpose::RPC:
             // If xpath is not a path, this throws error (one node expected)
             node = ctx.newPath2(xpath).createdNode;
             if (node.has_value())
             {
-                node.value().parseOp(data.c_str(), libyang::DataFormat::JSON,
-                                     libyang::OperationType::RpcYang);
+                node.value().parseOp(
+                    data.c_str(), libyang::DataFormat::JSON, libyang::OperationType::RpcYang);
             }
             else
             {
@@ -170,9 +168,8 @@ std::string Encode::json_encode(libyang::DataNode node)
 
     if (node.schema().nodeType() == libyang::NodeType::Leaf)
     {
-        auto printed =
-            node.printStr(libyang::DataFormat::JSON,
-                          libyang::PrintFlags::Shrink | libyang::PrintFlags::JsonNoNestedPrefix);
+        auto printed = node.printStr(libyang::DataFormat::JSON,
+            libyang::PrintFlags::Shrink | libyang::PrintFlags::JsonNoNestedPrefix);
         if (!printed.has_value())
         {
             throw std::runtime_error("Failed to print the leaf data node in JSON.");
@@ -187,10 +184,9 @@ std::string Encode::json_encode(libyang::DataNode node)
         // according to gNMI rules
         if (node.child().has_value())
         {
-            auto printed =
-                node.child()->printStr(libyang::DataFormat::JSON,
-                                       libyang::PrintFlags::Siblings | libyang::PrintFlags::Shrink |
-                                           libyang::PrintFlags::JsonNoNestedPrefix);
+            auto printed = node.child()->printStr(libyang::DataFormat::JSON,
+                libyang::PrintFlags::Siblings | libyang::PrintFlags::Shrink |
+                    libyang::PrintFlags::JsonNoNestedPrefix);
             if (!printed.has_value())
             {
                 throw std::runtime_error("Failed to print the data node in JSON.");

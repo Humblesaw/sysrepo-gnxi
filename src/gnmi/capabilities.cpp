@@ -28,8 +28,7 @@
 #include "utils/utils.h"
 
 grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
-                                       const gnmi::CapabilityRequest *request,
-                                       gnmi::CapabilityResponse *response)
+    const gnmi::CapabilityRequest *request, gnmi::CapabilityResponse *response)
 {
     std::string gnmi_version;
 
@@ -38,8 +37,8 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
     }
 
-    slog::RequestScope req_scope("Capabilities: " +
-                                 rpc_user_desc(context, auth_->username(context)));
+    slog::RequestScope req_scope(
+        "Capabilities: " + rpc_user_desc(context, auth_->username(context)));
     SLOG_INFO("Capabilities RPC");
 
     if (request->extension_size() > 0)
@@ -48,8 +47,7 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
         return grpc::Status(grpc::StatusCode::UNIMPLEMENTED, "Extensions not implemented");
     }
 
-    const auto status = rpc_catch_exceptions(
-        "Capabilities",
+    const auto status = rpc_catch_exceptions("Capabilities",
         [&]() -> grpc::Status
         {
             auto sess = sr_con_.sessionStart();
@@ -82,12 +80,12 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
     if (!status.ok())
     {
         SLOG_WARN("Capabilities RPC failed: code ", static_cast<int>(status.error_code()), ": ",
-                  status.error_message());
+            status.error_message());
     }
     else
     {
-        SLOG_INFO("Capabilities RPC succeeded, ", response->supported_models_size(),
-                  " supported models");
+        SLOG_INFO(
+            "Capabilities RPC succeeded, ", response->supported_models_size(), " supported models");
     }
     return status;
 }

@@ -61,7 +61,7 @@ class GNMIService final : public gnmi::gNMI::Service
      * @return gRPC status.
      */
     grpc::Status Capabilities(grpc::ServerContext *context, const gnmi::CapabilityRequest *request,
-                              gnmi::CapabilityResponse *response);
+        gnmi::CapabilityResponse *response);
 
     /**
      * @brief Retrieve a snapshot of the data tree.
@@ -71,8 +71,8 @@ class GNMIService final : public gnmi::gNMI::Service
      * @param[out] response Outgoing get response.
      * @return gRPC status.
      */
-    grpc::Status Get(grpc::ServerContext *context, const gnmi::GetRequest *request,
-                     gnmi::GetResponse *response);
+    grpc::Status Get(
+        grpc::ServerContext *context, const gnmi::GetRequest *request, gnmi::GetResponse *response);
 
     /**
      * @brief Modify the data tree.
@@ -82,8 +82,8 @@ class GNMIService final : public gnmi::gNMI::Service
      * @param[out] response Outgoing set response.
      * @return gRPC status.
      */
-    grpc::Status Set(grpc::ServerContext *context, const gnmi::SetRequest *request,
-                     gnmi::SetResponse *response);
+    grpc::Status Set(
+        grpc::ServerContext *context, const gnmi::SetRequest *request, gnmi::SetResponse *response);
 
     /**
      * @brief Handle a (streaming) subscription.
@@ -92,9 +92,8 @@ class GNMIService final : public gnmi::gNMI::Service
      * @param[in,out] stream Bidirectional stream of subscribe requests and responses.
      * @return gRPC status.
      */
-    grpc::Status
-    Subscribe(grpc::ServerContext *context,
-              grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
+    grpc::Status Subscribe(grpc::ServerContext *context,
+        grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream);
 
     /**
      * @brief Cancel all in-flight RPCs and reject any new RPCs (shutdown).

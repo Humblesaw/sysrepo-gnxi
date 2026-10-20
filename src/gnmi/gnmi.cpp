@@ -41,6 +41,7 @@ class ServerContextHolder
         const std::lock_guard<std::mutex> lock(server_context_mutex);
         server_contexts.insert(ctx);
     }
+
     ~ServerContextHolder()
     {
         const std::lock_guard<std::mutex> lock(server_context_mutex);
@@ -63,8 +64,8 @@ void GNMIService::try_cancel_all(void)
     SLOG_DEBUG("Sent cancellation to subscriptions");
 }
 
-grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetRequest *request,
-                              gnmi::SetResponse *response)
+grpc::Status GNMIService::Set(
+    grpc::ServerContext *context, const gnmi::SetRequest *request, gnmi::SetResponse *response)
 {
     if (rpc_shutting_down.load())
     {
@@ -73,10 +74,9 @@ grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetReque
 
     slog::RequestScope req_scope("Set: " + rpc_user_desc(context, auth_->username(context)));
     SLOG_INFO("Set RPC: ", request->replace_size(), " replace, ", request->delete__size(),
-              " delete, ", request->update_size(), " update");
+        " delete, ", request->update_size(), " update");
 
-    const auto status = rpc_catch_exceptions(
-        "Set",
+    const auto status = rpc_catch_exceptions("Set",
         [&]
         {
             impl::Set rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), commit_state_, *auth_);
@@ -86,7 +86,7 @@ grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetReque
     if (!status.ok())
     {
         SLOG_WARN("Set RPC failed: code ", static_cast<int>(status.error_code()), ": ",
-                  status.error_message());
+            status.error_message());
     }
     else
     {
@@ -95,8 +95,8 @@ grpc::Status GNMIService::Set(grpc::ServerContext *context, const gnmi::SetReque
     return status;
 }
 
-grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetRequest *request,
-                              gnmi::GetResponse *response)
+grpc::Status GNMIService::Get(
+    grpc::ServerContext *context, const gnmi::GetRequest *request, gnmi::GetResponse *response)
 {
     if (rpc_shutting_down.load())
     {
@@ -106,8 +106,7 @@ grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetReque
     slog::RequestScope req_scope("Get: " + rpc_user_desc(context, auth_->username(context)));
     SLOG_INFO("Get RPC: ", request->path_size(), " paths");
 
-    const auto status = rpc_catch_exceptions(
-        "Get",
+    const auto status = rpc_catch_exceptions("Get",
         [&]
         {
             impl::Get rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), *auth_);
@@ -117,7 +116,7 @@ grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetReque
     if (!status.ok())
     {
         SLOG_WARN("Get RPC failed: code ", static_cast<int>(status.error_code()), ": ",
-                  status.error_message());
+            status.error_message());
     }
     else
     {
@@ -126,8 +125,7 @@ grpc::Status GNMIService::Get(grpc::ServerContext *context, const gnmi::GetReque
     return status;
 }
 
-grpc::Status GNMIService::Subscribe(
-    grpc::ServerContext *context,
+grpc::Status GNMIService::Subscribe(grpc::ServerContext *context,
     grpc::ServerReaderWriter<gnmi::SubscribeResponse, gnmi::SubscribeRequest> *stream)
 {
     ServerContextHolder holder(context);
@@ -143,8 +141,7 @@ grpc::Status GNMIService::Subscribe(
     slog::RequestScope req_scope("Subscribe: " + rpc_user_desc(context, auth_->username(context)));
     SLOG_INFO("Subscribe RPC: stream opened");
 
-    const auto status = rpc_catch_exceptions(
-        "Subscribe",
+    const auto status = rpc_catch_exceptions("Subscribe",
         [&]
         {
             impl::Subscribe rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), *auth_);
@@ -154,7 +151,7 @@ grpc::Status GNMIService::Subscribe(
     if (!status.ok())
     {
         SLOG_WARN("Subscribe RPC failed: code ", static_cast<int>(status.error_code()), ": ",
-                  status.error_message());
+            status.error_message());
     }
     else
     {

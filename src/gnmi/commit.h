@@ -67,8 +67,8 @@ class Commit
      * @param[in] rollback_secs The number of seconds to set the timeout to.
      * @return grpc::Status::OK on success, failure otherwise.
      */
-    grpc::Status request_setup(const std::string &commit_id, int64_t rollback_secs,
-                               const std::string &username);
+    grpc::Status request_setup(
+        const std::string &commit_id, int64_t rollback_secs, const std::string &username);
 
     /**
      * @brief Finishes the commit: gnmi's CommitRequest. Starts the rollback timer thread.
@@ -99,8 +99,8 @@ class Commit
      * @param[in] rollback_secs The number of seconds to reset the timeout to.
      * @return grpc::Status::OK on success, failure otherwise.
      */
-    grpc::Status set_rollback_duration(const std::string &commit_id, int64_t rollback_secs,
-                                       const std::string &username);
+    grpc::Status set_rollback_duration(
+        const std::string &commit_id, int64_t rollback_secs, const std::string &username);
 
   private:
     // locking

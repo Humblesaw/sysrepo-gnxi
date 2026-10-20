@@ -131,9 +131,8 @@ void check_module_origin(const std::string &origin, const libyang::Module &modul
         return;
     }
     throw grpc::Status(grpc::INVALID_ARGUMENT,
-                       "module \"" + module.name() + "\" is under origin \"" +
-                           *gnxi::module_origin(module) +
-                           "\" and cannot be addressed under origin \"" + origin + "\"");
+        "module \"" + module.name() + "\" is under origin \"" + *gnxi::module_origin(module) +
+            "\" and cannot be addressed under origin \"" + origin + "\"");
 }
 
 /**
@@ -145,8 +144,8 @@ void check_module_origin(const std::string &origin, const libyang::Module &modul
  *
  * @throws grpc::Status INVALID_ARGUMENT.
  */
-std::string resolve_top_name(const libyang::Context &ctx, const std::string &name,
-                             const std::string &origin)
+std::string resolve_top_name(
+    const libyang::Context &ctx, const std::string &name, const std::string &origin)
 {
     auto separator = name.find(':');
     if (separator != std::string::npos)
@@ -160,9 +159,8 @@ std::string resolve_top_name(const libyang::Context &ctx, const std::string &nam
         }
         if (!module_has_top_node(*module, node))
         {
-            throw grpc::Status(grpc::INVALID_ARGUMENT, "module \"" + module_name +
-                                                           "\" has no top-level node \"" + node +
-                                                           "\"");
+            throw grpc::Status(grpc::INVALID_ARGUMENT,
+                "module \"" + module_name + "\" has no top-level node \"" + node + "\"");
         }
         check_module_origin(origin, *module);
         return name;
@@ -195,8 +193,8 @@ std::string resolve_top_name(const libyang::Context &ctx, const std::string &nam
             }
             list += candidate;
         }
-        throw grpc::Status(grpc::INVALID_ARGUMENT,
-                           "ambiguous path element \"" + name + "\", candidates: " + list);
+        throw grpc::Status(
+            grpc::INVALID_ARGUMENT, "ambiguous path element \"" + name + "\", candidates: " + list);
     }
     return candidates.front();
 }
@@ -230,8 +228,7 @@ void append_key_predicates(std::string &xpath, const gnmi::PathElem &elem)
         else
         {
             throw grpc::Status(grpc::INVALID_ARGUMENT,
-                               "key \"" + key.first +
-                                   "\" value contains both quote characters: " + key.second);
+                "key \"" + key.first + "\" value contains both quote characters: " + key.second);
         }
         xpath += "[" + key.first + "=" + delimiter + key.second + delimiter + "]";
     }
@@ -245,8 +242,7 @@ std::string resolve_origin(const gnmi::Path &prefix, const gnmi::Path &path)
     {
         if (!path.origin().empty())
         {
-            throw grpc::Status(
-                grpc::INVALID_ARGUMENT,
+            throw grpc::Status(grpc::INVALID_ARGUMENT,
                 "origin must not be specified in both prefix and path (gNMI spec 2.7)");
         }
         origin = prefix.origin();
@@ -266,8 +262,8 @@ std::string resolve_origin(const gnmi::Path &prefix, const gnmi::Path &path)
     return origin;
 }
 
-std::string gnmi_to_xpath(const libyang::Context &ctx, const gnmi::Path &prefix,
-                          const gnmi::Path &path)
+std::string gnmi_to_xpath(
+    const libyang::Context &ctx, const gnmi::Path &prefix, const gnmi::Path &path)
 {
     auto origin = resolve_origin(prefix, path);
 
@@ -284,8 +280,8 @@ std::string gnmi_to_xpath(const libyang::Context &ctx, const gnmi::Path &prefix,
             const auto &name = elem.name();
             if (name == "..")
             {
-                throw grpc::Status(grpc::INVALID_ARGUMENT,
-                                   "gNMI paths MUST be absolute, \"..\" is not allowed");
+                throw grpc::Status(
+                    grpc::INVALID_ARGUMENT, "gNMI paths MUST be absolute, \"..\" is not allowed");
             }
             if (name.empty())
             {
@@ -351,10 +347,11 @@ PathFormat format_for_origin(const std::string &origin)
 void data_node_to_gnmi_path(const libyang::DataNode &node, PathFormat format, gnmi::Path &out)
 {
     std::vector<libyang::DataNode> chain;
-    for (std::optional<libyang::DataNode> current = node; current.has_value();
-         current = current->parent())
+    std::optional<libyang::DataNode> current = node;
+    while (current.has_value())
     {
         chain.push_back(*current);
+        current = current->parent();
     }
 
     std::optional<std::string> previous_module;

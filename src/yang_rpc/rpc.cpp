@@ -62,7 +62,7 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
             {
                 SLOG_ERROR("RPC access denied to private module '", mod, "'");
                 return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                                    "Access to module '" + mod + "' is forbidden.");
+                    "Access to module '" + mod + "' is forbidden.");
             }
         }
 
@@ -80,8 +80,8 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
 
         if (output_node.has_value())
         {
-            status = encodef_->encode(request->encoding(), output_node.value(),
-                                      response->mutable_output());
+            status = encodef_->encode(
+                request->encoding(), output_node.value(), response->mutable_output());
             if (!status.ok())
             {
                 SLOG_ERROR("Rpc output value error: ", status.error_message());

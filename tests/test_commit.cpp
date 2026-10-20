@@ -106,58 +106,52 @@ class CommitFixture
     }
 
     // send a commit action, optionally with a mutation
-    SetResult
-    send_commit(const std::string &commit_id,
-                const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
+    SetResult send_commit(const std::string &commit_id,
+        const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
         return send_commit_ext_(
             commit_id, [](gnmi_ext::Commit *c) { c->mutable_commit(); }, mutation);
     }
 
     // send a commit action with explicit rollback duration, optionally with a mutation
-    SetResult send_commit_with_rollback(
-        const std::string &commit_id, int64_t duration_secs,
+    SetResult send_commit_with_rollback(const std::string &commit_id, int64_t duration_secs,
         const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
-        return send_commit_ext_(
-            commit_id, [duration_secs](gnmi_ext::Commit *c)
-            { c->mutable_commit()->mutable_rollback_duration()->set_seconds(duration_secs); },
-            mutation);
+        auto action = [duration_secs](gnmi_ext::Commit *c)
+        { c->mutable_commit()->mutable_rollback_duration()->set_seconds(duration_secs); };
+        return send_commit_ext_(commit_id, action, mutation);
     }
 
     // send a confirm action, optionally with a mutation
-    SetResult
-    send_confirm(const std::string &commit_id,
-                 const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
+    SetResult send_confirm(const std::string &commit_id,
+        const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
         return send_commit_ext_(
             commit_id, [](gnmi_ext::Commit *c) { c->mutable_confirm(); }, mutation);
     }
 
     // send a cancel action, optionally with a mutation
-    SetResult
-    send_cancel(const std::string &commit_id,
-                const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
+    SetResult send_cancel(const std::string &commit_id,
+        const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
         return send_commit_ext_(
             commit_id, [](gnmi_ext::Commit *c) { c->mutable_cancel(); }, mutation);
     }
 
     // send a set_rollback_duration action, optionally with a mutation
-    SetResult send_set_rollback_duration(
-        const std::string &commit_id, int64_t secs,
+    SetResult send_set_rollback_duration(const std::string &commit_id, int64_t secs,
         const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
-        return send_commit_ext_(
-            commit_id, [secs](gnmi_ext::Commit *c)
-            { c->mutable_set_rollback_duration()->mutable_rollback_duration()->set_seconds(secs); },
-            mutation);
+        auto action = [secs](gnmi_ext::Commit *c)
+        { c->mutable_set_rollback_duration()->mutable_rollback_duration()->set_seconds(secs); };
+        return send_commit_ext_(commit_id, action, mutation);
     }
 
     // send a commit extension with no action set
     SetResult send_no_action(const std::string &commit_id)
     {
-        return send_commit_ext_(commit_id, [](gnmi_ext::Commit *) {}, std::nullopt);
+        auto action = [](gnmi_ext::Commit *) {};
+        return send_commit_ext_(commit_id, action, std::nullopt);
     }
 
     // send an empty (unsupported) extension
@@ -187,7 +181,7 @@ class CommitFixture
     // optionally add a single mutation (xpath, value)
     template <typename ConfigFn>
     SetResult send_commit_ext_(const std::string &commit_id, ConfigFn config_commit,
-                               const std::optional<std::pair<std::string, std::string>> &mutation)
+        const std::optional<std::pair<std::string, std::string>> &mutation)
     {
         grpc::ClientContext ctx;
         gnmi::SetRequest request;
@@ -344,8 +338,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit then timeout rollback"
     verify_no_commit_in_progress();
 }
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: commit with default rollback duration",
-                 "[commit]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: commit with default rollback duration", "[commit]")
 {
     set_initial_config(TEST_XPATH, "true");
 
@@ -410,8 +404,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: plain Set while waiting", "[c
     send_cancel("commit-plain-1");
 }
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: commit with zero rollback duration",
-                 "[commit-neg]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: commit with zero rollback duration", "[commit-neg]")
 {
     auto r = send_commit_with_rollback("commit-neg-dur-1", 0, std::make_pair(TEST_XPATH, "false"));
     CHECK(r.status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -419,8 +413,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: commit with zero rollback dur
     check_error_response(r);
 }
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: commit with negative rollback duration",
-                 "[commit-neg]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: commit with negative rollback duration", "[commit-neg]")
 {
     auto r = send_commit_with_rollback("commit-neg-dur-1", -1, std::make_pair(TEST_XPATH, "false"));
     CHECK(r.status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -533,8 +527,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: mutations ignored on cancel",
 
 // https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-commit-confirmed.md#324-set-rollback-duration
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: id mismatch on set_rollback_duration",
-                 "[commit-neg]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: id mismatch on set_rollback_duration", "[commit-neg]")
 {
     set_initial_config(TEST_XPATH, "true");
 
@@ -550,8 +544,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: id mismatch on set_rollback_d
     send_cancel("srd-mismatch-A");
 }
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration while not waiting",
-                 "[commit-neg]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: set_rollback_duration while not waiting", "[commit-neg]")
 {
     // empty id
     auto r = send_set_rollback_duration("", 60);
@@ -566,8 +560,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration while n
     check_error_response(r2);
 }
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration with duration 0",
-                 "[commit-neg]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: set_rollback_duration with duration 0", "[commit-neg]")
 {
     set_initial_config(TEST_XPATH, "true");
 
@@ -583,8 +577,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration with du
     send_cancel("dur-zero-1");
 }
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration with negative duration",
-                 "[commit-neg]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: set_rollback_duration with negative duration", "[commit-neg]")
 {
     set_initial_config(TEST_XPATH, "true");
 
@@ -600,8 +594,8 @@ TEST_CASE_METHOD(CommitFixture, "Commit extension: set_rollback_duration with ne
     send_cancel("dur-neg-1");
 }
 
-TEST_CASE_METHOD(CommitFixture, "Commit extension: mutations ignored on set_rollback_duration",
-                 "[commit-neg]")
+TEST_CASE_METHOD(
+    CommitFixture, "Commit extension: mutations ignored on set_rollback_duration", "[commit-neg]")
 {
     set_initial_config(TEST_XPATH, "true");
 

@@ -1,7 +1,7 @@
 FROM archlinux:latest
 
 # build tools and third-party dependencies
-RUN pacman -Syu --noconfirm base-devel git cmake pcre2 pkgconf systemd-libs grpc protobuf openssl \
+RUN pacman -Syu --noconfirm base-devel git cmake pcre2 pkgconf systemd-libs grpc protobuf openssl clang \
     && pacman -Scc --noconfirm
 
 # install libyang

@@ -39,7 +39,7 @@ class YangRpcService final : public yang_rpc::YANG_RPC::Service
     YangRpcService(sysrepo::Connection conn) : sr_con_(conn) {}
 
     grpc::Status Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
-                     yang_rpc::RpcResponse *response);
+        yang_rpc::RpcResponse *response);
 
   private:
     sysrepo::Connection sr_con_; // sysrepo connection

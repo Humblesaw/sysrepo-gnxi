@@ -4,7 +4,7 @@ FROM ubuntu:noble
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential git ca-certificates cmake libpcre2-dev pkg-config libsystemd-dev \
-        libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev libssl-dev \
+        libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev libssl-dev clang-format \
     && rm -rf /var/lib/apt/lists/*
 
 # install libyang

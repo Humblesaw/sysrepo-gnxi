@@ -99,8 +99,8 @@ std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
     return grpc::CreateChannel(addr, grpc::SslCredentials(opts));
 }
 
-void prepare_context(grpc::ClientContext &ctx, const std::string &username = "",
-                     const std::string &password = "")
+void prepare_context(
+    grpc::ClientContext &ctx, const std::string &username = "", const std::string &password = "")
 {
     ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
 
@@ -115,7 +115,7 @@ void prepare_context(grpc::ClientContext &ctx, const std::string &username = "",
 }
 
 grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
-                             const std::string &username = "", const std::string &password = "")
+    const std::string &username = "", const std::string &password = "")
 {
     auto stub = gnmi::gNMI::NewStub(channel);
     grpc::ClientContext ctx;
@@ -126,7 +126,7 @@ grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
 }
 
 grpc::Status do_get(const std::shared_ptr<grpc::Channel> &channel, std::string xpath,
-                    const std::string &username = "", const std::string &password = "")
+    const std::string &username = "", const std::string &password = "")
 {
     auto stub = gnmi::gNMI::NewStub(channel);
     grpc::ClientContext ctx;
@@ -140,8 +140,7 @@ grpc::Status do_get(const std::shared_ptr<grpc::Channel> &channel, std::string x
 }
 
 grpc::Status do_set(const std::shared_ptr<grpc::Channel> &channel, std::string xpath,
-                    std::string value, const std::string &username = "",
-                    const std::string &password = "")
+    std::string value, const std::string &username = "", const std::string &password = "")
 {
     auto stub = gnmi::gNMI::NewStub(channel);
     grpc::ClientContext ctx;
@@ -156,8 +155,8 @@ grpc::Status do_set(const std::shared_ptr<grpc::Channel> &channel, std::string x
 
 std::unique_ptr<grpc::ClientReaderWriter<gnmi::SubscribeRequest, gnmi::SubscribeResponse>>
 do_subscribe(const std::shared_ptr<grpc::Channel> &channel, grpc::ClientContext &ctx,
-             std::string xpath, gnmi::SubscribeRequest &request, const std::string &username = "",
-             const std::string &password = "")
+    std::string xpath, gnmi::SubscribeRequest &request, const std::string &username = "",
+    const std::string &password = "")
 {
     auto stub = gnmi::gNMI::NewStub(channel);
     prepare_context(ctx, username, password);
@@ -218,7 +217,7 @@ TEST_CASE("mTLS: authorized Set RPC (rw)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
     auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
-                         "\"set by alice\"", "alice", "alicepass");
+        "\"set by alice\"", "alice", "alicepass");
     CHECK(status.ok());
 }
 
@@ -226,7 +225,7 @@ TEST_CASE("mTLS: denied Set RPC (ro)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
     auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
-                         "\"set by bob\"", "bob", "bobpass");
+        "\"set by bob\"", "bob", "bobpass");
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
 
@@ -234,7 +233,7 @@ TEST_CASE("mTLS: denied Set RPC", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
     auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
-                         "\"set by chuck\"", "chuck", "chuck$pass");
+        "\"set by chuck\"", "chuck", "chuck$pass");
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
 
@@ -363,8 +362,8 @@ TEST_CASE("mTLS: commit confirm is bound to the initiating user", "[auth-commit]
         commit->set_id(commit_id);
         commit->mutable_commit();
         auto upd = request.add_update();
-        xpath_to_path("/sysrepo-gnxi-test:test/things[name='bind-test']/description",
-                      upd->mutable_path());
+        xpath_to_path(
+            "/sysrepo-gnxi-test:test/things[name='bind-test']/description", upd->mutable_path());
         upd->mutable_val()->set_json_ietf_val("\"confirm binding\"");
         gnmi::SetResponse response;
         auto status = alice->Set(&ctx, request, &response);
