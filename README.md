@@ -148,6 +148,10 @@ Passwords are never stored in plaintext: the utility hashes them into the `iana-
 | gNMI extensions | Master Arbitration, History, Depth, Config Subscription | not supported, rejected with `UNIMPLEMENTED` |
 | gRPC reflection | targets SHOULD register the server reflection service | not provided |
 
+## Contributing
+
+In case you want to contribute to the project, please follow the latest commit and coding style. To format the source code use `make format` target. Single and multi-line comments are both written in `//` style. For annotating files, classes, functions etc. use doxygen-style comments. Naming styles are combined, for classes and structures we use `PascalCase`, for macros and constants `UPPER_SNAKE_CASE`, for functions and variables `lower_snake_case` and for private members and private methods `lower_snake_case_` (ending with _).
+
 ## License
 
 This project is licensed under the Apache License 2.0, see the `./LICENSE` file for the full text. The codebase is derived from third-party code licensed under the Apache License 2.0 (Graphiant Inc., Yohan Pipereau — see the source file headers), which is why the Apache License is kept for the project as a whole.
