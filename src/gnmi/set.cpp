@@ -37,6 +37,12 @@
 namespace impl
 {
 
+/**
+ * @brief Get the NETCONF operation name of an update operation.
+ *
+ * @param[in] op Update operation.
+ * @return "replace" for REPLACE, "merge" for MERGE.
+ */
 static const char *update_op_str(UpdateOp op)
 {
     return op == UpdateOp::REPLACE ? "replace" : "merge";
@@ -45,7 +51,7 @@ static const char *update_op_str(UpdateOp op)
 grpc::Status Set::handle_update_(
     const gnmi::Update &in, gnmi::UpdateResult *out, const gnmi::Path &prefix, UpdateOp op)
 {
-    // Parse request
+    // parse request
     if (!in.has_path() || !in.has_val())
     {
         return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, "Update is missing path or value");
@@ -60,9 +66,9 @@ grpc::Status Set::handle_update_(
 
     if (fullpath != gnxi::ROOT_XPATH && op == UpdateOp::REPLACE)
     {
-        // Replacing a list or leaf-list means we should delete all previous entries
+        // replacing a list or leaf-list means we should delete all previous entries
 
-        // Check if the xpath we are replacing is a leaf-list or a list
+        // check if the xpath we are replacing is a leaf-list or a list
         auto node_type = ly_ctx.findPath(fullpath).nodeType();
         if (node_type == libyang::NodeType::Leaflist || node_type == libyang::NodeType::List)
         {
@@ -71,7 +77,7 @@ grpc::Status Set::handle_update_(
             auto del_node = created_nodes.createdNode;
             auto sr_mod = ly_ctx.getModuleImplemented("sysrepo").value();
 
-            // Ensure we don't create any parent nodes - they might be deleted
+            // ensure we don't create any parent nodes - they might be deleted
             // in this transaction, so mark them "ether" and keep the top-level
             // ancestor for the merge below
             auto parent = std::optional<libyang::DataNode>(del_node.value());
@@ -119,12 +125,13 @@ grpc::Status Set::handle_update_(
 
         if (op == UpdateOp::REPLACE)
         {
-            // The gNMI semantics are that a replace at the top-level should cause all data node
-            // not provided to be removed. However, sysrepo semantics are that only the provided
-            // nodes are replaced. Therefore, request that everything not being replaced is deleted.
+            // the gNMI semantics are that a replace at the top-level should cause all data node
+            // not provided to be removed
+            // however, sysrepo semantics are that only the provided nodes are replaced
+            // therefore, request that everything not being replaced is deleted
 
             auto del_root = sr_sess_.getData(fullpath, 1);
-            // Walk all siblings not in update and add delete node to them
+            // walk all siblings not in update and add delete node to them
             for (auto n = del_root; n.has_value(); n = n->nextSibling())
             {
                 // data of other origins is not part of this replace
@@ -133,16 +140,16 @@ grpc::Status Set::handle_update_(
                     continue;
                 }
 
-                // Default flags are unreliable since getData() retrieves only a subset of the
+                // default flags are unreliable since getData() retrieves only a subset of the
                 // datastore
                 // if (getRawNode(*n)->flags & LYD_DEFAULT)
                 // {
-                //     // Default nodes need not be deleted and can be skipped
+                //     // default nodes need not be deleted and can be skipped
                 //     continue;
                 // }
 
                 bool is_replace_node = false;
-                // Is this a replace node?
+                // is this a replace node?
                 for (auto repl_n = top_level; repl_n.has_value(); repl_n = repl_n->nextSibling())
                 {
                     if (n->schema().path() == repl_n->schema().path())
@@ -152,7 +159,7 @@ grpc::Status Set::handle_update_(
                     }
                 }
 
-                // If this is a replace node, then optimise further sysrepo processing by not
+                // if this is a replace node, then optimise further sysrepo processing by not
                 // adding it to the batch
                 if (!is_replace_node)
                 {
@@ -162,8 +169,8 @@ grpc::Status Set::handle_update_(
             }
         }
 
-        // Add operation attribute to each node - there can be multiple if the JSON contains
-        // multiple top-level nodes.
+        // add operation attribute to each node - there can be multiple if the JSON contains
+        // multiple top-level nodes
         for (auto n = top_level; n.has_value(); n = n->nextSibling())
         {
             n->newMeta(ietf_nc_mod, "ietf-netconf:operation", update_op_str(op));
@@ -180,9 +187,9 @@ grpc::Status Set::handle_update_(
     }
     else
     {
-        // Find the edit point for the data fragment
+        // find the edit point for the data fragment
         auto set = top_level->findXPath(fullpath);
-        // We should have found a path, and wildcards don't make sense
+        // we should have found a path, and wildcards don't make sense
         if (set.empty())
         {
             SLOG_ERROR("Decoded fragment contains no node matching ", fullpath,
@@ -207,7 +214,7 @@ grpc::Status Set::handle_update_(
         }
     }
 
-    // Fill in Response
+    // fill in response
     *(out->mutable_path()) = in.path();
 
     return status;
@@ -332,7 +339,7 @@ grpc::Status Set::run(
         return auth_status;
     }
 
-    /* Echo the request prefix in the response */
+    // echo the request prefix in the response
     if (request->has_prefix())
     {
         response->mutable_prefix()->CopyFrom(request->prefix());
@@ -351,7 +358,7 @@ grpc::Status Set::run(
         std::set<std::string> del_root_origins;
         for (const auto &delpath : request->delete_())
         {
-            // Parse request and config sysrepo
+            // parse request and config sysrepo
             std::string fullpath;
             try
             {
@@ -370,7 +377,7 @@ grpc::Status Set::run(
                 return status;
             }
 
-            // Fill in Response
+            // fill in response
             gnmi::UpdateResult res;
             *(res.mutable_path()) = delpath;
             res.set_op(gnmi::UpdateResult::DELETE);
@@ -382,7 +389,7 @@ grpc::Status Set::run(
             SLOG_DEBUG("Delete ", fullpath);
             try
             {
-                // We cannot use deleteItem here as sysrepo doesn't like it being
+                // we cannot use deleteItem here as sysrepo doesn't like it being
                 // mixed with edit_batch, so retrieve just the nodes referenced by
                 // the xpath and no deeper to avoid it being any more expensive
                 // than it has to be
@@ -394,7 +401,7 @@ grpc::Status Set::run(
 
                 if (fullpath == gnxi::ROOT_XPATH)
                 {
-                    // Walk all siblings and add delete node to them
+                    // walk all siblings and add delete node to them
                     for (auto n : del_root->siblings())
                     {
                         // only data of the origins the root delete was issued under
@@ -419,7 +426,7 @@ grpc::Status Set::run(
                 }
                 else
                 {
-                    // Find the node(s) actually referenced by the path to mark them as
+                    // find the node(s) actually referenced by the path to mark them as
                     // requiring delete since they could well be deeper than the root
                     // node
                     auto set = del_root->findXPath(fullpath);
@@ -430,8 +437,8 @@ grpc::Status Set::run(
 
                     for (auto n : set)
                     {
-                        // Ensure we don't create any parent nodes - they might be deleted
-                        // in this transaction.
+                        // ensure we don't create any parent nodes - they might be deleted
+                        // in this transaction
                         auto check = n.parent();
                         while (check.has_value())
                         {
@@ -451,7 +458,7 @@ grpc::Status Set::run(
                 // data only), and in the specific-path case the getData() snapshot
                 // only contains the top-level ancestors of the matched nodes, so
                 // the siblings merged along are ancestors of marked (or otherwise
-                // already existing) data only.
+                // already existing) data only
                 xact_.merge(delete_tree_, del_root);
             }
             catch (const sysrepo::Error &exc)
@@ -509,14 +516,14 @@ grpc::Status Set::run(
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
         catch (const std::exception &exc)
-        { // Any other exception
+        { // any other exception
             SLOG_ERROR("Replace failed: ", exc.what());
             commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
         }
     }
 
-    /* gNMI paths with union_replace -- not yet supported */
+    // gNMI paths with union_replace -- not yet supported
     if (request->union_replace_size() > 0)
     {
         SLOG_WARN("Unsupported union_replace in SetRequest");
@@ -558,7 +565,7 @@ grpc::Status Set::run(
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, exc.what());
         }
         catch (const std::exception &exc)
-        { // Any other exception
+        { // any other exception
             SLOG_ERROR("Update failed: ", exc.what());
             commit_state_->clear();
             return grpc::Status(grpc::StatusCode::INTERNAL, exc.what());
@@ -572,18 +579,18 @@ grpc::Status Set::run(
 
     try
     {
-        /* edit final tree batch */
+        // edit final tree batch
         if (xact_.final_tree.has_value())
         {
             sr_sess_.editBatch(xact_.final_tree.value(), sysrepo::DefaultOperation::Merge);
         }
 
-        /* if this fails, we can still revert the changes */
+        // if this fails, we can still revert the changes
         sr_sess_.applyChanges();
 
         if (!commit_ext)
         {
-            /* copy the prepared configuration to Startup (has to succeed) */
+            // copy the prepared configuration to Startup (has to succeed)
             SessionDsSwitcher ds_switch(sr_sess_, sysrepo::Datastore::Startup);
             sr_sess_.copyConfig(sysrepo::Datastore::Running);
         }

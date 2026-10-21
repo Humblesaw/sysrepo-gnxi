@@ -32,7 +32,8 @@
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
 
-/* Positive Tests */
+// positive tests
+
 TEST_CASE("Subscribe (once)", "[subs]")
 {
     grpc::ClientContext ctx;
@@ -209,7 +210,7 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    // Wait for one update after the initial one
+    // wait for one update after the initial one
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -227,7 +228,7 @@ TEST_CASE("Subscribe (stream-sample)", "[subs]")
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
     CHECK(!response.update().atomic());
 
-    // And then cancel
+    // and then cancel
     ctx.TryCancel();
     success = rw->Read(&response);
     CHECK(success == false);
@@ -367,7 +368,7 @@ TEST_CASE("Subscribe (once) with wildcards", "[subs]")
     CHECK(response.update().update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto json = response.update().update().Get(0).val().json_ietf_val();
-    // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
+    // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.update().update().Get(0).path());
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
@@ -395,9 +396,18 @@ TEST_CASE("Subscribe (once) with wildcards", "[subs]")
     CHECK(status.ok());
 }
 
+/**
+ * @brief Cancel a Subscribe stream context after a delay.
+ *
+ * Waits long enough that any pending message would have been sent, then
+ * cancels the context. Used by on-change tests to terminate a quiet
+ * subscription.
+ *
+ * @param[in] ctx Client context of the subscription stream.
+ */
 static void onchange_cancel_thread(grpc::ClientContext &ctx)
 {
-    // Wait long enough to be sure that no pending message would have been sent
+    // wait long enough to be sure that no pending message would have been sent
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     ctx.TryCancel();
@@ -421,7 +431,7 @@ TEST_CASE("Subscribe (on-change, no updates)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    /* Initial update */
+    // initial update
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -468,7 +478,7 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     auto list = request.mutable_subscribe();
     auto sub = list->add_subscription();
 
-    // Make sure the item doesn't already exist, or no notifications
+    // make sure the item doesn't already exist, or no notifications
     // will be generated and the test will hang
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test-state/things[name='C']/name"),
         Contains("SR_ERR_NOT_FOUND"));
@@ -482,7 +492,7 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial update
+    // initial update
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -571,7 +581,7 @@ TEST_CASE("Subscribe (on-change, with update)", "[subs]")
     CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
@@ -599,7 +609,7 @@ TEST_CASE("Subscribe (on-change, with delete)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial update
+    // initial update
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -674,7 +684,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial update
+    // initial update
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -730,7 +740,7 @@ TEST_CASE("Subscribe for leaf (on-change, update)", "[subs]")
     CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
@@ -758,7 +768,7 @@ TEST_CASE("Subscribe (on-change, update with composite key)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial update
+    // initial update
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -839,7 +849,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial update
+    // initial update
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -863,7 +873,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    // Delete then add - sysrepo generates both delete and create events, check that we handle that
+    // delete then add - sysrepo generates both delete and create events, check that we handle that
     sr_sess->dropForeignOperationalContent("/sysrepo-gnxi-test:test-state/things");
     sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
     sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "8");
@@ -888,7 +898,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
     CHECK(!response.update().atomic());
 
-    // Update then delete - sysrepo collapses this to nothing
+    // update then delete - sysrepo collapses this to nothing
     sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']", std::nullopt);
     sr_sess->setItem("/sysrepo-gnxi-test:test-state/things[name='C']/counter", "8");
     sr_sess->dropForeignOperationalContent("/sysrepo-gnxi-test:test-state/things");
@@ -903,7 +913,7 @@ TEST_CASE("Subscribe for leaf (on-change, delete and add)", "[subs]")
     CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
@@ -1057,7 +1067,7 @@ TEST_CASE("Subscribe with non-existent path (stream-sample)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    // Wait for one update after the initial one
+    // wait for one update after the initial one
     success = rw->Read(&response);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
     CHECK(response.extension_size() == 0);
@@ -1068,7 +1078,7 @@ TEST_CASE("Subscribe with non-existent path (stream-sample)", "[subs]")
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
-    // And then cancel
+    // and then cancel
     ctx.TryCancel();
     success = rw->Read(&response);
     CHECK(success == false);
@@ -1114,7 +1124,7 @@ TEST_CASE("Subscribe with non-existent path (on-change)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    // And then cancel
+    // and then cancel
     ctx.TryCancel();
     success = rw->Read(&response);
     CHECK(success == false);
@@ -1150,7 +1160,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial update for 1st subscription
+    // initial update for 1st subscription
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1172,7 +1182,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
     CHECK(!response.update().atomic());
 
-    // Empty initial update for 2nd subscription (no data)
+    // empty initial update for 2nd subscription (no data)
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1182,7 +1192,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK(!response.update().has_prefix());
     REQUIRE(response.update().update_size() == 0);
 
-    // Sync response
+    // sync response
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1190,7 +1200,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    // Delete for 1 subscription
+    // delete for 1 subscription
     sr_sess->deleteItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']");
     sr_sess->applyChanges();
 
@@ -1210,7 +1220,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions, delete)", "[subs]")
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
-    // Update for the other subscription
+    // update for the other subscription
     sr_sess->setItem(
         "/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foofoo']/data", "baz");
     sr_sess->applyChanges();
@@ -1273,7 +1283,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial update for 1st subscription
+    // initial update for 1st subscription
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1295,7 +1305,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
     CHECK(!response.update().atomic());
 
-    // Initial update for 2nd subscription
+    // initial update for 2nd subscription
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1315,7 +1325,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK_THAT(resppath.elem(0).name(), Equals("sysrepo-gnxi-test-wine:wines"));
     CHECK(!response.update().atomic());
 
-    // Sync
+    // sync
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1323,7 +1333,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    // Delete for 1 subscription
+    // delete for 1 subscription
     sr_sess->deleteItem("/sysrepo-gnxi-test:test3/complex-list[type='bar'][name='foo']");
     sr_sess->applyChanges();
 
@@ -1343,7 +1353,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     REQUIRE(response.update().update_size() == 0);
     CHECK(!response.update().atomic());
 
-    // Update for the other subscription
+    // update for the other subscription
     sr_sess->setItem(
         "/sysrepo-gnxi-test-wine:wines/wine[name='Mas La Plana'][vintage='1985']/score", "99");
     sr_sess->applyChanges();
@@ -1352,7 +1362,7 @@ TEST_CASE("Subscribe (on-change, 2 subscriptions different modules, update/delet
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
     CHECK(response.extension_size() == 0);
-    // This is an update (i.e. modify)
+    // this is an update (i.e. modify)
     CHECK(response.update().delete__size() == 1);
     CHECK(response.update().update_size() == 1);
     CHECK(response.update().timestamp() > 0);
@@ -1411,7 +1421,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Initial data should contain data for sample subscription
+    // initial data should contain data for sample subscription
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1433,7 +1443,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
 
-    // Next response is initial-data for on-change subscription
+    // next response is initial-data for on-change subscription
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1458,7 +1468,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
 
     CHECK(!response.update().atomic());
 
-    // Sync response
+    // sync response
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1466,7 +1476,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK(!response.has_update());
     CHECK(response.sync_response());
 
-    // Wait for one update (sample only) after the initial one
+    // wait for one update (sample only) after the initial one
     success = rw->Read(&response);
     CHECK(success == true);
     CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1486,7 +1496,7 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK_THAT(resppath.elem(1).key().at("name"), Equals("foo"));
     CHECK_THAT(resppath.elem(1).key().at("type"), Equals("bar"));
 
-    // And then cancel
+    // and then cancel
     ctx.TryCancel();
     success = rw->Read(&response);
     CHECK(success == false);
@@ -1495,6 +1505,10 @@ TEST_CASE("Subscribe (stream: mix of sample and on-change)", "[subs]")
     CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
 }
 
+/**
+ * @brief Push 20 updates of the operational counter.
+ *
+ */
 static void update_counter()
 {
     sr_sess->switchDatastore(sysrepo::Datastore::Operational);
@@ -1530,15 +1544,15 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
             "/sysrepo-gnxi-test:test-state/things[name='C']/counter", sub->mutable_path());
         sub->set_mode(gnmi::SubscriptionMode::ON_CHANGE);
 
-        // This is to have race condition where the data is being modified
-        // around same time it's being subscribed to below.
+        // this is to have race condition where the data is being modified
+        // around same time it's being subscribed to below
         auto update_thread = std::thread(update_counter);
 
         auto rw = gnmi_client->Subscribe(&ctx);
         auto success = rw->Write(request);
         CHECK(success == true);
 
-        // Initial update
+        // initial update
         success = rw->Read(&response);
         CHECK(success == true);
         CHECK(!(response.response_case() == gnmi::SubscribeResponse::ResponseCase::kError));
@@ -1550,7 +1564,7 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
         CHECK(response.update().update().Get(0).val().value_case() ==
               gnmi::TypedValue::ValueCase::kJsonIetfVal);
         auto json = response.update().update().Get(0).val().json_ietf_val();
-        // We don't check the value since it can be 0...max
+        // we don't check the value since it can be 0...max
         // CHECK_THAT(json, Equals("\"0\""));
         auto path = path_to_xpath(response.update().update().Get(0).path());
         CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='C']/counter"));
@@ -1574,7 +1588,7 @@ TEST_CASE("Subscribe for leaf (on-change, race condition)", "[subs-scale]")
         CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
         CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
-        // Clean up
+        // clean up
         sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
         sr_sess->applyChanges();
     }
@@ -1762,9 +1776,9 @@ TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
     auto success = rw->Write(request);
     CHECK(success == true);
 
-    // Just generate a huge amount of updates without reading so that the Write call from the server
-    // hangs This shouldn't cause any delay for the applyChanges call, which would normally be a
-    // system component.
+    // just generate a huge amount of updates without reading so that the Write call from the server
+    // hangs, this shouldn't cause any delay for the applyChanges call, which would normally be a
+    // system component
     for (uint32_t i = 0; i < 25000; i++)
     {
         sr_sess->setItem(
@@ -1781,12 +1795,12 @@ TEST_CASE("Subscribe for leaf (on-change, slow client)", "[subs-scale]")
     CHECK(status.error_code() == grpc::StatusCode::CANCELLED);
     CHECK_THAT(status.error_message(), Contains("cancelled", Catch::CaseSensitive::No));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test-state/things[name='C']");
     sr_sess->applyChanges();
 }
 
-/* Negative tests */
+// negative tests
 
 TEST_CASE("Subscribe (empty)", "[subs-neg]")
 {
@@ -2067,7 +2081,7 @@ TEST_CASE("Subscribe (stream-sample) with zero sample interval", "[subs]")
     auto path = path_to_xpath(response.update().update().Get(0).path());
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state"));
 
-    // And then cancel
+    // and then cancel
     ctx.TryCancel();
     success = rw->Read(&response);
     CHECK(success == false);

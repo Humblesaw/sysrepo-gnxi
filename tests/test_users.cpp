@@ -79,7 +79,12 @@ class UsersFixture
         }
     }
 
-    // run the sysrepo-gnxi-users CLI binary as a subprocess
+    /**
+     * @brief Run the sysrepo-gnxi-users CLI binary as a subprocess.
+     *
+     * @param[in] args Arguments for the binary.
+     * @return Exit status of the subprocess, -1 on fork failure or abnormal exit.
+     */
     int run_bin(const std::vector<std::string> &args)
     {
         pid_t pid = fork();
@@ -122,7 +127,11 @@ class UsersFixture
         return -1;
     }
 
-    // get user database root node from sysrepo
+    /**
+     * @brief Get user database root node from sysrepo.
+     *
+     * @return Root node of the user database.
+     */
     libyang::DataNode get_db(void)
     {
         auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
@@ -134,7 +143,13 @@ class UsersFixture
         return std::move(data.value());
     }
 
-    // get user with a specific name
+    /**
+     * @brief Get user with a specific name.
+     *
+     * @param[in] root User database root node.
+     * @param[in] name Name of the user to find.
+     * @return User entry with the given name.
+     */
     libyang::DataNode get_user(libyang::DataNode &root, const std::string &name)
     {
         for (auto user : root.findXPath("/sysrepo-gnxi-users:users/user"))
@@ -148,7 +163,12 @@ class UsersFixture
         throw std::runtime_error("no user '" + name + "' in database");
     }
 
-    // get password of a specific user
+    /**
+     * @brief Get password of a specific user.
+     *
+     * @param[in] user User entry to read from.
+     * @return Password of the user.
+     */
     std::string get_password(libyang::DataNode &user)
     {
         auto password = user.findPath("password");
@@ -159,7 +179,11 @@ class UsersFixture
         return password->asTerm().valueStr();
     }
 
-    // check if any users exist in the database
+    /**
+     * @brief Check if any users exist in the database.
+     *
+     * @return True if there are no users in the database, false otherwise.
+     */
     bool db_empty(void)
     {
         try

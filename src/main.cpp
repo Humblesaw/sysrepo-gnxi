@@ -52,12 +52,21 @@
 #include <utils/log.h>
 #include <yang_rpc/yang_rpc.h>
 
+/**
+ * @brief Global state shared between the server and the signal handler.
+ *
+ */
 static struct
 {
     std::unique_ptr<grpc::Server> server;
     int pipefd[2];
 } g_state;
 
+/**
+ * @brief Forward a received signal number to the main loop through the self-pipe.
+ *
+ * @param[in] signum Number of the received signal.
+ */
 extern "C" void signal_handler(int signum)
 {
     if (write(g_state.pipefd[1], &signum, sizeof(signum)) < 0)
@@ -66,21 +75,25 @@ extern "C" void signal_handler(int signum)
     }
 }
 
+/**
+ * @brief Set up the signal handling for a graceful shutdown.
+ *
+ */
 void setup_signal_handler(void)
 {
-    // Set up the signal handler
+    // set up the signal handler
     if (pipe(g_state.pipefd) < 0)
     {
         SLOG_FATAL("Failed to create signal handler pipe: ", strerror(errno));
         exit(1);
     }
 
-    // Block all signals for the main thread and other new threads
+    // block all signals for the main thread and other new threads
     sigset_t set;
     sigfillset(&set);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
-    // Register the signal handler
+    // register the signal handler
     struct sigaction sa;
     sa.sa_handler = &signal_handler;
     sigemptyset(&sa.sa_mask);
@@ -89,11 +102,15 @@ void setup_signal_handler(void)
     sigaction(SIGINT, &sa, NULL);
 }
 
+/**
+ * @brief Wait for a termination signal and shutdown the server.
+ *
+ */
 static void wait_for_terminate(void)
 {
     int signal = 0;
 
-    // UnBlock all signals for this thread
+    // unblock all signals for this thread
     sigset_t set;
     sigfillset(&set);
     pthread_sigmask(SIG_UNBLOCK, &set, NULL);
@@ -290,6 +307,13 @@ static Auth::TlsMaterial load_tls_config(sysrepo::Session &sess)
     return tls;
 }
 
+/**
+ * @brief Start the gRPC server and wait for its termination.
+ *
+ * @param[in] sr_conn Sysrepo connection.
+ * @param[in] bind_addrs gRPC listen URIs to bind.
+ * @param[in] auth Authentication providing the server credentials.
+ */
 void run_server(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs,
     std::shared_ptr<Auth> auth)
 {

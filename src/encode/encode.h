@@ -28,20 +28,10 @@
 #include <sysrepo-cpp/Session.hpp>
 #include <sysrepo.h>
 
-/*
- * Encode directory aims at providing a CREATE-UPDATE-READ wrapper on top of
- * sysrepo for JSON encoding (other encodings can be added).
- * It provides YANG validation before storing elements and after fetching them
- * in sysrepo.
+/**
+ * @brief Helper class to reset the session datastore on going out of scope.
  *
- * update()  CREATE & UPDATE
- * read()    READ
- *
- * DELETE is not supported as it is not dependent of encodings.
- * Use sr_deleteItem to suppress subtree from a xpath directly.
  */
-
-/* helper class to reset session datastore on going out of scope */
 class SessionDsSwitcher
 {
   public:
@@ -58,8 +48,9 @@ class SessionDsSwitcher
     sysrepo::Datastore orig_ds_;
 };
 
-/*
- * Purpose for the encode/decode
+/**
+ * @brief Purpose for the encode/decode.
+ *
  */
 enum class EncodePurpose
 {
@@ -67,28 +58,65 @@ enum class EncodePurpose
     RPC,
 };
 
-/*
- * Factory to instantiate encodings
- * Encoding can be {JSON, Bytes, Proto, ASCII, JSON_IETF}
+/**
+ * @brief Factory to instantiate encodings.
+ *
+ * Encoding can be {JSON, Bytes, Proto, ASCII, JSON_IETF}.
  */
 class Encode
 {
   public:
     Encode(sysrepo::Session sess) : sr_sess_(sess) {}
 
-    /* Supported Encodings */
+    /**
+     * @brief Supported encodings.
+     *
+     */
     enum Supported
     {
         JSON_IETF = 0,
     };
 
+    /**
+     * @brief Decode a gNMI TypedValue into a libyang data node.
+     *
+     * @param[in] xpath XPath of the data to decode.
+     * @param[in] reqval Typed value to decode.
+     * @param[in] purpose Purpose for the encode/decode.
+     * @return grpc::Status::OK and the parsed data node, an error status and
+     * std::nullopt otherwise.
+     */
     std::tuple<grpc::Status, std::optional<libyang::DataNode>> decode(
         const std::string &xpath, const gnmi::TypedValue &reqval, EncodePurpose purpose);
+
+    /**
+     * @brief Encode a libyang data node into a gNMI TypedValue of the given
+     * encoding.
+     *
+     * @param[in] encoding Encoding to use.
+     * @param[in] node Data node to encode.
+     * @param[out] val Typed value receiving the encoded data.
+     * @return grpc::Status::OK on success, an error status otherwise.
+     */
     grpc::Status encode(gnmi::Encoding encoding, libyang::DataNode node, gnmi::TypedValue *val);
 
-    /* JSON encoding */
+    /**
+     * @brief Parse a message encoded in JSON IETF and set fields in sysrepo.
+     *
+     * @param[in] xpath XPath of the data to decode.
+     * @param[in] data Input data encoded in JSON.
+     * @param[in] purpose Purpose for the encode/decode.
+     * @return The parsed data node.
+     */
     std::optional<libyang::DataNode> json_decode(
         const std::string &xpath, const std::string &data, EncodePurpose purpose);
+
+    /**
+     * @brief Encode a libyang data node into JSON form.
+     *
+     * @param[in] node Data node to encode.
+     * @return The data node encoded in JSON.
+     */
     std::string json_encode(libyang::DataNode node);
 
   private:

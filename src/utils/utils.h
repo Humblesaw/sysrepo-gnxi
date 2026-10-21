@@ -33,7 +33,11 @@
 
 #include "utils/log.h"
 
-/* Get current time since epoch in nanosec */
+/**
+ * @brief Get the current time since epoch in nanoseconds.
+ *
+ * @return Nanoseconds since the system clock epoch.
+ */
 inline uint64_t get_time_nanosec()
 {
     std::chrono::nanoseconds ts;

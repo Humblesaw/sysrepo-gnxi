@@ -22,6 +22,7 @@
 #include "yang_rpc.h"
 
 #include "rpc.h"
+#include <utils/log.h>
 #include <utils/utils.h>
 
 grpc::Status YangRpcService::Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,

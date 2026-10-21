@@ -33,6 +33,11 @@
 static std::set<grpc::ServerContext *> server_contexts;
 static std::mutex server_context_mutex;
 
+/**
+ * @brief RAII registration of a gRPC server context in the global context
+ * set, so that try_cancel_all() can cancel the RPC on shutdown.
+ *
+ */
 class ServerContextHolder
 {
   public:
@@ -130,8 +135,8 @@ grpc::Status GNMIService::Subscribe(grpc::ServerContext *context,
 {
     ServerContextHolder holder(context);
 
-    // If we are shutting down don't start any new subscriptions
-    // as TryCancelAll will not be called after this.
+    // if we are shutting down don't start any new subscriptions
+    // as TryCancelAll will not be called after this
     if (rpc_shutting_down.load())
     {
         SLOG_DEBUG("Subscribe is not possible as server is shutting down");

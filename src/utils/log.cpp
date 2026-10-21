@@ -45,6 +45,12 @@ slog::RequestScope::~RequestScope()
     request_ctx.clear();
 }
 
+/**
+ * @brief Map a log level number to its fixed-width label.
+ *
+ * @param[in] lvl Level of the message.
+ * @return Label of the level.
+ */
 static const char *level_label(int lvl)
 {
     switch (lvl)
@@ -89,6 +95,15 @@ void slog::emit(int lvl, const std::string &msg)
     std::cerr << msg << "\n";
 }
 
+/**
+ * @brief Forward sysrepo log messages to the server log.
+ *
+ * Errors and warnings are re-emitted at DEBUG level, less severe messages
+ * are dropped.
+ *
+ * @param[in] level sysrepo log level of the message.
+ * @param[in] message Message text.
+ */
 static void sysrepo_log_cb(sr_log_level_t level, const char *message)
 {
     switch (level)
@@ -102,6 +117,18 @@ static void sysrepo_log_cb(sr_log_level_t level, const char *message)
     }
 }
 
+/**
+ * @brief Forward libyang log messages to the server log.
+ *
+ * Errors and warnings are re-emitted at DEBUG level with the data or
+ * schema path appended when available, less severe messages are dropped.
+ *
+ * @param[in] level libyang log level of the message.
+ * @param[in] message Message text.
+ * @param[in] data_path Data path related to the message, NULL when none.
+ * @param[in] schema_path Schema path related to the message, NULL when none.
+ * @param[in] line Source line (unused).
+ */
 static void libyang_log_cb(LY_LOG_LEVEL level, const char *message, const char *data_path,
     const char *schema_path, uint64_t line)
 {

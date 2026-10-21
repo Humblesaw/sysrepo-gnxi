@@ -64,6 +64,7 @@ bool secure_equals(std::string_view a, std::string_view b)
  * @brief RAII wrapper for struct crypt_data. The structure is
  * heap-allocated as it is over 32 KiB large, and it is zeroed out before
  * the memory is released since it holds password-derived data.
+ *
  */
 class CryptData
 {
@@ -86,6 +87,11 @@ class CryptData
     CryptData(const CryptData &) = delete;
     CryptData &operator=(const CryptData &) = delete;
 
+    /**
+     * @brief Get the wrapped crypt_data structure.
+     *
+     * @return Pointer to the crypt_data structure.
+     */
     struct crypt_data *get() { return m_data_; }
 
   private:

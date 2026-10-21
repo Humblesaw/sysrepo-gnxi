@@ -67,7 +67,7 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
                 response->GetDescriptor()->file()->options().GetExtension(gnmi::gnmi_service);
             response->set_gnmi_version(gnmi_version);
 
-            // Encoding used in TypedValue for responses
+            // encoding used in TypedValue for responses
             // response->add_supported_encodings(gnmi::Encoding::JSON);
             // response->add_supported_encodings(gnmi::Encoding::BYTES);
             // response->add_supported_encodings(gnmi::Encoding::PROTO);

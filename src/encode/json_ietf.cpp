@@ -29,53 +29,55 @@
 
 #include "encode.h"
 
-/*****************
- * CRUD - UPDATE *
- *****************/
-
+/**
+ * @brief Extract the value part of a JSON object with a single member.
+ *
+ * @param[in] object JSON object to extract the value from.
+ * @return The value part of the JSON object.
+ */
 std::string strip_json_object_value(const std::string &object)
 {
     std::string result = object;
     bool name_begin = false;
     int index_start = 0;
 
-    /* not a valid JSON object */
+    // not a valid JSON object
     if (object.front() != '{' || object.back() != '}')
     {
         SLOG_WARN("Unexpected input: JSON object does not have { or }");
         throw std::runtime_error("JSON object does not have { or }");
     }
 
-    /* strip the JSON object brackets */
+    // strip the JSON object brackets
     result = object.substr(1, object.size() - 2);
 
-    /* go through the JSON object and find the delimiter ':' between name and value */
+    // go through the JSON object and find the delimiter ':' between name and value
     for (size_t i = 0; i < result.length(); ++i)
     {
         switch (result.at(i))
         {
         case '"':
-            /* beginning or ending of a name */
+            // beginning or ending of a name
             name_begin = !name_begin;
             break;
         case ':':
-            /* skip all ':' inside of the name */
+            // skip all ':' inside of the name
             if (!name_begin)
             {
-                /* index of ':' between name and value */
+                // index of ':' between name and value
                 index_start = i;
             }
             break;
         }
 
-        /* we have found the ':' */
+        // we have found the ':'
         if (index_start)
         {
             break;
         }
     }
 
-    /* not a valid JSON object */
+    // not a valid JSON object
     if (!index_start)
     {
         SLOG_WARN("Unexpected input: JSON object does not have a :");
@@ -85,14 +87,10 @@ std::string strip_json_object_value(const std::string &object)
     return result.substr(index_start + 1);
 }
 
-/*
- * Parse a message encoded in JSON IETF and set fields in sysrepo.
- * @param data Input data encoded in JSON
- */
 std::optional<libyang::DataNode> Encode::json_decode(
     const std::string &xpath, const std::string &data, EncodePurpose purpose)
 {
-    /* get request */
+    // get request
     // TODO "/*" is a bad sign that this is a set/get request for all data, rewrite it
     if (xpath.compare("/*") == 0)
     {
@@ -116,7 +114,7 @@ std::optional<libyang::DataNode> Encode::json_decode(
         }
     }
 
-    // Create a node tree according to the xpath and data value.
+    // create a node tree according to the xpath and data value
     try
     {
         auto ctx = sr_sess_.getContext();
@@ -127,7 +125,7 @@ std::optional<libyang::DataNode> Encode::json_decode(
             return ctx.parseValueFragment(xpath, data, libyang::DataFormat::JSON, std::nullopt,
                 libyang::ParseOptions::JsonNull | libyang::ParseOptions::Strict, std::nullopt);
         case EncodePurpose::RPC:
-            // If xpath is not a path, this throws error (one node expected)
+            // if xpath is not a path, this throws error (one node expected)
             node = ctx.newPath2(xpath).createdNode;
             if (node.has_value())
             {
@@ -147,7 +145,7 @@ std::optional<libyang::DataNode> Encode::json_decode(
     {
         SLOG_WARN("Failed to parse JSON_IETF data for \"", xpath, "\": ", exc.what());
         SLOG_DEBUG("Input data: ", data);
-        // Don't leave the error lying around on the context otherwise sysrepo may pick it up on
+        // don't leave the error lying around on the context otherwise sysrepo may pick it up on
         // an unrelated operation
         auto ctx = sr_sess_.getContext();
         ctx.cleanAllErrors();
@@ -157,11 +155,6 @@ std::optional<libyang::DataNode> Encode::json_decode(
     return std::nullopt;
 }
 
-/***************
- * CRUD - READ *
- ***************/
-
-/* Encode a libyang data node into JSON form */
 std::string Encode::json_encode(libyang::DataNode node)
 {
     std::string data;
@@ -178,9 +171,9 @@ std::string Encode::json_encode(libyang::DataNode node)
     }
     else
     {
-        // In case the node has no children
+        // in case the node has no children
         data = "{}";
-        // The xpath will have found the containing node, but we want to dump its children
+        // the xpath will have found the containing node, but we want to dump its children
         // according to gNMI rules
         if (node.child().has_value())
         {

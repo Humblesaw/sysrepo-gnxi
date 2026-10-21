@@ -66,7 +66,7 @@ std::unordered_set<std::string> collect_xpath_mods(
 
     for (const auto &schema_node : set)
     {
-        /* get module of the first schema node */
+        // get module of the first schema node
         parent = schema_node;
         while (parent->parent() != std::nullopt)
         {
@@ -74,7 +74,7 @@ std::unordered_set<std::string> collect_xpath_mods(
         }
         auto ly_mod = parent->module();
 
-        /* add a module to the set */
+        // add a module to the set
         ly_mod_set.insert(ly_mod.name());
     }
 
@@ -83,13 +83,6 @@ std::unordered_set<std::string> collect_xpath_mods(
 
 DataSubscribe::DataSubscribe(sysrepo::Session sess) : data_sess_(sess) {}
 
-/*
- * Similar to sysrepo::Subscribe::module_change_subscribe
- *
- * Works around:
- * 1. Subscribe::module_change_subscribe requiring a module.
- * 2. Subscribe::module_change_subscribe not providing user-supplied context to callback function.
- */
 void DataSubscribe::data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath,
     uint32_t priority, sysrepo::SubscribeOptions opts)
 {

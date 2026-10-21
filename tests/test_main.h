@@ -45,7 +45,21 @@ extern std::unique_ptr<yang_rpc::YANG_RPC::Stub> gnxi_client;
 // sysrepo session to inspect data
 extern std::optional<sysrepo::Session> sr_sess;
 
+/**
+ * @brief Parse an XPath-like string into a gNMI Path.
+ *
+ * @param[in] xpath XPath-like string to parse.
+ * @param[out] path gNMI path to fill from the parsed elements.
+ * @param[in] origin Origin to set on the path (empty for no origin).
+ */
 extern void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin = "rfc7951");
+
+/**
+ * @brief Render a gNMI Path as an XPath-like string, keys sorted for determinism.
+ *
+ * @param[in] path gNMI path to render.
+ * @return XPath-like string representation of the path.
+ */
 extern std::string path_to_xpath(const gnmi::Path &path);
 
 /**

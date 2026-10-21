@@ -57,10 +57,28 @@ class Set
 
     ~Set() {}
 
+    /**
+     * @brief Run the Set RPC.
+     *
+     * @param[in] context gRPC server context.
+     * @param[in] request Incoming set request.
+     * @param[out] response Outgoing set response.
+     * @return gRPC status.
+     */
     grpc::Status run(
         grpc::ServerContext *context, const gnmi::SetRequest *request, gnmi::SetResponse *response);
 
   private:
+    /**
+     * @brief Handle a single update: decode its value and merge it into the
+     * transaction tree.
+     *
+     * @param[in] in Update to handle.
+     * @param[out] out Result of the update.
+     * @param[in] prefix Prefix of the request paths.
+     * @param[in] op Update operation (merge or replace).
+     * @return gRPC status.
+     */
     grpc::Status handle_update_(
         const gnmi::Update &in, gnmi::UpdateResult *out, const gnmi::Path &prefix, UpdateOp op);
 

@@ -52,6 +52,7 @@ struct PemBundle
 
 /**
  * @brief Read a file into a string (PEM material for the gRPC channels).
+ *
  */
 static std::string read_file(const std::filesystem::path &path)
 {
@@ -63,6 +64,11 @@ static std::string read_file(const std::filesystem::path &path)
     return {std::istreambuf_iterator<char>(ifs), {}};
 }
 
+/**
+ * @brief Get the test client certificate bundle, loaded once from the test schema directory.
+ *
+ * @return Test client certificate bundle.
+ */
 const PemBundle &pem_bundle()
 {
     static PemBundle b = []()
@@ -77,11 +83,23 @@ const PemBundle &pem_bundle()
     return b;
 }
 
+/**
+ * @brief Create an insecure gRPC channel to the given address.
+ *
+ * @param[in] addr Address to connect to.
+ * @return New gRPC channel.
+ */
 std::shared_ptr<grpc::Channel> make_insecure_channel(const std::string &addr)
 {
     return grpc::CreateChannel(addr, grpc::InsecureChannelCredentials());
 }
 
+/**
+ * @brief Create a TLS gRPC channel without a client certificate to the given address.
+ *
+ * @param[in] addr Address to connect to.
+ * @return New gRPC channel.
+ */
 std::shared_ptr<grpc::Channel> make_tls_channel(const std::string &addr)
 {
     grpc::SslCredentialsOptions opts;
@@ -89,6 +107,12 @@ std::shared_ptr<grpc::Channel> make_tls_channel(const std::string &addr)
     return grpc::CreateChannel(addr, grpc::SslCredentials(opts));
 }
 
+/**
+ * @brief Create an mTLS gRPC channel with the test client certificate to the given address.
+ *
+ * @param[in] addr Address to connect to.
+ * @return New gRPC channel.
+ */
 std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
 {
     const auto &b = pem_bundle();
@@ -99,6 +123,13 @@ std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
     return grpc::CreateChannel(addr, grpc::SslCredentials(opts));
 }
 
+/**
+ * @brief Prepare a client context with a deadline and optional credentials metadata.
+ *
+ * @param[in] ctx Client context to prepare.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ */
 void prepare_context(
     grpc::ClientContext &ctx, const std::string &username = "", const std::string &password = "")
 {
@@ -114,6 +145,14 @@ void prepare_context(
     }
 }
 
+/**
+ * @brief Call the Capabilities RPC on a channel with optional credentials.
+ *
+ * @param[in] channel Channel to use.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return RPC status.
+ */
 grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
     const std::string &username = "", const std::string &password = "")
 {
@@ -125,6 +164,15 @@ grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
     return stub->Capabilities(&ctx, request, &response);
 }
 
+/**
+ * @brief Call the Get RPC for a config path on a channel with optional credentials.
+ *
+ * @param[in] channel Channel to use.
+ * @param[in] xpath XPath to get.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return RPC status.
+ */
 grpc::Status do_get(const std::shared_ptr<grpc::Channel> &channel, std::string xpath,
     const std::string &username = "", const std::string &password = "")
 {
@@ -139,6 +187,16 @@ grpc::Status do_get(const std::shared_ptr<grpc::Channel> &channel, std::string x
     return stub->Get(&ctx, request, &response);
 }
 
+/**
+ * @brief Call the Set RPC with a single update on a channel with optional credentials.
+ *
+ * @param[in] channel Channel to use.
+ * @param[in] xpath XPath to set.
+ * @param[in] value JSON-IETF value to set.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return RPC status.
+ */
 grpc::Status do_set(const std::shared_ptr<grpc::Channel> &channel, std::string xpath,
     std::string value, const std::string &username = "", const std::string &password = "")
 {
@@ -153,6 +211,18 @@ grpc::Status do_set(const std::shared_ptr<grpc::Channel> &channel, std::string x
     return stub->Set(&ctx, request, &response);
 }
 
+/**
+ * @brief Prepare a ONCE Subscribe request and open the Subscribe stream on a channel with
+ * optional credentials.
+ *
+ * @param[in] channel Channel to use.
+ * @param[in] ctx Client context to prepare and use for the stream.
+ * @param[in] xpath XPath to subscribe to.
+ * @param[in] request Subscribe request to fill with the subscription.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return New Subscribe stream.
+ */
 std::unique_ptr<grpc::ClientReaderWriter<gnmi::SubscribeRequest, gnmi::SubscribeResponse>>
 do_subscribe(const std::shared_ptr<grpc::Channel> &channel, grpc::ClientContext &ctx,
     std::string xpath, gnmi::SubscribeRequest &request, const std::string &username = "",

@@ -35,6 +35,13 @@
 #include <sysrepo-cpp/Connection.hpp>
 #include <sysrepo-cpp/Session.hpp>
 
+/**
+ * @brief gRPC server credentials and user authentication/authorization.
+ *
+ * In insecure mode authentication and authorization are disabled, in secure
+ * mode mutual TLS is enforced and users are checked against the user
+ * database stored in sysrepo.
+ */
 class Auth
 {
   public:
@@ -127,6 +134,10 @@ class Auth
         const std::unordered_set<std::string> &modules, Access permission) const;
 };
 
+/**
+ * @brief gRPC metadata processor authenticating username/password call credentials.
+ *
+ */
 class UserPassAuthenticator final : public grpc::AuthMetadataProcessor
 {
   public:
@@ -137,6 +148,19 @@ class UserPassAuthenticator final : public grpc::AuthMetadataProcessor
 
     ~UserPassAuthenticator() {}
 
+    /**
+     * @brief Authenticate the username/password credentials in the call metadata.
+     *
+     * On success the username is stored in the auth context for per-RPC
+     * authorization and the credentials are consumed so that they do not
+     * reach the RPC handlers.
+     *
+     * @param[in] auth_metadata Call credentials metadata.
+     * @param[in] context Authentication context to store the username in.
+     * @param[out] consumed_auth_metadata Metadata consumed by the processor.
+     * @param[out] response_metadata Unused response metadata.
+     * @return OK when authenticated, UNAUTHENTICATED otherwise.
+     */
     grpc::Status Process(const InputMetadata &auth_metadata, grpc::AuthContext *context,
         OutputMetadata *consumed_auth_metadata, OutputMetadata *response_metadata) override;
 

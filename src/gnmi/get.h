@@ -45,12 +45,41 @@ class Get
 
     ~Get() {}
 
+    /**
+     * @brief Run the Get RPC.
+     *
+     * @param[in] context gRPC server context.
+     * @param[in] req Incoming get request.
+     * @param[out] response Outgoing get response.
+     * @return gRPC status.
+     */
     grpc::Status run(
         grpc::ServerContext *context, const gnmi::GetRequest *req, gnmi::GetResponse *response);
 
   private:
+    /**
+     * @brief Build one notification of the get response from the data of a
+     * single request path.
+     *
+     * @param[out] notification Notification to fill.
+     * @param[in] prefix Prefix of the request paths.
+     * @param[in] path Request path to get.
+     * @param[in] encoding Encoding requested by the client.
+     * @param[in] data_type Data type requested by the client.
+     * @return gRPC status.
+     */
     grpc::Status build_get_notification_(gnmi::Notification *notification, const gnmi::Path &prefix,
         const gnmi::Path &path, gnmi::Encoding encoding, gnmi::GetRequest_DataType data_type);
+
+    /**
+     * @brief Build the updates of a notification from the data of one path.
+     *
+     * @param[out] update_list Update list to fill.
+     * @param[in] fullpath XPath of the data to get.
+     * @param[in] encoding Encoding requested by the client.
+     * @param[in] origin Origin of the requested data.
+     * @return gRPC status.
+     */
     grpc::Status build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Update> *update_list,
         const std::string &fullpath, gnmi::Encoding encoding, const std::string &origin);
 

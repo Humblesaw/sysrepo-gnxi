@@ -101,6 +101,7 @@ enum class PathFormat
 
 /**
  * @brief Get the path name format matching the given (normalized) origin.
+ *
  */
 PathFormat format_for_origin(const std::string &origin);
 

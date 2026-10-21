@@ -40,9 +40,9 @@ grpc::Status Get::build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Upd
 {
     try
     {
-        /* Get multiple subtree for YANG lists or one for other YANG types */
+        // get multiple subtree for YANG lists or one for other YANG types
         auto sr_trees = sr_sess_.getData(fullpath);
-        /* The path not (yet) existing isn't an error, so just return an empty set */
+        // the path not (yet) existing isn't an error, so just return an empty set
         if (!sr_trees.has_value())
         {
             return grpc::Status::OK;
@@ -82,22 +82,15 @@ grpc::Status Get::build_get_update_(google::protobuf::RepeatedPtrField<gnmi::Upd
     return grpc::Status::OK;
 }
 
-/*
- * Build Get Notifications - Build a Notification message.
- * Contrary to Subscribe Notifications, A new notification message must be
- * created for every path of the GetRequest.
- * There can still be multiple paths in GetResponse if requested path
- * is a directory path.
- */
 grpc::Status Get::build_get_notification_(gnmi::Notification *notification,
     const gnmi::Path &prefix, const gnmi::Path &path, gnmi::Encoding encoding,
     gnmi::GetRequest_DataType data_type)
 {
-    /* Data elements that have changed values */
+    // data elements that have changed values
     google::protobuf::RepeatedPtrField<gnmi::Update> *update_list = notification->mutable_update();
     auto ds = sysrepo::Datastore::Operational;
 
-    /* Get time since epoch in milliseconds */
+    // get time since epoch in milliseconds
     notification->set_timestamp(get_time_nanosec());
 
     std::string origin;
@@ -137,7 +130,12 @@ grpc::Status Get::build_get_notification_(gnmi::Notification *notification,
     return build_get_update_(update_list, fullpath, encoding, origin);
 }
 
-/* Verify request fields are correct */
+/**
+ * @brief Verify that the fields of a get request are valid and supported.
+ *
+ * @param[in] request Get request to verify.
+ * @return grpc::Status::OK when the request is valid, an error status otherwise.
+ */
 static inline grpc::Status verify_get_request(const gnmi::GetRequest *request)
 {
     auto status = gnmi_check_encoding(request->encoding());
@@ -169,7 +167,6 @@ static inline grpc::Status verify_get_request(const gnmi::GetRequest *request)
     return grpc::Status::OK;
 }
 
-/* Implement gNMI Get RPC */
 grpc::Status Get::run(
     grpc::ServerContext *context, const gnmi::GetRequest *req, gnmi::GetResponse *response)
 {
@@ -196,7 +193,7 @@ grpc::Status Get::run(
         req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
         Auth::Access::READ_ONLY);
 
-    /* Run through all paths */
+    // run through all paths
     notification_list = response->mutable_notification();
     for (const auto &path : req->path())
     {

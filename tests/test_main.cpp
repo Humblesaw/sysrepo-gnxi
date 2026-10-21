@@ -54,7 +54,6 @@ std::unique_ptr<gnmi::gNMI::Stub> gnmi_client;
 std::unique_ptr<yang_rpc::YANG_RPC::Stub> gnxi_client;
 std::optional<sysrepo::Session> sr_sess;
 
-// Parse XPath-like string in gnmi::Path
 void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin)
 {
     if (!origin.empty())
@@ -70,14 +69,14 @@ void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin)
     auto start = 0u;
     auto end = xpath.find_first_of('/', start);
     assert(end != std::string::npos);
-    // Skip initial / - we don't want an empty path elem inserted for it
+    // skip initial / - we don't want an empty path elem inserted for it
     start = end + 1;
     end = xpath.find_first_of('/', start);
     for (; true; start = end + 1, end = xpath.find_first_of('/', start))
     {
         auto elem = path->add_elem();
         auto key_start = xpath.find_first_of('[', start);
-        // Parse list key if present
+        // parse list key if present
         if (key_start != std::string::npos && key_start < end)
         {
             auto value_end = 0u;
@@ -86,7 +85,7 @@ void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origin)
             while (key_start != std::string::npos && key_start < end)
             {
                 auto key_end = xpath.find_first_of('=', key_start);
-                // May be single or double quote character
+                // may be single or double quote character
                 auto quote = xpath[key_end + 1];
                 value_end = xpath.find_first_of(quote, key_end + 2);
                 // +1 to skip over leading '['
@@ -150,6 +149,17 @@ std::string path_to_xpath(const gnmi::Path &path)
     return str;
 }
 
+/**
+ * @brief Sysrepo module-change callback for the test module, fails on the custom-error leaf.
+ *
+ * @param[in] session Sysrepo session.
+ * @param[in] sub_id Subscription ID.
+ * @param[in] module_name Name of the changed module.
+ * @param[in] xpath XPath of the changed data.
+ * @param[in] event Sysrepo event.
+ * @param[in] request_id Sysrepo request ID.
+ * @return Callback result.
+ */
 static sysrepo::ErrorCode module_change_cb(sysrepo::Session session, uint32_t sub_id,
     std::string_view module_name, std::optional<std::string_view> xpath, sysrepo::Event event,
     uint32_t request_id)
@@ -165,10 +175,22 @@ static sysrepo::ErrorCode module_change_cb(sysrepo::Session session, uint32_t su
         return sysrepo::ErrorCode::CallbackFailed;
     }
 
-    // Don't do anything with the configuration
+    // don't do anything with the configuration
     return sysrepo::ErrorCode::Ok;
 }
 
+/**
+ * @brief Sysrepo RPC callback for clear-stats, fails on input "error" and stalls on "timeout".
+ *
+ * @param[in] session Sysrepo session.
+ * @param[in] sub_id Subscription ID.
+ * @param[in] xpath XPath of the RPC.
+ * @param[in] input RPC input.
+ * @param[in] event Sysrepo event.
+ * @param[in] request_id Sysrepo request ID.
+ * @param[in] output RPC output to fill.
+ * @return Callback result.
+ */
 static sysrepo::ErrorCode clear_stats_rpc_cb(sysrepo::Session session, uint32_t sub_id,
     std::string_view xpath, const libyang::DataNode input, sysrepo::Event event,
     uint32_t request_id, libyang::DataNode output)
@@ -185,7 +207,7 @@ static sysrepo::ErrorCode clear_stats_rpc_cb(sysrepo::Session session, uint32_t 
     }
     if (input.child() && input.child()->isTerm() && input.child()->asTerm().valueStr() == "timeout")
     {
-        // Sleep for a time longer than SR_RPC_CB_TIMEOUT
+        // sleep for a time longer than SR_RPC_CB_TIMEOUT
         sleep(3);
     }
 
@@ -194,6 +216,18 @@ static sysrepo::ErrorCode clear_stats_rpc_cb(sysrepo::Session session, uint32_t 
     return sysrepo::ErrorCode::Ok;
 }
 
+/**
+ * @brief Sysrepo action callback for the test action, replies with a static result.
+ *
+ * @param[in] session Sysrepo session.
+ * @param[in] sub_id Subscription ID.
+ * @param[in] xpath XPath of the action.
+ * @param[in] input Action input.
+ * @param[in] event Sysrepo event.
+ * @param[in] request_id Sysrepo request ID.
+ * @param[in] output Action output to fill.
+ * @return Callback result.
+ */
 static sysrepo::ErrorCode action_test_cb(sysrepo::Session session, uint32_t sub_id,
     std::string_view xpath, const libyang::DataNode input, sysrepo::Event event,
     uint32_t request_id, libyang::DataNode output)
@@ -556,6 +590,11 @@ void SetupServer::wait_for_tcp_(const std::string &host, uint16_t port)
     throw std::runtime_error("mTLS server did not become ready within 10s");
 }
 
+/**
+ * @brief RAII helper that installs the test modules into the per-binary repository, starts the
+ * shared sysrepo session, subscribes the test callbacks and pushes the test operational data.
+ *
+ */
 class SetupSysrepo
 {
   public:
@@ -587,11 +626,11 @@ class SetupSysrepo
     ~SetupSysrepo()
     {
         sub_.reset();
-        // don't hold onto sr_sess forever.
+        // don't hold onto sr_sess forever
         sr_sess.reset();
     }
 
-    // prevent copy and assignments.
+    // prevent copy and assignments
     SetupSysrepo(SetupSysrepo &) = delete;
     SetupSysrepo &operator=(const SetupSysrepo &) = delete;
 
@@ -599,6 +638,11 @@ class SetupSysrepo
     std::optional<sysrepo::Subscription> sub_;
 };
 
+/**
+ * @brief Isolates the test binary into its own sysrepo repository and SHM directory by setting
+ * the corresponding environment variables, unless the user already provides their own.
+ *
+ */
 class SetupTests
 {
   public:
@@ -606,8 +650,8 @@ class SetupTests
     {
         if (getenv("SYSREPO_REPOSITORY_PATH"))
         {
-            // Don't set environment variables if user has already specified them!
-            // They may have good reason to do it, and may know what they are doing.
+            // don't set environment variables if user has already specified them!
+            // they may have good reason to do it, and may know what they are doing
             fprintf(stderr, "Using user-defined sysrepo env\n\n");
             return;
         }
@@ -635,7 +679,7 @@ class SetupTests
                 "Failed to setenv SR_ENV_RUN_TESTS " + std::string(strerror(errno)));
         }
 
-        // Print this so debugging is easier
+        // print this so debugging is easier
         fprintf(stderr,
             "Running tests with \nSYSREPO_REPOSITORY_PATH=%s\n"
             "SYSREPO_SHM_DIR=%s\nSR_ENV_RUN_TESTS=1\n",

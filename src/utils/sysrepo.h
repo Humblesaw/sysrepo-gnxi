@@ -33,17 +33,29 @@
 #include <sysrepo-cpp/Subscription.hpp>
 #include <unordered_set>
 
-/*
- * Resolve an XPath against the schema context and return every distinct
- * YANG module the XPath touches.
- * A top-level wildcard XPath ("/ *") yields all implemented modules of
- * the context.
+/**
+ * @brief Resolve an XPath against the schema context and return every
+ * distinct YANG module the XPath touches.
  *
- * Throws on unresolvable/malformed XPath (libyang::Error).
+ * A top-level wildcard XPath (ROOT_XPATH) yields all implemented modules
+ * of the context.
+ *
+ * @param[in] ly_ctx libyang context with the schema to resolve against.
+ * @param[in] xpath XPath to resolve.
+ * @return Set of the distinct module names the XPath touches.
+ *
+ * @throws libyang::Error on unresolvable/malformed XPath.
  */
 std::unordered_set<std::string> collect_xpath_mods(
     const libyang::Context &ly_ctx, const char *xpath);
 
+/**
+ * @brief Accumulator of the edit trees of one gNMI Set transaction.
+ *
+ * The per-operation data trees (delete, purge, replace, update) are
+ * merged into final_tree as they are built; the accumulated tree is then
+ * applied as a single sysrepo edit batch.
+ */
 class UpdateTransaction
 {
   public:
@@ -62,15 +74,37 @@ class UpdateTransaction
     void push(std::optional<libyang::DataNode> &tree);
 };
 
+/**
+ * @brief Module change subscription of all modules an XPath touches.
+ *
+ * sysrepo subscribes to module changes per module, so
+ * data_change_subscribe() resolves the modules of the XPath and
+ * subscribes each of them on the stored session.
+ */
 class DataSubscribe
 {
   public:
     DataSubscribe(sysrepo::Session sess);
+
+    /**
+     * @brief Subscribe to changes of every module the XPath touches.
+     *
+     * Similar to sysrepo::Subscribe::module_change_subscribe.
+     * Works around:
+     * 1. Subscribe::module_change_subscribe requiring a module.
+     * 2. Subscribe::module_change_subscribe not providing user-supplied
+     * context to callback function.
+     *
+     * @param[in] cb Module change callback.
+     * @param[in] xpath XPath selecting the data to subscribe to.
+     * @param[in] priority Subscription priority.
+     * @param[in] opts Subscription options.
+     */
     void data_change_subscribe(sysrepo::ModuleChangeCb cb, const char *xpath, uint32_t priority = 0,
         sysrepo::SubscribeOptions opts = sysrepo::SubscribeOptions::Default);
 
   private:
     std::optional<sysrepo::Subscription> sub_;
-    /* The session is also available in the base class, but it is private so is duplicated here */
+    // the session is also available in the base class, but it is private so is duplicated here
     sysrepo::Session data_sess_;
 };

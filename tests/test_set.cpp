@@ -86,7 +86,7 @@ TEST_CASE("Empty leaf Set request (update)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals(""));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -127,7 +127,7 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
     CHECK_THAT(json.value(),
         Equals("{\"sysrepo-gnxi-test:test4\":{\"params\":[\"mtu\",\"queue\",\"speed\"]}}"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test4");
     sr_sess->applyChanges();
 }
@@ -166,7 +166,7 @@ TEST_CASE("Top-level Set request leaflist (replace)", "[set]")
 //     val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled");
 //     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
-//     // Clean up
+//     // clean up
 //     sr_sess->deleteItem("/sysrepo-gnxi-test:test");
 //     sr_sess->applyChanges();
 // }
@@ -205,12 +205,13 @@ TEST_CASE("Top-level Set request leaflist (update)", "[set]")
 
     CHECK_THAT(json.value(),
         Equals("{\"sysrepo-gnxi-test:test4\":{\"params\":[\"abc\",\"mtu\",\"queue\",\"speed\"]}}"));
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test4");
     sr_sess->applyChanges();
 }
 
-/* Positive Tests */
+// positive tests
+
 TEST_CASE("Top-level Set request (update)", "[set]")
 {
     grpc::ClientContext ctx;
@@ -240,13 +241,13 @@ TEST_CASE("Top-level Set request (update)", "[set]")
     val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/ready");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals(""));
 
-    // Also verify it makes it into the startup datastore since confirmed commit not used
+    // also verify it makes it into the startup datastore since confirmed commit not used
     sr_sess->switchDatastore(sysrepo::Datastore::Startup);
     val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Clean up
+    // clean up
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
@@ -282,7 +283,7 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Item B should have been removed since the whole config was replaced and the new config only
+    // item B should have been removed since the whole config was replaced and the new config only
     // contained item A
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
         Contains("SR_ERR_NOT_FOUND"));
@@ -291,7 +292,7 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
     CHECK_THROWS_WITH(
         sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"), Contains("SR_ERR_NOT_FOUND"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -327,7 +328,7 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Item B should have been removed since the whole config was replaced and the new config only
+    // item B should have been removed since the whole config was replaced and the new config only
     // contained item A
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
         Contains("SR_ERR_NOT_FOUND"));
@@ -336,7 +337,7 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
     CHECK_THROWS_WITH(
         sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"), Contains("SR_ERR_NOT_FOUND"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -378,23 +379,23 @@ TEST_CASE("Top-level Set request (multi replace + update)", "[set]")
 
     auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
-    // The update should be applied after the replace
+    // the update should be applied after the replace
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
-    // Item B should have been removed since the whole config was replaced and the new config only
+    // item B should have been removed since the whole config was replaced and the new config only
     // contained item A
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
         Contains("SR_ERR_NOT_FOUND"));
-    // The replace should have caused this node to be removed
+    // the replace should have caused this node to be removed
     CHECK_THROWS_WITH(
         sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"), Contains("SR_ERR_NOT_FOUND"));
-    // The update should be applied after the replace
+    // the update should be applied after the replace
     val = sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled2");
 
-    // The update should be applied after the replace
+    // the update should be applied after the replace
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->deleteItem("/sysrepo-gnxi-test:test2/enabled");
     sr_sess->applyChanges();
@@ -480,7 +481,7 @@ TEST_CASE("Path-based Set request (update)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -510,7 +511,7 @@ TEST_CASE("Leaf Set request (update)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("A"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -542,7 +543,7 @@ TEST_CASE("Set request (with prefix)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("A"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -554,7 +555,7 @@ TEST_CASE("Set request (with empty prefix)", "[set]")
     gnmi::SetResponse response;
     auto update = request.add_update();
 
-    // Add empty prefix
+    // add empty prefix
     request.mutable_prefix();
     xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']/name", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("\"A\"");
@@ -574,7 +575,7 @@ TEST_CASE("Set request (with empty prefix)", "[set]")
     auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/name");
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("A"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -616,7 +617,7 @@ TEST_CASE("Set request transaction (update)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
     sr_sess->applyChanges();
@@ -661,7 +662,7 @@ TEST_CASE("Set request transaction (delete+update)", "[set]")
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
         Contains("SR_ERR_NOT_FOUND"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
     sr_sess->applyChanges();
 }
@@ -697,7 +698,8 @@ TEST_CASE("Set request (delete with wildcards)", "[set]")
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
 }
 
-// gNMI spec §3.4.6: In the case that a path specifies an element within the data tree that does not
+// gNMI spec §3.4.6
+// In the case that a path specifies an element within the data tree that does not
 // exist, these deletes MUST be silently accepted.
 TEST_CASE("Set request (delete) with non-existent path", "[set]")
 {
@@ -862,11 +864,18 @@ TEST_CASE("Set request for list with composite key", "[set]")
     sr_sess->applyChanges();
 }
 
-/* Scale Tests */
+// scale tests
+
+/**
+ * @brief Generate a random lowercase alphabetic JSON string.
+ *
+ * @param[in] length Number of random characters inside the quotes.
+ * @return Random string wrapped in double quotes.
+ */
 std::string generate_random_string(size_t length)
 {
     std::string str;
-    str.reserve(length + 2); // Reserve space for the string to avoid reallocations
+    str.reserve(length + 2); // reserve space for the string to avoid reallocations
 
     str += '"';
     for (size_t i = 0; i < length; ++i)
@@ -903,7 +912,7 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
         REQUIRE(status.ok());
     }
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things");
     sr_sess->applyChanges();
 
@@ -912,7 +921,7 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
     CHECK_THAT(json.value(), Equals("{}"));
 }
 
-/* Negative Tests */
+// negative tests
 
 TEST_CASE("Set request (no val type)", "[set-neg]")
 {
@@ -1169,7 +1178,7 @@ TEST_CASE("Set request (incorrect prefix)", "[set-neg]")
     auto update = request.add_update();
 
     xpath_to_path("/sysrepo-gnxi-test:test/things[name='A']", update->mutable_path());
-    // The prefix, if any, should be sysrepo-gnxi-test
+    // the prefix, if any, should be sysrepo-gnxi-test
     update->mutable_val()->set_json_ietf_val("{\"sysrepo-gnxi-test-wine:enabled\":true}");
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.error_code() == grpc::StatusCode::INVALID_ARGUMENT);
@@ -1183,7 +1192,7 @@ TEST_CASE("Set request (incorrect prefix)", "[set-neg]")
     REQUIRE(response.response_size() == 0);
 }
 
-// Check that failing transaction doesn't modify state
+// check that failing transaction doesn't modify state
 TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
 {
     grpc::ClientContext ctx;
@@ -1197,7 +1206,7 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
         "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
     update = request.add_update();
     xpath_to_path("/", update->mutable_path());
-    // Contains bad value for enabled so expected to fail
+    // contains bad value for enabled so expected to fail
     update->mutable_val()->set_json_ietf_val(
         "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"B\",\"enabled\":\"maybe\"}]}}");
 
@@ -1212,14 +1221,14 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
     REQUIRE(response.response_size() == 0);
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    // Check that no changes happened to the state
+    // check that no changes happened to the state
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
         Contains("SR_ERR_NOT_FOUND"));
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
         Contains("SR_ERR_NOT_FOUND"));
 
     request.Clear();
-    // Try again with an unrelated update that succeeds
+    // try again with an unrelated update that succeeds
     update = request.add_update();
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
@@ -1235,7 +1244,7 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
     auto path = path_to_xpath(response.response().Get(0).path());
     CHECK_THAT(path, Equals("/"));
 
-    // Check that no state was changed other than that related to the most recent updae
+    // check that no state was changed other than that related to the most recent updae
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
         Contains("SR_ERR_NOT_FOUND"));
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
@@ -1244,12 +1253,12 @@ TEST_CASE("Set request failing transaction (2 updates)", "[set-neg]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
     sr_sess->applyChanges();
 }
 
-// Check that failing transaction doesn't modify state
+// check that failing transaction doesn't modify state
 TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
 {
     grpc::ClientContext ctx;
@@ -1264,7 +1273,7 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
 
     xpath_to_path("/sysrepo-gnxi-test:test/things[name='B']", request.add_delete_());
     xpath_to_path("/", update->mutable_path());
-    // Contains bad value for enabled so expected to fail
+    // contains bad value for enabled so expected to fail
     update->mutable_val()->set_json_ietf_val(
         "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":\"maybe\"}]}}");
 
@@ -1278,7 +1287,7 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     CHECK(!response.has_prefix());
     REQUIRE(response.response_size() == 0);
 
-    // Check that no changes happened to the state
+    // check that no changes happened to the state
     auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
@@ -1286,7 +1295,7 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
         Contains("SR_ERR_NOT_FOUND"));
 
     request.Clear();
-    // Try again with an unrelated update that succeeds
+    // try again with an unrelated update that succeeds
     update = request.add_update();
     xpath_to_path("/", update->mutable_path());
     update->mutable_val()->set_json_ietf_val(
@@ -1302,7 +1311,7 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
     auto path = path_to_xpath(response.response().Get(0).path());
     CHECK_THAT(path, Equals("/"));
 
-    // Check that no state was changed other than that related to the most recent updae
+    // check that no state was changed other than that related to the most recent updae
     val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled");
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
@@ -1312,13 +1321,13 @@ TEST_CASE("Set request failing transaction (delete+update)", "[set-neg]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
     sr_sess->applyChanges();
 }
 
-// Check that failing transaction doesn't modify state
+// check that failing transaction doesn't modify state
 TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
 {
     grpc::ClientContext ctx;
@@ -1331,7 +1340,7 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     update->mutable_val()->set_json_ietf_val("true");
     update = request.add_update();
     xpath_to_path("/sysrepo-gnxi-test:test/things[name='B']/enabled", update->mutable_path());
-    // Contains bad value for enabled so expected to fail
+    // contains bad value for enabled so expected to fail
     update->mutable_val()->set_json_ietf_val("\"maybe\"");
 
     auto status = gnmi_client->Set(&ctx, request, &response);
@@ -1348,14 +1357,14 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
 
-    // Check that no changes happened to the state
+    // check that no changes happened to the state
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
         Contains("SR_ERR_NOT_FOUND"));
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
         Contains("SR_ERR_NOT_FOUND"));
 
     request.Clear();
-    // Try again with an unrelated update that succeeds
+    // try again with an unrelated update that succeeds
     update = request.add_update();
     xpath_to_path("/sysrepo-gnxi-test:test/things[name='C']/enabled", update->mutable_path());
     update->mutable_val()->set_json_ietf_val("true");
@@ -1370,7 +1379,7 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
     auto path = path_to_xpath(response.response().Get(0).path());
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test/things[name='C']/enabled"));
 
-    // Check that no state was changed other than that related to the most recent updae
+    // check that no state was changed other than that related to the most recent updae
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']"),
         Contains("SR_ERR_NOT_FOUND"));
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']"),
@@ -1379,7 +1388,7 @@ TEST_CASE("Set request failing transaction (2 leaf updates)", "[set-neg]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // Clean up
+    // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='C']");
     sr_sess->applyChanges();
 }

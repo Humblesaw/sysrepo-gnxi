@@ -57,7 +57,12 @@ class CommitFixture
 
     ~CommitFixture() { clean_sysrepo_(); }
 
-    // set a leaf value in both Running and Startup datastores
+    /**
+     * @brief Set a leaf value in both Running and Startup datastores.
+     *
+     * @param[in] xpath XPath of the leaf to set.
+     * @param[in] value Value to set.
+     */
     void set_initial_config(const std::string &xpath, const std::string &value)
     {
         sr_sess->switchDatastore(sysrepo::Datastore::Running);
@@ -65,7 +70,13 @@ class CommitFixture
         sr_sess->applyChanges();
     }
 
-    // verify a leaf value in a given datastore
+    /**
+     * @brief Verify a leaf value in a given datastore.
+     *
+     * @param[in] ds Datastore to check.
+     * @param[in] xpath XPath of the leaf to check.
+     * @param[in] expected Expected value.
+     */
     void check_value(sysrepo::Datastore ds, const std::string &xpath, const std::string &expected)
     {
         sr_sess->switchDatastore(ds);
@@ -73,8 +84,12 @@ class CommitFixture
         CHECK_THAT(std::string(val.asTerm().valueStr()), Equals(expected));
     }
 
-    // verify a successful SetResponse carrying no UpdateResults
-    // (confirm/cancel/set_rollback_duration)
+    /**
+     * @brief Verify a successful SetResponse carrying no UpdateResults
+     * (confirm/cancel/set_rollback_duration).
+     *
+     * @param[in] r Result of the Set RPC call.
+     */
     void check_empty_success_response(const SetResult &r)
     {
         CHECK(r.response.timestamp() > 0);
@@ -83,14 +98,21 @@ class CommitFixture
         CHECK(r.response.response_size() == 0);
     }
 
-    // verify an error SetResponse: no timestamp, no UpdateResults
+    /**
+     * @brief Verify an error SetResponse: no timestamp, no UpdateResults.
+     *
+     * @param[in] r Result of the Set RPC call.
+     */
     void check_error_response(const SetResult &r)
     {
         CHECK(r.response.timestamp() == 0);
         CHECK(r.response.response_size() == 0);
     }
 
-    // verify that a commit is in progress, send a plain Set and expect FAILED_PRECONDITION
+    /**
+     * @brief Verify that a commit is in progress, send a plain Set and expect FAILED_PRECONDITION.
+     *
+     */
     void verify_commit_in_progress()
     {
         auto r = send_plain_set(TEST_XPATH, "true");
@@ -98,14 +120,23 @@ class CommitFixture
         CHECK_THAT(r.status.error_message(), Contains("previous Set has to be confirmed"));
     }
 
-    // verify that no commit is in progress, send a plain Set and expect success
+    /**
+     * @brief Verify that no commit is in progress, send a plain Set and expect success.
+     *
+     */
     void verify_no_commit_in_progress()
     {
         auto r = send_plain_set(TEST_XPATH, "true");
         CHECK(r.status.ok());
     }
 
-    // send a commit action, optionally with a mutation
+    /**
+     * @brief Send a commit action, optionally with a mutation.
+     *
+     * @param[in] commit_id Commit ID to use.
+     * @param[in] mutation Optional single mutation (xpath, value) to include.
+     * @return Result of the Set RPC call.
+     */
     SetResult send_commit(const std::string &commit_id,
         const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
@@ -113,7 +144,14 @@ class CommitFixture
             commit_id, [](gnmi_ext::Commit *c) { c->mutable_commit(); }, mutation);
     }
 
-    // send a commit action with explicit rollback duration, optionally with a mutation
+    /**
+     * @brief Send a commit action with explicit rollback duration, optionally with a mutation.
+     *
+     * @param[in] commit_id Commit ID to use.
+     * @param[in] duration_secs Rollback duration in seconds.
+     * @param[in] mutation Optional single mutation (xpath, value) to include.
+     * @return Result of the Set RPC call.
+     */
     SetResult send_commit_with_rollback(const std::string &commit_id, int64_t duration_secs,
         const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
@@ -122,7 +160,13 @@ class CommitFixture
         return send_commit_ext_(commit_id, action, mutation);
     }
 
-    // send a confirm action, optionally with a mutation
+    /**
+     * @brief Send a confirm action, optionally with a mutation.
+     *
+     * @param[in] commit_id Commit ID to use.
+     * @param[in] mutation Optional single mutation (xpath, value) to include.
+     * @return Result of the Set RPC call.
+     */
     SetResult send_confirm(const std::string &commit_id,
         const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
@@ -130,7 +174,13 @@ class CommitFixture
             commit_id, [](gnmi_ext::Commit *c) { c->mutable_confirm(); }, mutation);
     }
 
-    // send a cancel action, optionally with a mutation
+    /**
+     * @brief Send a cancel action, optionally with a mutation.
+     *
+     * @param[in] commit_id Commit ID to use.
+     * @param[in] mutation Optional single mutation (xpath, value) to include.
+     * @return Result of the Set RPC call.
+     */
     SetResult send_cancel(const std::string &commit_id,
         const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
@@ -138,7 +188,14 @@ class CommitFixture
             commit_id, [](gnmi_ext::Commit *c) { c->mutable_cancel(); }, mutation);
     }
 
-    // send a set_rollback_duration action, optionally with a mutation
+    /**
+     * @brief Send a set_rollback_duration action, optionally with a mutation.
+     *
+     * @param[in] commit_id Commit ID to use.
+     * @param[in] secs Rollback duration in seconds.
+     * @param[in] mutation Optional single mutation (xpath, value) to include.
+     * @return Result of the Set RPC call.
+     */
     SetResult send_set_rollback_duration(const std::string &commit_id, int64_t secs,
         const std::optional<std::pair<std::string, std::string>> &mutation = std::nullopt)
     {
@@ -147,14 +204,23 @@ class CommitFixture
         return send_commit_ext_(commit_id, action, mutation);
     }
 
-    // send a commit extension with no action set
+    /**
+     * @brief Send a commit extension with no action set.
+     *
+     * @param[in] commit_id Commit ID to use.
+     * @return Result of the Set RPC call.
+     */
     SetResult send_no_action(const std::string &commit_id)
     {
         auto action = [](gnmi_ext::Commit *) {};
         return send_commit_ext_(commit_id, action, std::nullopt);
     }
 
-    // send an empty (unsupported) extension
+    /**
+     * @brief Send an empty (unsupported) extension.
+     *
+     * @return Result of the Set RPC call.
+     */
     SetResult send_unsupported_extension()
     {
         grpc::ClientContext ctx;
@@ -164,7 +230,13 @@ class CommitFixture
         return {gnmi_client->Set(&ctx, request, &response), std::move(response)};
     }
 
-    // send a plain Set (no extension) with a mutation
+    /**
+     * @brief Send a plain Set (no extension) with a mutation.
+     *
+     * @param[in] xpath XPath of the leaf to set.
+     * @param[in] value Value to set.
+     * @return Result of the Set RPC call.
+     */
     SetResult send_plain_set(const std::string &xpath, const std::string &value)
     {
         grpc::ClientContext ctx;
@@ -177,8 +249,15 @@ class CommitFixture
     }
 
   private:
-    // build and send a SetRequest with a Commit extension configured by config_commit
-    // optionally add a single mutation (xpath, value)
+    /**
+     * @brief Build and send a SetRequest with a Commit extension configured by config_commit,
+     * optionally add a single mutation (xpath, value).
+     *
+     * @param[in] commit_id Commit ID to use.
+     * @param[in] config_commit Callback that sets the Commit action on the extension.
+     * @param[in] mutation Optional single mutation (xpath, value) to include.
+     * @return Result of the Set RPC call.
+     */
     template <typename ConfigFn>
     SetResult send_commit_ext_(const std::string &commit_id, ConfigFn config_commit,
         const std::optional<std::pair<std::string, std::string>> &mutation)
@@ -198,7 +277,10 @@ class CommitFixture
         return {gnmi_client->Set(&ctx, request, &response), std::move(response)};
     }
 
-    // remove test data from sysrepo
+    /**
+     * @brief Remove test data from sysrepo.
+     *
+     */
     static void clean_sysrepo_()
     {
         sr_sess->switchDatastore(sysrepo::Datastore::Running);
@@ -343,7 +425,7 @@ TEST_CASE_METHOD(
 {
     set_initial_config(TEST_XPATH, "true");
 
-    // commit without rollback_duration -> should default to 600s.
+    // commit without rollback_duration -> should default to 600s
     auto r1 = send_commit("commit-default-1", std::make_pair(TEST_XPATH, "false"));
     CHECK(r1.status.ok());
     CHECK(r1.response.timestamp() > 0);

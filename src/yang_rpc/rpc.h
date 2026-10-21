@@ -39,6 +39,13 @@ class Rpc
   public:
     Rpc(sysrepo::Session sess) : sr_sess_(sess) { encodef_ = std::make_shared<Encode>(sr_sess_); }
 
+    /**
+     * @brief Invoke the YANG RPC or action named by the request.
+     *
+     * @param[in] req Incoming RPC request.
+     * @param[out] response Outgoing RPC response.
+     * @return gRPC status.
+     */
     grpc::Status run(const yang_rpc::RpcRequest *req, yang_rpc::RpcResponse *response);
 
   private:

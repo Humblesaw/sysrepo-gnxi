@@ -35,8 +35,9 @@ using namespace std;
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
 
-/* Positive Tests */
+// positive tests
 
+// gNMI spec reference:
 // A path referring to "root" (which is represented by a path consisting of an empty set of
 // elements) should result in the nodes childA and childB and all of their children ... being
 // considered by the relevant operation.
@@ -75,6 +76,10 @@ TEST_CASE("Top-level Get request", "[get]")
     CHECK(found);
 }
 
+/**
+ * @brief Perform one top-level Get request and check the JSON_IETF response.
+ *
+ */
 static void single_get()
 {
     grpc::ClientContext ctx;
@@ -203,7 +208,7 @@ TEST_CASE("Get request of one leaf of oper state", "[get]")
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
-    // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
+    // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
@@ -233,7 +238,7 @@ TEST_CASE("Get request with prefix", "[get]")
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
-    // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
+    // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
@@ -335,7 +340,7 @@ TEST_CASE("Get request with wildcard", "[get]")
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
-    // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
+    // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
@@ -371,7 +376,7 @@ TEST_CASE("Get request with multiple paths", "[get]")
     CHECK(response.notification().Get(0).update().Get(0).val().value_case() ==
           gnmi::TypedValue::ValueCase::kJsonIetfVal);
     auto json = response.notification().Get(0).update().Get(0).val().json_ietf_val();
-    // This is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
+    // this is a 64-bit value, so is represented as a string (ref: RFC7951 §6.1)
     CHECK_THAT(json, Equals("\"1\""));
     auto path = path_to_xpath(response.notification().Get(0).update().Get(0).path());
     CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test-state/things[name='A']/counter"));
@@ -832,7 +837,7 @@ TEST_CASE("Get request from list with composite key having doube-quotes(\") ",
     sr_sess->applyChanges();
 }
 
-/* Negative tests */
+// negative tests
 
 TEST_CASE("Get request with unsupported encoding type", "[get-neg]")
 {

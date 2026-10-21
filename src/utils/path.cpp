@@ -36,6 +36,7 @@ namespace
  * @brief Check whether the schema node carries data, i.e. can appear in the
  * data tree (RPCs, actions, notifications and the structural choice/case
  * nodes cannot).
+ *
  */
 bool is_data_node(const libyang::SchemaNode &node)
 {
@@ -57,6 +58,7 @@ bool is_data_node(const libyang::SchemaNode &node)
  * @brief Check whether the subtree of the schema node contains a (data or RPC)
  * node of the given name directly below the (possibly choice/case-obscured)
  * top level.
+ *
  */
 bool subtree_has_top_node(const libyang::SchemaNode &node, const std::string &name)
 {
@@ -82,6 +84,7 @@ bool subtree_has_top_node(const libyang::SchemaNode &node, const std::string &na
  * @brief Check whether the module defines a top-level node of the given name
  * (descends through top-level choices and cases, includes top-level RPCs,
  * nested actions are addressed through their parent data nodes).
+ *
  */
 bool module_has_top_node(const libyang::Module &module, const std::string &name)
 {
@@ -112,6 +115,7 @@ bool module_has_top_node(const libyang::Module &module, const std::string &name)
 
 /**
  * @brief Check whether the module's data is addressable under the origin.
+ *
  */
 bool origin_contains_module(const std::string &origin, const libyang::Module &module)
 {

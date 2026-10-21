@@ -26,8 +26,6 @@
 #include <proto/yang_rpc.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
-#include "utils/log.h"
-
 /**
  * @brief The YANG_RPC service: entry point for invoking YANG RPCs and
  * actions over gRPC.
@@ -38,6 +36,14 @@ class YangRpcService final : public yang_rpc::YANG_RPC::Service
   public:
     YangRpcService(sysrepo::Connection conn) : sr_con_(conn) {}
 
+    /**
+     * @brief Invoke a YANG RPC or action.
+     *
+     * @param[in] context gRPC server context.
+     * @param[in] request Incoming RPC request.
+     * @param[out] response Outgoing RPC response.
+     * @return gRPC status.
+     */
     grpc::Status Rpc(grpc::ServerContext *context, const yang_rpc::RpcRequest *request,
         yang_rpc::RpcResponse *response);
 
