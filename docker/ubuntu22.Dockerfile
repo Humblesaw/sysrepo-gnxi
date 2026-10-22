@@ -51,6 +51,6 @@ RUN ldconfig
 # install sysrepo-gnxi
 COPY . /root/sysrepo-gnxi
 WORKDIR /root/sysrepo-gnxi/build
-RUN cmake -DENABLE_TESTS=ON -DENABLE_YANG_RPC=ON ..
+RUN cmake -DENABLE_TESTS=ON ..
 RUN make -j"$(nproc)"
 RUN ctest --output-on-failure

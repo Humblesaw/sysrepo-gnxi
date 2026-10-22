@@ -29,9 +29,6 @@ endif()
 # options
 option(ENABLE_TESTS "Build tests" OFF)
 option(ENABLE_COVERAGE "Build code coverage report from tests" OFF)
-# gNXI RPC service does not support per-module authorization
-# keep it disabled in production builds unless explicitly enabled
-option(ENABLE_YANG_RPC "Register the YANG_RPC service alongside gNMI" OFF)
 
 # generate a compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -113,9 +110,6 @@ set(GNXI_HEADERS src/encode/encode.h
 # server
 add_executable(${PROJECT_NAME} ${GNXI_SRC} src/main.cpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src)
-if(ENABLE_YANG_RPC)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE GNXI_SERVICE_ENABLED)
-endif()
 
 # header file location required to build target
 target_include_directories(${PROJECT_NAME}
@@ -144,15 +138,11 @@ set(GNXI_TESTS tests/test_auth.cpp
                tests/test_capabilities.cpp
                tests/test_commit.cpp
                tests/test_get.cpp
+               tests/test_rpc.cpp
                tests/test_set.cpp
                tests/test_subscribe.cpp
                tests/test_users.cpp
 )
-
-# the test_rpc suite exercises the gNXI service, build it only when enabled
-if(ENABLE_YANG_RPC)
-    list(APPEND GNXI_TESTS tests/test_rpc.cpp)
-endif()
 
 if (ENABLE_TESTS)
     enable_testing()
@@ -172,9 +162,6 @@ if (ENABLE_TESTS)
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
         )
         target_include_directories(${GNXI_TEST_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/tests)
-        if(ENABLE_YANG_RPC)
-            target_compile_definitions(${GNXI_TEST_NAME} PRIVATE GNXI_SERVICE_ENABLED)
-        endif()
         if("${GNXI_TEST_NAME}" STREQUAL "test_auth")
             target_compile_definitions(${GNXI_TEST_NAME} PRIVATE AUTH_MTLS_ENABLED)
         endif()
