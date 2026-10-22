@@ -54,7 +54,7 @@ grpc::Status GNMIService::Capabilities(grpc::ServerContext *context,
 
             for (auto module : sess.getContext().modules())
             {
-                if (module.implemented() && !is_private_module(module.name()))
+                if (module.implemented())
                 {
                     auto model = response->add_supported_models();
                     model->set_name(module.name());

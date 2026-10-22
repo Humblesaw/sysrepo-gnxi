@@ -31,7 +31,11 @@
 #include <thread>
 
 #include <grpc/grpc.h>
+#include <libyang/set.h>
+#include <libyang/tree_data.h>
 #include <proto/gnmi.grpc.pb.h>
+#include <sysrepo.h>
+#include <sysrepo/netconf_acm.h>
 // #include <grpcpp/impl/codegen/core_codegen_interface.h>
 
 #include "subscribe.h"
@@ -41,8 +45,6 @@
 #include <utils/log.h>
 #include <utils/path.h>
 #include <utils/utils.h>
-
-#include "security/auth.h"
 
 namespace impl
 {
@@ -220,6 +222,50 @@ grpc::Status Subscribe::build_subscribe_notification_for_changes(gnmi::Notificat
 
     // fill Update RepeatedPtrField in Notification message
     // Update field contains only data elements that have changed values
+
+    // when the stream's session has a NACM user (secure mode), hide all
+    // changes the recipient may not read, sysrepo's NACM covers data
+    // reads/edits, RPCs and notifications, but NOT module-change
+    // subscriptions, so the filtering must be applied explicitly per
+    // recipient here
+    const auto recipient_nacm_user = sr_nacm_get_user(sysrepo::getRawSession(sr_sess_));
+    auto nacm_visible = [&](const libyang::DataNode &node)
+    {
+        if (!recipient_nacm_user)
+        {
+            return true;
+        }
+
+        // rebuild the changed node as a standalone tree with its ancestors
+        // and let sysrepo filter it for the recipient
+        const struct ly_ctx *raw_ctx = libyang::getRawNode(node)->schema->module->ctx;
+        const std::string path = node.path();
+        const char *value = node.isTerm() ? lyd_get_value(libyang::getRawNode(node)) : nullptr;
+
+        struct lyd_node *filter_tree = nullptr, *created = nullptr;
+        if (lyd_new_path2(nullptr, raw_ctx, path.c_str(), value, 0, 0, 0, &filter_tree, &created) !=
+            LY_SUCCESS)
+        {
+            SLOG_WARN("NACM filter tree build failed for ", path, ", hiding the change");
+            return false;
+        }
+        (void)created;
+
+        bool visible =
+            sr_nacm_filter_data_read(sysrepo::getRawSession(sr_sess_), &filter_tree) == SR_ERR_OK &&
+            filter_tree != nullptr;
+        if (visible)
+        {
+            // the node itself may have been filtered out while its ancestors remained
+            struct ly_set *set = nullptr;
+            visible = lyd_find_xpath2(filter_tree, path.c_str(), nullptr, &set) == LY_SUCCESS &&
+                      set->count > 0;
+            ly_set_free(set, nullptr);
+        }
+        lyd_free_all(filter_tree);
+        return visible;
+    };
+
     try
     {
         auto last_change = make_pair(std::string(""), sysrepo::ChangeOperation::Created);
@@ -244,6 +290,14 @@ grpc::Status Subscribe::build_subscribe_notification_for_changes(gnmi::Notificat
             // the subscription (module) may span data of other origins
             if (!gnxi::data_node_in_origin(change.node, origin))
             {
+                continue;
+            }
+
+            // deliver changes only to recipients allowed to read them (NACM)
+            if (!nacm_visible(change.node))
+            {
+                SLOG_DEBUG(
+                    "Change to ", change.node.path(), " hidden from the stream recipient by NACM");
                 continue;
             }
 
@@ -1054,21 +1108,6 @@ grpc::Status Subscribe::run(grpc::ServerContext *context,
             SLOG_WARN("heartbeat_interval unsupported, no heartbeat notifications are sent");
         }
     }
-
-    // authorize
-    std::vector<gnmi::Path> paths;
-
-    for (auto &s : request.subscribe().subscription())
-    {
-        // non-existent paths cannot be authorized,
-        // but they also cannot skip authorization
-        paths.push_back(s.path());
-    }
-
-    auth_.authorize(context, sr_sess_,
-        request.subscribe().has_prefix() ? std::optional(request.subscribe().prefix())
-                                         : std::nullopt,
-        paths, Auth::Access::READ_ONLY);
 
     switch (request.subscribe().mode())
     {

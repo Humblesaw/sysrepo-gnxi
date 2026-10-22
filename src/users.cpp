@@ -27,7 +27,6 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include <libyang-cpp/DataNode.hpp>
@@ -37,39 +36,24 @@
 #include <openssl/crypto.h>
 
 #include "security/hash.h"
-#include "utils/utils.h"
 
 constexpr const char *USAGE = R"(Usage:
   sysrepo-gnxi-users add --name NAME --password PASS [--hash ALGO]
-                         [--permissions MOD:PERM[,MOD:PERM...]]
-  sysrepo-gnxi-users edit --name NAME [--password PASS [--hash ALGO]]
-                          [--permissions MOD:PERM[,MOD:PERM...]]
-  sysrepo-gnxi-users remove --name NAME
+  sysrepo-gnxi-users edit --name NAME --password PASS [--hash ALGO]
+  sysrepo-gnxi-users remove --name NAME [--purge-nacm]
   sysrepo-gnxi-users show [--name NAME]
 
 Options:
   -n,--name NAME        username
-  -P,--password PASS    password
+  -p,--password PASS    password
   -s,--hash ALGO        hashing algorithm: md5, sha256 or sha512 (default)
-  -p,--permissions ...  comma-separated MOD:PERM entries, PERM being
-                        'rw' (read-write), 'ro' (read-only) or 'no'
-                        (no access, removes the module from the ACL, no-op
-                        for modules not present in the ACL);
-                        MOD may be '*' for all modules currently installed
-                        in sysrepo (with 'no' for all modules in the ACL)
+  --purge-nacm          with remove also strip the username from every
+                        ietf-netconf-acm group
 
 The user database is stored in sysrepo under
 /sysrepo-gnxi-users:users and is protected by filesystem permissions.
+Authorization of the users is configured in /ietf-netconf-acm (NACM).
 )";
-
-/**
- * @brief A permission for a single module.
- *
- */
-struct Permission
-{
-    std::string module, access; // "rw", "ro" or "no" (no access)
-};
 
 /**
  * @brief Options for user creation/edit/deletion in the user database.
@@ -78,68 +62,8 @@ struct Permission
 struct Options
 {
     std::string command, name, password, hash;
-    std::vector<Permission> permissions;
+    bool purge_nacm = false;
 };
-
-/**
- * @brief A user account from the database with its ACL.
- *
- */
-struct UserInfo
-{
-    std::string name;
-    std::vector<std::pair<std::string, std::string>> acl;
-};
-
-/**
- * @brief Split a string into a vector of modules.
- *
- * @param[in] list List of modules split by commas provided from the command line.
- * @return Vector of modules.
- */
-std::vector<std::string> split_modules(const std::string &list)
-{
-    std::vector<std::string> out;
-    size_t pos = 0;
-    while (pos <= list.size())
-    {
-        auto comma = list.find(',', pos);
-        auto item = list.substr(pos, comma == std::string::npos ? comma : comma - pos);
-        if (!item.empty())
-        {
-            out.push_back(item);
-        }
-        if (comma == std::string::npos)
-        {
-            break;
-        }
-        pos = comma + 1;
-    }
-    return out;
-}
-
-/**
- * @brief Parse a comma-separated list of MODULE:PERMISSION entries.
- *
- * @param[in] list Permissions provided from the command line.
- * @return Parsed permissions in the order they were given.
- */
-std::vector<Permission> parse_permissions(const std::string &list)
-{
-    std::vector<Permission> out;
-    for (const auto &item : split_modules(list))
-    {
-        const auto colon = item.find(':');
-        const auto access = colon == std::string::npos ? "" : item.substr(colon + 1);
-        if (colon == std::string::npos || item.substr(0, colon).empty() ||
-            (access != "rw" && access != "ro" && access != "no"))
-        {
-            throw std::runtime_error("Invalid permission entry: " + item);
-        }
-        out.push_back({item.substr(0, colon), access});
-    }
-    return out;
-}
 
 /**
  * @brief Parse command line options.
@@ -171,28 +95,29 @@ Options parse_args(int argc, char *argv[])
     }
 
     static struct option long_options[] = {{"name", required_argument, 0, 'n'},
-        {"password", required_argument, 0, 'P'}, {"hash", required_argument, 0, 's'},
-        {"permissions", required_argument, 0, 'p'}, {"help", no_argument, 0, 'h'}, {0, 0, 0, 0}};
+        {"password", required_argument, 0, 'p'}, {"hash", required_argument, 0, 's'},
+        {"purge-nacm", no_argument, 0, 0}, {"help", no_argument, 0, 'h'}, {0, 0, 0, 0}};
 
     optind = 2; // skip program name and command
     int c;
-    while ((c = getopt_long(argc, argv, "n:P:s:p:h", long_options, nullptr)) != -1)
+    int purge_nacm_index = -1;
+    while ((c = getopt_long(argc, argv, "n:p:s:h", long_options, &purge_nacm_index)) != -1)
     {
         switch (c)
         {
+        case 0:
+            // long option without a short equivalent (purge-nacm is the only one)
+            opts.purge_nacm = true;
+            break;
         case 'n':
             opts.name = optarg;
             break;
-        case 'P':
+        case 'p':
             opts.password = optarg;
             break;
         case 's':
             opts.hash = optarg;
             break;
-        case 'p':
-            opts.permissions = parse_permissions(optarg);
-            break;
-        case '?':
         case 'h':
             std::cout << USAGE;
             std::exit(0);
@@ -202,10 +127,16 @@ Options parse_args(int argc, char *argv[])
         }
     }
 
+    if (opts.purge_nacm && opts.command != "remove")
+    {
+        std::cerr << "--purge-nacm applies only to the remove command\n\n" << USAGE;
+        std::exit(-1);
+    }
+
     if (opts.command == "show")
     {
         // show accepts only an optional --name
-        if (!opts.password.empty() || !opts.hash.empty() || !opts.permissions.empty())
+        if (!opts.password.empty() || !opts.hash.empty())
         {
             std::cerr << "show accepts only an optional --name\n\n" << USAGE;
             std::exit(-1);
@@ -228,33 +159,13 @@ Options parse_args(int argc, char *argv[])
         std::cerr << "--hash requires --password\n\n" << USAGE;
         std::exit(-1);
     }
-    if (opts.command == "edit" && opts.password.empty() && opts.permissions.empty())
+    if (opts.command == "edit" && opts.password.empty())
     {
-        std::cerr << "Nothing to edit: provide --password and/or --permissions\n\n" << USAGE;
+        std::cerr << "Nothing to edit: provide --password\n\n" << USAGE;
         std::exit(-1);
     }
 
     return opts;
-}
-
-/**
- * @brief Get all of the module names inside sysrepo, excluding private and
- * internal modules.
- *
- * @return Sysrepo module names.
- */
-std::vector<std::string> sysrepo_modules()
-{
-    sysrepo::Connection conn;
-    std::vector<std::string> result;
-    for (const auto &mod : conn.sessionStart().getContext().modules())
-    {
-        if (mod.implemented() && mod.name() != "sysrepo" && !is_private_module(mod.name()))
-        {
-            result.push_back(mod.name());
-        }
-    }
-    return result;
 }
 
 /**
@@ -268,44 +179,6 @@ bool user_exists(sysrepo::Session &sess, const std::string &name)
 {
     auto data = sess.getData("/sysrepo-gnxi-users:users/user[name='" + name + "']");
     return data.has_value();
-}
-
-/**
- * @brief Set permissions for the @name user.
- *
- * @param[in] sess Sysrepo session.
- * @param[in] name Username to change permissions for.
- * @param[in] opts Command line options (read/write permissions).
- */
-void set_acl(sysrepo::Session &sess, const std::string &name, const Options &opts)
-{
-    std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + name + "']";
-
-    auto add_acl = [&](const std::string &module, const char *access)
-    { sess.setItem(user_path + "/acl[module='" + module + "']/access", access); };
-    // apply the entries in the given order, the last one wins on conflicts
-    for (const auto &perm : opts.permissions)
-    {
-        if (perm.access == "no")
-        {
-            if (perm.module == "*")
-            {
-                sess.deleteItem(user_path + "/acl");
-            }
-            else
-            {
-                sess.deleteItem(user_path + "/acl[module='" + perm.module + "']");
-            }
-        }
-        else
-        {
-            for (const auto &m :
-                perm.module == "*" ? sysrepo_modules() : std::vector<std::string>{perm.module})
-            {
-                add_acl(m, perm.access.c_str());
-            }
-        }
-    }
 }
 
 /**
@@ -325,13 +198,12 @@ void cmd_add(const Options &opts)
 
     std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + opts.name + "']";
     sess.setItem(user_path + "/password", make_hash(opts.password, opts.hash));
-    set_acl(sess, opts.name, opts);
     sess.applyChanges();
     std::cout << "User '" << opts.name << "' added to sysrepo\n";
 }
 
 /**
- * @brief Edit user's password and/or permissions in the database.
+ * @brief Edit user's password in the database.
  *
  * @param[in] opts Command line options.
  */
@@ -346,13 +218,44 @@ void cmd_edit(const Options &opts)
     }
 
     std::string user_path = "/sysrepo-gnxi-users:users/user[name='" + opts.name + "']";
-    if (!opts.password.empty())
-    {
-        sess.setItem(user_path + "/password", make_hash(opts.password, opts.hash));
-    }
-    set_acl(sess, opts.name, opts);
+    sess.setItem(user_path + "/password", make_hash(opts.password, opts.hash));
     sess.applyChanges();
     std::cout << "User '" << opts.name << "' updated in sysrepo\n";
+}
+
+/**
+ * @brief Strip the username from every ietf-netconf-acm group it is a member
+ * of, printing each removed membership.
+ *
+ * @param[in] sess Sysrepo session.
+ * @param[in] name Username to purge.
+ */
+void purge_nacm(sysrepo::Session &sess, const std::string &name)
+{
+    auto groups = sess.getData("/ietf-netconf-acm:nacm/groups");
+    if (!groups.has_value())
+    {
+        return;
+    }
+
+    for (auto group : groups->findXPath("/ietf-netconf-acm:nacm/groups/group"))
+    {
+        auto gname = group.findPath("name");
+        if (!gname.has_value())
+        {
+            continue;
+        }
+        for (auto entry : group.findXPath("user-name"))
+        {
+            if (entry.asTerm().valueStr() != name)
+            {
+                continue;
+            }
+            sess.deleteItem(entry.path());
+            std::cout << "Removed '" << name << "' from NACM group '" << gname->asTerm().valueStr()
+                      << "'\n";
+        }
+    }
 }
 
 /**
@@ -371,42 +274,77 @@ void cmd_remove(const Options &opts)
     }
 
     sess.deleteItem("/sysrepo-gnxi-users:users/user[name='" + opts.name + "']");
+    if (opts.purge_nacm)
+    {
+        purge_nacm(sess, opts.name);
+    }
     sess.applyChanges();
     std::cout << "User '" << opts.name << "' removed from sysrepo\n";
 }
 
 /**
- * @brief Collect all users with their ACLs from sysrepo.
+ * @brief Collect all usernames from sysrepo.
  *
  * @param[in] sess Sysrepo session.
- * @return Users with their ACLs, sorted by username and module name.
+ * @return Usernames sorted alphabetically.
  */
-std::vector<UserInfo> collect_users(sysrepo::Session &sess)
+std::vector<std::string> collect_users(sysrepo::Session &sess)
 {
-    std::vector<UserInfo> users;
+    std::vector<std::string> users;
     auto data = sess.getData("/sysrepo-gnxi-users:users");
     if (data.has_value())
     {
         for (auto user : data->findXPath("/sysrepo-gnxi-users:users/user"))
         {
-            UserInfo u;
-            u.name = user.findPath("name")->asTerm().valueStr();
-            for (auto entry : user.findXPath("acl"))
+            auto uname = user.findPath("name");
+            if (!uname.has_value())
             {
-                u.acl.emplace_back(entry.findPath("module")->asTerm().valueStr(),
-                    entry.findPath("access")->asTerm().valueStr());
+                continue;
             }
-            std::sort(u.acl.begin(), u.acl.end());
-            users.push_back(std::move(u));
+            users.push_back(uname->asTerm().valueStr());
         }
     }
-    std::sort(users.begin(), users.end(),
-        [](const UserInfo &a, const UserInfo &b) { return a.name < b.name; });
+    std::sort(users.begin(), users.end());
     return users;
 }
 
 /**
- * @brief Show all users, or the module permissions of a specific user.
+ * @brief Collect the NACM groups a username is a member of (read-only
+ * convenience display of /ietf-netconf-acm:nacm/groups).
+ *
+ * @param[in] sess Sysrepo session.
+ * @param[in] name Username to look up.
+ * @return NACM group names the user is a member of, sorted alphabetically.
+ */
+std::vector<std::string> collect_nacm_groups(sysrepo::Session &sess, const std::string &name)
+{
+    std::vector<std::string> groups;
+    auto data = sess.getData("/ietf-netconf-acm:nacm/groups");
+    if (data.has_value())
+    {
+        for (auto group : data->findXPath("/ietf-netconf-acm:nacm/groups/group"))
+        {
+            for (auto entry : group.findXPath("user-name"))
+            {
+                if (entry.asTerm().valueStr() == name)
+                {
+                    auto gname = group.findPath("name");
+                    if (!gname.has_value())
+                    {
+                        continue;
+                    }
+                    groups.push_back(gname->asTerm().valueStr());
+                    break;
+                }
+            }
+        }
+    }
+    std::sort(groups.begin(), groups.end());
+    return groups;
+}
+
+/**
+ * @brief Show all users, or the details of a specific user.
  *
  * @param[in] opts Command line options.
  */
@@ -419,28 +357,21 @@ void cmd_show(const Options &opts)
     // a specific user requested
     if (!opts.name.empty())
     {
-        auto it = std::find_if(
-            users.begin(), users.end(), [&](const UserInfo &u) { return u.name == opts.name; });
-        if (it == users.end())
+        if (std::find(users.begin(), users.end(), opts.name) == users.end())
         {
             throw std::runtime_error("User '" + opts.name + "' not found in sysrepo");
         }
-        std::cout << "--- " << it->name << " ---\n";
-        if (it->acl.empty())
+        std::cout << "--- " << opts.name << "'s NACM groups " << " ---\n";
+
+        auto groups = collect_nacm_groups(sess, opts.name);
+        if (groups.empty())
         {
-            std::cout << "No module permissions.\n";
+            std::cout << "none (no rules apply to this user)\n";
             return;
         }
-        // align the permissions on the longest module name
-        size_t width = 0;
-        for (const auto &entry : it->acl)
+        for (const auto &group : groups)
         {
-            width = std::max(width, entry.first.size());
-        }
-        for (const auto &entry : it->acl)
-        {
-            std::cout << entry.first << std::string(width - entry.first.size(), ' ') << " | "
-                      << (entry.second == "rw" ? "read-write" : "read-only") << "\n";
+            std::cout << group << "\n";
         }
         return;
     }
@@ -454,7 +385,7 @@ void cmd_show(const Options &opts)
     std::cout << "--- Users ---\n";
     for (const auto &u : users)
     {
-        std::cout << u.name << "\n";
+        std::cout << u << "\n";
     }
 }
 

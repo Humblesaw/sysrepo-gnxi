@@ -49,8 +49,10 @@ enum class UpdateOp
 class Set
 {
   public:
-    Set(sysrepo::Session running_sess, std::shared_ptr<Commit> commit_state, const Auth &auth)
-        : sr_sess_(running_sess), commit_state_(commit_state), auth_(auth)
+    Set(sysrepo::Session running_sess, sysrepo::Connection sr_conn,
+        std::shared_ptr<Commit> commit_state, const Auth &auth)
+        : sr_sess_(running_sess), sr_con_(std::move(sr_conn)), commit_state_(commit_state),
+          auth_(auth)
     {
         encodef_ = std::make_shared<Encode>(sr_sess_);
     }
@@ -83,6 +85,7 @@ class Set
         const gnmi::Update &in, gnmi::UpdateResult *out, const gnmi::Path &prefix, UpdateOp op);
 
     sysrepo::Session sr_sess_;             // sysrepo running datastore session
+    sysrepo::Connection sr_con_;           // for internal (not per-user) sessions
     std::shared_ptr<Encode> encodef_;      // support for json ietf encoding
     std::shared_ptr<Commit> commit_state_; // commit confirm state
     const Auth &auth_;                     // authentication/authorization data

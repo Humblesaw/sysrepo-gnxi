@@ -22,35 +22,27 @@
 
 #pragma once
 
-#include <optional>
 #include <string>
-#include <unordered_set>
 
 #include <grpcpp/security/auth_metadata_processor.h>
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server_context.h>
 
-#include <proto/gnmi.grpc.pb.h>
-
 #include <sysrepo-cpp/Connection.hpp>
 #include <sysrepo-cpp/Session.hpp>
 
 /**
- * @brief gRPC server credentials and user authentication/authorization.
+ * @brief gRPC server credentials and user authentication.
  *
  * In insecure mode authentication and authorization are disabled, in secure
  * mode mutual TLS is enforced and users are checked against the user
- * database stored in sysrepo.
+ * database stored in sysrepo. Authorization is delegated to the sysrepo
+ * NACM implementation, the authenticated username is pushed into each
+ * per-RPC sysrepo session as its NACM user.
  */
 class Auth
 {
   public:
-    enum class Access
-    {
-        READ_ONLY,
-        READ_WRITE,
-    };
-
     /**
      * @brief Server TLS material (the base64 bodies stored in sysrepo wrapped
      * in PEM markers for gRPC)
@@ -106,32 +98,20 @@ class Auth
         sysrepo::Session &sess, const std::string &username, const std::string &password) const;
 
     /**
-     * @brief Authorize an operation against known users. Throw on error.
+     * @brief Set the authenticated username as the NACM user of a session,
+     * enabling NACM enforcement (read filtering, write and RPC denial) for
+     * all sysrepo operations done over it. Throw on error.
      *
-     * @param[in] ctx Server context to read the username from.
-     * @param[in] sess Sysrepo session to read the users from.
-     * @param[in] prefix Prefix of the paths to check.
-     * @param[in] paths Paths to check.
-     * @param[in] permission Permission level needed to authorize the process (read/write).
+     * No-op in insecure mode (no NACM user, operations are unrestricted).
+     *
+     * @param[in,out] sess Session to set the NACM user on.
+     * @param[in] ctx Server context to read the authenticated username from.
      */
-    void authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
-        const std::optional<gnmi::Path> &prefix, const std::vector<gnmi::Path> &paths,
-        Access permission) const;
+    void set_nacm_user(sysrepo::Session &sess, grpc::ServerContext *ctx) const;
 
   private:
     bool insecure_;
     std::shared_ptr<grpc::ServerCredentials> credentials_;
-
-    /**
-     * @brief Authorize an operation (read/write) against a database of known users. Throw on error.
-     *
-     * @param[in] sess Sysrepo session to read the users from.
-     * @param[in] username Username to authorize.
-     * @param[in] modules Names of the modules used in the operation.
-     * @param[in] permission Permission level needed to authorize the process (read/write).
-     */
-    void authorize_(sysrepo::Session &sess, const std::string &username,
-        const std::unordered_set<std::string> &modules, Access permission) const;
 };
 
 /**

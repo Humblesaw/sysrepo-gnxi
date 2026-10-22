@@ -25,12 +25,10 @@
 
 #include <openssl/crypto.h>
 
-#include <proto/gnmi.grpc.pb.h>
+#include <sysrepo.h>
+#include <sysrepo/netconf_acm.h>
 
-#include "utils/log.h"
-#include "utils/path.h"
-#include "utils/sysrepo.h"
-#include "utils/utils.h"
+#include <utils/log.h>
 
 #include "auth.h"
 #include "hash.h"
@@ -129,104 +127,7 @@ void Auth::authenticate(
     throw std::runtime_error("invalid username or password");
 }
 
-void Auth::authorize_(sysrepo::Session &sess, const std::string &username,
-    const std::unordered_set<std::string> &modules, Access permission) const
-{
-    // an empty set of modules means the operation matches no schema nodes
-    // (e.g. a non-existent path), so there is nothing to authorize
-    if (modules.empty())
-    {
-        return;
-    }
-
-    std::unordered_set<std::string> modules_authorized;
-
-    try
-    {
-        // read the user database live from sysrepo
-        auto data = sess.getData("/sysrepo-gnxi-users:users");
-        if (!data.has_value())
-        {
-            throw std::runtime_error("no user database found in sysrepo "
-                                     "(/sysrepo-gnxi-users:users)");
-        }
-
-        auto users = data->findXPath("user");
-        for (const auto &user : users)
-        {
-            auto name = user.findPath("name");
-            assert(name.has_value());
-            if (name->asTerm().valueStr() != username)
-            {
-                continue;
-            }
-
-            auto acl_set = user.findXPath("acl");
-            for (const auto &acl_node : acl_set)
-            {
-                auto mod_node = acl_node.findPath("module");
-                assert(mod_node.has_value());
-                std::string mod = mod_node->asTerm().valueStr();
-                if (!modules.contains(mod))
-                {
-                    continue;
-                }
-
-                auto acc_node = acl_node.findPath("access");
-                assert(acc_node.has_value());
-                std::string acc = acc_node->asTerm().valueStr();
-
-                // need read/write or read-only permission
-                if ((permission == Auth::Access::READ_WRITE && acc == "rw") ||
-                    (permission == Auth::Access::READ_ONLY && (acc == "rw" || acc == "ro")))
-                {
-                    modules_authorized.insert(mod);
-                    continue;
-                }
-                // insufficient permissions
-                else
-                {
-                    SLOG_ERROR("Authorization failed (insufficient permissions): User " + username +
-                               " has been denied " + acc + " access to " + mod + ".");
-                    throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                        "User " + username + " has been denied " + acc + " access to " + mod + ".");
-                }
-            }
-
-            // already found the user
-            break;
-        }
-    }
-    catch (grpc::Status &exc)
-    {
-        throw exc;
-    }
-    catch (std::exception &exc)
-    {
-        SLOG_ERROR("Authorization failed (user database problem): ", exc.what());
-        throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-            "Authorization failed: " + std::string(exc.what()));
-    }
-
-    // authorized only if every used module has been covered by an ACL entry
-    if (modules_authorized.size() != modules.size())
-    {
-        for (const auto &mod : modules)
-        {
-            if (!modules_authorized.contains(mod))
-            {
-                SLOG_ERROR("Authorization failed (module not in ACL): User '", username,
-                    "' lacks an ACL entry for module '", mod, "'.");
-                throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                    "User " + username + " lacks an ACL entry for module '" + mod + "'.");
-            }
-        }
-    }
-}
-
-void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
-    const std::optional<gnmi::Path> &prefix, const std::vector<gnmi::Path> &paths,
-    Access permission) const
+void Auth::set_nacm_user(sysrepo::Session &sess, grpc::ServerContext *ctx) const
 {
     // insecure mode == no authorization
     if (insecure_)
@@ -234,24 +135,7 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
         return;
     }
 
-    std::vector<std::string> xpaths;
-
-    try
-    {
-        const gnmi::Path empty_prefix;
-        const gnmi::Path &path_prefix = prefix.value_or(empty_prefix);
-        for (auto &path : paths)
-        {
-            xpaths.push_back(gnxi::gnmi_to_xpath(sess.getContext(), path_prefix, path));
-        }
-    }
-    catch (const grpc::Status &status)
-    {
-        SLOG_DEBUG("Prefix or path could not be parsed: ", status.error_message());
-        throw;
-    }
-
-    // get username (otherwise we cannot authorize)
+    // the authenticated username
     std::string name = username(ctx);
     if (name.empty())
     {
@@ -259,25 +143,12 @@ void Auth::authorize(grpc::ServerContext *ctx, sysrepo::Session &sess,
         throw grpc::Status(grpc::StatusCode::INTERNAL, "Authenticated username unavailable.");
     }
 
-    for (const auto &xpath : xpaths)
+    if (sr_nacm_set_user(sysrepo::getRawSession(sess), name.c_str()) != SR_ERR_OK)
     {
-        auto mods = collect_xpath_mods(sess.getContext(), xpath.c_str());
-
-        // reject any access to private modules
-        for (const auto &mod : mods)
-        {
-            if (is_private_module(mod))
-            {
-                SLOG_ERROR("Authorization failed (private module): User ", name,
-                    " attempted access to private module '", mod, "'.");
-                throw grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                    "Access to module '" + mod + "' is forbidden.");
-            }
-        }
-
-        // authorize the remaining modules against the user's ACL
-        authorize_(sess, name, mods, permission);
+        SLOG_ERROR("Authorization failed (cannot set NACM user)");
+        throw grpc::Status(grpc::StatusCode::INTERNAL, "NACM setup of the session failed.");
     }
+    SLOG_DEBUG("NACM user of an RPC session set to '", name, "'");
 }
 
 grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,

@@ -450,9 +450,7 @@ void SetupServer::restart()
     auto channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
     channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
     gnmi_client = gnmi::gNMI::NewStub(channel);
-#ifdef GNXI_SERVICE_ENABLED
     gnxi_client = yang_rpc::YANG_RPC::NewStub(channel);
-#endif
 }
 
 void SetupServer::stop_(pid_t pid)
@@ -731,9 +729,7 @@ int main(int argc, char *argv[])
         auto main_channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
         main_channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
         gnmi_client = gnmi::gNMI::NewStub(main_channel);
-#    ifdef GNXI_SERVICE_ENABLED
         gnxi_client = yang_rpc::YANG_RPC::NewStub(main_channel);
-#    endif
 #endif
 
         result = Catch::Session().run(argc, argv);

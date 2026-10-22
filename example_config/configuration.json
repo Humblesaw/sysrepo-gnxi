@@ -41,6 +41,33 @@
       }
     ]
   },
+  "ietf-netconf-acm:nacm": {
+    "enable-nacm": true,
+    "read-default": "deny",
+    "write-default": "deny",
+    "exec-default": "deny",
+    "groups": {
+      "group": [
+        {
+          "name": "admin",
+          "user-name": ["admin"]
+        }
+      ]
+    },
+    "rule-list": [
+      {
+        "name": "admin-all",
+        "group": ["admin"],
+        "rule": [
+          {
+            "name": "all",
+            "access-operations": "*",
+            "action": "permit"
+          }
+        ]
+      }
+    ]
+  },
   "sysrepo-gnxi-server:server": {
     "listen": {
       "endpoint": [

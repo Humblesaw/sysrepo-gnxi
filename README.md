@@ -33,17 +33,17 @@ JSON encoding is not supported due to the nature of the data. Libyang and sysrep
 
 **Supported encryption & authentication/authorization**
 
-The server supports two connection modes: **insecure connection** and **mTLS connection with username/password authentication/authorization**.
+The server supports two connection modes: **insecure connection** and **mTLS connection with username/password authentication**.
 Insecure mode does not provide any encryption of the server/client communication and no authentication/authorization of any sorts, therefore it should only be used in fully secure environments.
-Secure mode follows the gNMI specification and requires both the server and client to authenticate via certificate. On top of that the spec requires that the client authenticates using a username and password. The server checks them against the users stored in sysrepo-gnxi-users module data in sysrepo. Furthermore each user can have read-only and/or read-write access to multiple sysrepo modules. The server then checks each request and decides whether the particular user has the right to execute specific RPC. Known limitation: the YANG_RPC `Rpc` RPC is only authenticated, not authorized against the user ACL — the only check is that it does not access the server's private modules (`sysrepo-gnxi-server`, `sysrepo-gnxi-users`). Since an RPC or action can modify arbitrary data, any authenticated user can effectively overwrite data of any module via this RPC and therefore bypass all authorization rules. For this reason the YANG_RPC service is not compiled in by default (CMake option `ENABLE_YANG_RPC`, see below).
+Secure mode follows the gNMI specification and requires both the server and client to authenticate via certificate. On top of that the spec requires that the client authenticates using a username and password. The server checks them against the users stored in `sysrepo-gnxi-users` module data in sysrepo. Authorization is then enforced by sysrepo itself using standard NACM (`ietf-netconf-acm`, RFC 8341), the authenticated username is attached to every RPC's sysrepo session and sysrepo checks the configured NACM rule-lists on each operation.
 
-| RPC          | Required privilege (per module in RPC)                    |
-|--------------|-----------------------------------------------------------|
-| Capabilities | -                                                         |
-| Get          | read-only or read-write                                   |
-| Set          | read-write                                                |
-| Subscribe    | read-only or read-write                                   |
-| Rpc          | - (authenticated but not authorized, see the note above)  |
+| RPC          | NACM access needed (per affected module)                                    |
+|--------------|-----------------------------------------------------------------------------|
+| Capabilities | -                                                                           |
+| Get          | read (unreadable data is silently filtered out of the response)             |
+| Set          | create/update/delete per edit (denied edits fail with `PERMISSION_DENIED`)  |
+| Subscribe    | read (initial/polled data and streamed changes are filtered per recipient)  |
+| Rpc          | exec on the invoked RPC/action (denied exec fails with `PERMISSION_DENIED`) |
 
 ## Dependencies
 
@@ -74,7 +74,6 @@ make install
 The default build type is Debug; use `-DCMAKE_BUILD_TYPE=Release` for production builds. CMake options:
 
 - `ENABLE_TESTS` — build the test-suite (OFF by default)
-- `ENABLE_YANG_RPC` — register the YANG_RPC service (OFF by default, it does not support per-module authorization, see the note above)
 - `ENABLE_COVERAGE` — build a code coverage report from tests (OFF by default)
 - `SYSREPO_SETUP` — install the required YANG modules into sysrepo during `make install` (ON by default)
 
@@ -103,25 +102,26 @@ sysrepo-gnxi
 gnmic capabilities --tls-key example_config/client.key --tls-cert example_config/client.crt --tls-ca example_config/ca.crt -u admin -p admin -a 127.0.0.1 --port 50051
 ```
 
-To run the server in secure mode, you have to edit the server configuration using e.g. `sysrepocfg --edit=/path/to/configuration.json`. Example working configuration can be found in `example_config/configuration.json`. The configuration contains server key, server certificate, CA certificate (all of which can be found in `example_config/`), user `admin` with no module permissions and password `admin` and listening endpoint on 127.0.0.1:50051.
+To run the server in secure mode, you have to edit the server configuration using e.g. `sysrepocfg --edit=/path/to/configuration.json`. Example working configuration can be found in `example_config/configuration.json`. The configuration contains server key, server certificate, CA certificate (all of which can be found in `example_config/`), user `admin` with password `admin`, a NACM rule-list granting full access and listening endpoint on 127.0.0.1:50051.
 
-## Users (ACL) utility
+## Users utility
 
-To correctly populate the users which are stored in sysrepo you can use the `sysrepo-gnxi-users` utility.
+To populate the user database stored in sysrepo you can use the `sysrepo-gnxi-users` utility. It manages accounts only, authorization is configured through NACM rule-lists in `ietf-netconf-acm`.
 
 ```
-# create a user with an ACL
-sysrepo-gnxi-users add --name alice --password secret --permissions interfaces:rw,ietf-interfaces:ro
+# create a user
+sysrepo-gnxi-users add --name alice --password secret
 
-# grant additional read-only access and remove access later
-sysrepo-gnxi-users edit --name alice --permissions ietf-system:ro,interfaces:no
+# change the password later
+sysrepo-gnxi-users edit --name alice --password newsecret
 
-# review stored users and ACLs
+# review stored users (also shows the NACM groups each user belongs to)
 sysrepo-gnxi-users show
 sysrepo-gnxi-users show --name alice
 
-# remove the user
+# remove the user (optionally also stripping its name from NACM groups)
 sysrepo-gnxi-users remove --name alice
+sysrepo-gnxi-users remove --name alice --purge-nacm
 ```
 
 Passwords are never stored in plaintext: the utility hashes them into the `iana-crypt-hash` `crypt-hash` format — SHA-512-crypt (`$6$`) by default, with SHA-256-crypt (`$5$`) or MD5-crypt (`$1$`) selectable via `--hash`. Cleartext `$0$` values are rejected both by a YANG constraint of the module and by the authenticator. Stronger KDFs (Argon2id, bcrypt) are a possible future addition.

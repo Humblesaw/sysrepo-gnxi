@@ -29,7 +29,6 @@
 #include <grpcpp/server_context.h>
 #include <proto/gnmi.grpc.pb.h>
 #include <string>
-#include <unordered_set>
 
 #include "utils/log.h"
 
@@ -45,33 +44,6 @@ inline uint64_t get_time_nanosec()
         std::chrono::system_clock::now().time_since_epoch());
 
     return ts.count();
-}
-
-/**
- * @brief Check whether a YANG module name belongs to a private module
- * that must never be accessible via gNMI RPCs.
- *
- * The set of private modules is hardcoded. It includes all modules that
- * store server configuration, TLS credentials or user database data,
- * and the internal "sysrepo" module (datastore internals).
- *
- * @param[in] name Module name to check.
- * @return True if the module is private, false otherwise.
- */
-inline bool is_private_module(const std::string &name)
-{
-    static const std::unordered_set<std::string> PRIVATE_MODULES = {
-        "sysrepo",
-        "sysrepo-gnxi-server",
-        "sysrepo-gnxi-users",
-        "ietf-keystore",
-        "ietf-truststore",
-        "ietf-crypto-types",
-        "ietf-tls-server",
-        "ietf-tls-common",
-        "iana-tls-cipher-suite-algs",
-    };
-    return PRIVATE_MODULES.contains(name);
 }
 
 /**

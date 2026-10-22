@@ -23,6 +23,8 @@
 
 #include <fcntl.h>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <sys/wait.h>
@@ -36,6 +38,7 @@
 
 #include "config.h"
 
+using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
 using Catch::Matchers::Matches;
 
@@ -49,7 +52,15 @@ class UsersFixture
   public:
     static std::filesystem::path log;
 
-    UsersFixture()
+    UsersFixture() = default;
+
+    ~UsersFixture() { cleanup(); }
+
+    /**
+     * @brief Remove the log and all user/NACM data manipulated by the tests.
+     *
+     */
+    void cleanup()
     {
         std::filesystem::remove_all(log);
         // clean up any existing user data in sysrepo
@@ -57,6 +68,8 @@ class UsersFixture
         {
             auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
             sess.deleteItem("/sysrepo-gnxi-users:users");
+            sess.deleteItem("/ietf-netconf-acm:nacm/groups");
+            sess.deleteItem("/ietf-netconf-acm:nacm/rule-list");
             sess.applyChanges();
         }
         catch (...)
@@ -64,19 +77,54 @@ class UsersFixture
         }
     }
 
-    ~UsersFixture()
+    /**
+     * @brief Read the CLI log of the last run.
+     *
+     * @return CLI output from the log file.
+     */
+    std::string read_log()
     {
-        std::filesystem::remove_all(log);
-        // clean up user data after tests
-        try
+        std::ifstream ifs(log);
+        return {std::istreambuf_iterator<char>(ifs), {}};
+    }
+
+    /**
+     * @brief Add a username to a NACM group directly in sysrepo.
+     *
+     * @param[in] group NACM group to add the membership to.
+     * @param[in] name Username to add as the group member.
+     */
+    void nacm_group_add(const std::string &group, const std::string &name)
+    {
+        auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
+        sess.setItem(
+            "/ietf-netconf-acm:nacm/groups/group[name='" + group + "']/user-name", name.c_str());
+        sess.applyChanges();
+    }
+
+    /**
+     * @brief Check whether a username is a member of a NACM group.
+     *
+     * @param[in] group NACM group to check.
+     * @param[in] name Username to look for.
+     * @return True if the membership exists.
+     */
+    bool nacm_group_has(const std::string &group, const std::string &name)
+    {
+        auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
+        auto data = sess.getData("/ietf-netconf-acm:nacm/groups/group[name='" + group + "']");
+        if (!data.has_value())
         {
-            auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
-            sess.deleteItem("/sysrepo-gnxi-users:users");
-            sess.applyChanges();
+            return false;
         }
-        catch (...)
+        for (auto entry : data->findXPath("/ietf-netconf-acm:nacm/groups/group/user-name"))
         {
+            if (entry.asTerm().valueStr() == name)
+            {
+                return true;
+            }
         }
+        return false;
     }
 
     /**
@@ -270,37 +318,6 @@ TEST_CASE_METHOD(UsersFixture, "Users: add duplicate user fails", "[users]")
     CHECK_THAT(password1, Equals(password2));
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: add with ACL", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512",
-                "--permissions", "sysrepo-gnxi-test:rw,ietf-interfaces:ro"}) == 0);
-
-    auto root = get_db();
-    auto user = get_user(root, "alice");
-
-    auto acl = user.findXPath("acl");
-    REQUIRE(acl.size() == 2);
-
-    bool found_rw = false, found_ro = false;
-    for (auto entry : acl)
-    {
-        auto mod = entry.findPath("module");
-        auto acc = entry.findPath("access");
-        REQUIRE(mod.has_value());
-        REQUIRE(acc.has_value());
-        if (mod->asTerm().valueStr() == "sysrepo-gnxi-test" && acc->asTerm().valueStr() == "rw")
-        {
-            found_rw = true;
-        }
-        else if (mod->asTerm().valueStr() == "ietf-interfaces" && acc->asTerm().valueStr() == "ro")
-        {
-            found_ro = true;
-        }
-    }
-    CHECK(found_rw);
-    CHECK(found_ro);
-}
-
 // edit
 
 TEST_CASE_METHOD(UsersFixture, "Users: edit password", "[users]")
@@ -328,19 +345,6 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit password with default algorithm", "[
     CHECK_THAT(password1, !Equals(password2));
 }
 
-TEST_CASE_METHOD(UsersFixture, "Users: edit ACL", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--hash", "sha512",
-                "--permissions", "mod-a:rw"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-b:ro,mod-c:ro"}) == 0);
-
-    auto root = get_db();
-    auto user = get_user(root, "alice");
-
-    auto acl = user.findXPath("acl");
-    REQUIRE(acl.size() == 3);
-}
-
 TEST_CASE_METHOD(UsersFixture, "Users: edit nonexistent user fails", "[users]")
 {
     REQUIRE(run_bin({"edit", "--name", "ghost", "--password", "pass"}) != 0);
@@ -351,69 +355,6 @@ TEST_CASE_METHOD(UsersFixture, "Users: edit with nothing to edit fails", "[users
 {
     REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
     REQUIRE(run_bin({"edit", "--name", "alice"}) != 0);
-}
-
-TEST_CASE_METHOD(UsersFixture, "Users: edit permissions remove a single module", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
-                "mod-a:rw,mod-b:rw,mod-c:rw"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-b:no"}) == 0);
-
-    auto root = get_db();
-    auto user = get_user(root, "alice");
-    REQUIRE(user.findXPath("acl").size() == 2);
-    CHECK(!user.findPath("acl[module='mod-b']").has_value());
-}
-
-TEST_CASE_METHOD(UsersFixture, "Users: edit permissions remove multiple modules", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
-                "mod-a:rw,mod-b:rw,mod-c:ro"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-a:no,mod-c:no"}) == 0);
-
-    auto root = get_db();
-    auto user = get_user(root, "alice");
-    REQUIRE(user.findXPath("acl").size() == 1);
-    CHECK(user.findPath("acl[module='mod-b']").has_value());
-}
-
-TEST_CASE_METHOD(UsersFixture, "Users: edit permissions order matters", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
-                "mod-a:rw"}) == 0);
-    // remove mod-a, then add it back as ro - the remove runs first
-    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-a:no,mod-a:ro"}) == 0);
-
-    auto root = get_db();
-    auto user = get_user(root, "alice");
-    REQUIRE(user.findXPath("acl").size() == 1);
-    auto entry = user.findPath("acl[module='mod-a']");
-    REQUIRE(entry.has_value());
-    auto access = entry->findPath("access");
-    REQUIRE(access.has_value());
-    CHECK(access->asTerm().valueStr() == "ro");
-}
-
-TEST_CASE_METHOD(UsersFixture, "Users: edit removing a nonexistent module is a no-op", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
-                "mod-a:rw"}) == 0);
-    REQUIRE(run_bin({"edit", "--name", "alice", "--permissions", "mod-zzz:no"}) == 0);
-
-    auto root = get_db();
-    auto user = get_user(root, "alice");
-    REQUIRE(user.findXPath("acl").size() == 1);
-}
-
-TEST_CASE_METHOD(UsersFixture, "Users: 'no' permission in add mode is a no-op", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
-                "mod-b:no,mod-b:rw"}) == 0);
-
-    auto root = get_db();
-    auto user = get_user(root, "alice");
-    REQUIRE(user.findXPath("acl").size() == 1);
-    CHECK(user.findPath("acl[module='mod-b']").has_value());
 }
 
 // remove
@@ -431,10 +372,56 @@ TEST_CASE_METHOD(UsersFixture, "Users: remove user", "[users]")
     CHECK_THAT(password, Matches("^\\$6\\$[a-zA-Z0-9./]{16}\\$[a-zA-Z0-9./]{86}$"));
 }
 
+TEST_CASE_METHOD(UsersFixture, "Users: remove keeps NACM groups by default", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    nacm_group_add("admin", "alice");
+    nacm_group_add("readonly", "alice");
+
+    REQUIRE(run_bin({"remove", "--name", "alice"}) == 0);
+    auto root = get_db();
+    CHECK_THROWS(get_user(root, "alice"));
+
+    // dormant NACM grants are the RFC standard behavior, no cleanup by default
+    CHECK(nacm_group_has("admin", "alice"));
+    CHECK(nacm_group_has("readonly", "alice"));
+}
+
+TEST_CASE_METHOD(UsersFixture, "Users: remove --purge-nacm strips NACM groups", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "bob", "--password", "pass"}) == 0);
+    nacm_group_add("admin", "alice");
+    nacm_group_add("readonly", "alice");
+    nacm_group_add("admin", "bob");
+
+    REQUIRE(run_bin({"remove", "--name", "alice", "--purge-nacm"}) == 0);
+    auto root = get_db();
+    CHECK_THROWS(get_user(root, "alice"));
+
+    CHECK(!nacm_group_has("admin", "alice"));
+    CHECK(!nacm_group_has("readonly", "alice"));
+    // memberships of other users are untouched
+    CHECK(nacm_group_has("admin", "bob"));
+    // and the purge is reported in the CLI log
+    auto output = read_log();
+    CHECK_THAT(output, Contains("Removed 'alice' from NACM group 'admin'"));
+    CHECK_THAT(output, Contains("Removed 'alice' from NACM group 'readonly'"));
+}
+
 TEST_CASE_METHOD(UsersFixture, "Users: remove nonexistent user fails", "[users]")
 {
     REQUIRE(run_bin({"remove", "--name", "ghost"}) != 0);
     CHECK(db_empty());
+}
+
+TEST_CASE_METHOD(UsersFixture, "Users: --purge-nacm applies only to remove", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--purge-nacm"}) != 0);
+    CHECK(db_empty());
+    REQUIRE(run_bin({"show", "--purge-nacm"}) != 0);
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"edit", "--name", "alice", "--password", "x", "--purge-nacm"}) != 0);
 }
 
 // show
@@ -444,26 +431,41 @@ TEST_CASE_METHOD(UsersFixture, "Users: show nonexistent user fails", "[users]")
     REQUIRE(run_bin({"show", "--name", "ghost"}) != 0);
 }
 
+TEST_CASE_METHOD(UsersFixture, "Users: show shows NACM group memberships", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "bob", "--password", "pass"}) == 0);
+    nacm_group_add("admin", "alice");
+    nacm_group_add("readonly", "alice");
+
+    REQUIRE(run_bin({"show", "--name", "alice"}) == 0);
+    auto output = read_log();
+    CHECK_THAT(output, Contains("admin"));
+    CHECK_THAT(output, Contains("readonly"));
+
+    // a user with no memberships says so
+    REQUIRE(run_bin({"show", "--name", "bob"}) == 0);
+    CHECK_THAT(read_log(), Contains("no rules apply"));
+}
+
+TEST_CASE_METHOD(UsersFixture, "Users: show lists all users", "[users]")
+{
+    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"add", "--name", "bob", "--password", "pass"}) == 0);
+    REQUIRE(run_bin({"show"}) == 0);
+    auto output = read_log();
+    CHECK_THAT(output, Contains("alice"));
+    CHECK_THAT(output, Contains("bob"));
+}
+
 TEST_CASE_METHOD(UsersFixture, "Users: show rejects irrelevant options", "[users]")
 {
     REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass"}) == 0);
     REQUIRE(run_bin({"show", "--password", "pass"}) != 0);
-    REQUIRE(run_bin({"show", "--permissions", "mod-a:rw"}) != 0);
+    REQUIRE(run_bin({"show", "--hash", "sha512"}) != 0);
 }
 
 // error handling
-
-TEST_CASE_METHOD(UsersFixture, "Users: invalid permission entries fail", "[users]")
-{
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions",
-                "mod-a:bogus"}) != 0);
-    REQUIRE(
-        run_bin({"add", "--name", "alice", "--password", "pass", "--permissions", "mod-a:"}) != 0);
-    REQUIRE(
-        run_bin({"add", "--name", "alice", "--password", "pass", "--permissions", "mod-a"}) != 0);
-    REQUIRE(run_bin({"add", "--name", "alice", "--password", "pass", "--permissions", ":rw"}) != 0);
-    CHECK(db_empty());
-}
 
 TEST_CASE_METHOD(UsersFixture, "Users: missing --name fails", "[users]")
 {

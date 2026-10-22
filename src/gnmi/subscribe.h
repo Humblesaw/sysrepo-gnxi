@@ -24,7 +24,6 @@
 #pragma once
 
 #include "encode/encode.h"
-#include "security/auth.h"
 #include "utils/sysrepo.h"
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
@@ -42,7 +41,7 @@ class Scheduler;
 class Subscribe
 {
   public:
-    Subscribe(sysrepo::Session sess, const Auth &auth) : sr_sess_(sess), auth_(auth)
+    explicit Subscribe(sysrepo::Session sess) : sr_sess_(sess)
     {
         encodef_ = std::make_shared<Encode>(sr_sess_);
     }
@@ -184,7 +183,6 @@ class Subscribe
   private:
     sysrepo::Session sr_sess_;        // sysrepo session
     std::shared_ptr<Encode> encodef_; // support for json ietf encoding
-    const Auth &auth_;                // authentication/authorization data
     std::recursive_mutex stream_mutex_;
 };
 

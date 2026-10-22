@@ -310,35 +310,6 @@ grpc::Status Set::run(
             grpc::StatusCode::FAILED_PRECONDITION, "previous Set has to be confirmed");
     }
 
-    // authorize
-    try
-    {
-        std::vector<gnmi::Path> paths;
-        for (const auto &p : request->delete_())
-        {
-            paths.push_back(p);
-        }
-        for (const auto &r : request->replace())
-        {
-            // non-existent paths cannot be authorized,
-            // but they also cannot skip authorization
-            paths.push_back(r.path());
-        }
-        for (const auto &r : request->update())
-        {
-            paths.push_back(r.path());
-        }
-        // TODO add union_replace authorization
-        auth_.authorize(context, sr_sess_,
-            request->has_prefix() ? std::optional(request->prefix()) : std::nullopt, paths,
-            Auth::Access::READ_WRITE);
-    }
-    catch (const grpc::Status &auth_status)
-    {
-        commit_state_->clear();
-        return auth_status;
-    }
-
     // echo the request prefix in the response
     if (request->has_prefix())
     {
@@ -590,12 +561,15 @@ grpc::Status Set::run(
 
         if (!commit_ext)
         {
-            // copy the prepared configuration to Startup (has to succeed)
-            SessionDsSwitcher ds_switch(sr_sess_, sysrepo::Datastore::Startup);
-            sr_sess_.copyConfig(sysrepo::Datastore::Running);
+            // copy the prepared configuration to Startup (has to succeed), do
+            // it over a session without a NACM user - a user must be able to
+            // apply a partial edit without write access to the rest of the
+            // configuration
+            auto startup_sess = sr_con_.sessionStart(sysrepo::Datastore::Startup);
+            startup_sess.copyConfig(sysrepo::Datastore::Running);
         }
     }
-    catch (const sysrepo::Error &exc)
+    catch (const sysrepo::ErrorWithCode &exc)
     {
         commit_state_->clear();
         std::string err_str;
@@ -610,6 +584,11 @@ grpc::Status Set::run(
         }
         SLOG_ERROR("commit error: ", err_str);
         sr_sess_.discardChanges();
+        if (exc.code() == sysrepo::ErrorCode::Unauthorized)
+        {
+            // the user lacks write access for some part of the edit (NACM)
+            return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, err_str);
+        }
         return grpc::Status(grpc::StatusCode::ABORTED, err_str);
     }
     catch (const std::exception &exc)
