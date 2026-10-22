@@ -84,7 +84,9 @@ grpc::Status GNMIService::Set(
     const auto status = rpc_catch_exceptions("Set",
         [&]
         {
-            impl::Set rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), commit_state_, *auth_);
+            auto sess = sr_con_.sessionStart(sysrepo::Datastore::Running);
+            auth_->set_nacm_user(sess, context);
+            impl::Set rpc(std::move(sess), sr_con_, commit_state_, *auth_);
             return rpc.run(context, request, response);
         });
 
@@ -114,7 +116,9 @@ grpc::Status GNMIService::Get(
     const auto status = rpc_catch_exceptions("Get",
         [&]
         {
-            impl::Get rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), *auth_);
+            auto sess = sr_con_.sessionStart(sysrepo::Datastore::Running);
+            auth_->set_nacm_user(sess, context);
+            impl::Get rpc(std::move(sess));
             return rpc.run(context, request, response);
         });
 
@@ -149,7 +153,9 @@ grpc::Status GNMIService::Subscribe(grpc::ServerContext *context,
     const auto status = rpc_catch_exceptions("Subscribe",
         [&]
         {
-            impl::Subscribe rpc(sr_con_.sessionStart(sysrepo::Datastore::Running), *auth_);
+            auto sess = sr_con_.sessionStart(sysrepo::Datastore::Running);
+            auth_->set_nacm_user(sess, context);
+            impl::Subscribe rpc(std::move(sess));
             return rpc.run(context, stream);
         });
 

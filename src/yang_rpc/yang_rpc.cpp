@@ -33,24 +33,17 @@ grpc::Status YangRpcService::Rpc(grpc::ServerContext *context, const yang_rpc::R
         return grpc::Status(grpc::StatusCode::UNAVAILABLE, "Server is shutting down");
     }
 
-    // no Auth is wired into this service, read the username straight from
-    // the auth context (empty when the server runs in insecure mode)
-    std::string username;
-    if (auto auth_ctx = context->auth_context())
-    {
-        const auto vals = auth_ctx->FindPropertyValues("username");
-        if (!vals.empty())
-        {
-            username.assign(vals[0].data(), vals[0].length());
-        }
-    }
-    slog::RequestScope req_scope("Rpc: " + rpc_user_desc(context, username));
+    slog::RequestScope req_scope("Rpc: " + rpc_user_desc(context, auth_->username(context)));
     SLOG_INFO("Rpc RPC");
 
     const auto status = rpc_catch_exceptions("Rpc",
         [&]
         {
-            impl::Rpc rpc(sr_con_.sessionStart(sysrepo::Datastore::Running));
+            auto sess = sr_con_.sessionStart(sysrepo::Datastore::Running);
+            // sysrepo itself enforces the NACM exec (and input/output data)
+            // check in sendRPC for this user
+            auth_->set_nacm_user(sess, context);
+            impl::Rpc rpc(std::move(sess));
             return rpc.run(request, response);
         });
 

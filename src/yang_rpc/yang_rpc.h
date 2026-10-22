@@ -21,10 +21,14 @@
 
 #pragma once
 
+#include <memory>
+
 #include <grpcpp/grpcpp.h>
 
 #include <proto/yang_rpc.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
+
+#include "security/auth.h"
 
 /**
  * @brief The YANG_RPC service: entry point for invoking YANG RPCs and
@@ -34,7 +38,17 @@
 class YangRpcService final : public yang_rpc::YANG_RPC::Service
 {
   public:
-    YangRpcService(sysrepo::Connection conn) : sr_con_(conn) {}
+    /**
+     * @brief Construct the service on a sysrepo connection.
+     *
+     * @param[in] conn Sysrepo connection.
+     * @param[in] auth Authentication used to derive the per-RPC NACM user,
+     * shared with the gNMI service.
+     */
+    YangRpcService(sysrepo::Connection conn, std::shared_ptr<Auth> auth)
+        : sr_con_(conn), auth_(std::move(auth))
+    {
+    }
 
     /**
      * @brief Invoke a YANG RPC or action.
@@ -49,4 +63,5 @@ class YangRpcService final : public yang_rpc::YANG_RPC::Service
 
   private:
     sysrepo::Connection sr_con_; // sysrepo connection
+    std::shared_ptr<Auth> auth_; // authentication for the per-RPC NACM user
 };

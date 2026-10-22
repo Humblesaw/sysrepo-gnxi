@@ -170,6 +170,7 @@ static inline grpc::Status verify_get_request(const gnmi::GetRequest *request)
 grpc::Status Get::run(
     grpc::ServerContext *context, const gnmi::GetRequest *req, gnmi::GetResponse *response)
 {
+    (void)context;
     google::protobuf::RepeatedPtrField<gnmi::Notification> *notification_list;
     gnmi::Notification *notification;
     grpc::Status status;
@@ -182,16 +183,6 @@ grpc::Status Get::run(
 
     SLOG_DEBUG("GetRequest DataType ", gnmi::GetRequest::DataType_Name(req->type()),
         ", GetRequest Encoding ", gnmi::Encoding_Name(req->encoding()));
-
-    // authorize
-    std::vector<gnmi::Path> paths;
-    for (const auto &p : req->path())
-    {
-        paths.push_back(p);
-    }
-    auth_.authorize(context, sr_sess_,
-        req->has_prefix() ? std::optional(req->prefix()) : std::nullopt, paths,
-        Auth::Access::READ_ONLY);
 
     // run through all paths
     notification_list = response->mutable_notification();

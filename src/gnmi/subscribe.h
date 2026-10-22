@@ -24,7 +24,6 @@
 #pragma once
 
 #include "encode/encode.h"
-#include "security/auth.h"
 #include "utils/sysrepo.h"
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
@@ -42,7 +41,7 @@ class Scheduler;
 class Subscribe
 {
   public:
-    Subscribe(sysrepo::Session sess, const Auth &auth) : sr_sess_(sess), auth_(auth)
+    explicit Subscribe(sysrepo::Session sess) : sr_sess_(sess)
     {
         encodef_ = std::make_shared<Encode>(sr_sess_);
     }
@@ -135,6 +134,22 @@ class Subscribe
         std::string fullpath, gnmi::Encoding encoding, std::string origin);
 
     /**
+     * @brief Check whether the stream's recipient may read the given data node
+     * according to NACM.
+     *
+     * sysrepo enforces NACM on data reads, edits, RPCs and notifications, but
+     * not on module-change subscriptions, so on-change stream updates must be
+     * filtered explicitly per recipient here.
+     *
+     * @param[in] node Changed node to check.
+     * @param[in] recipient_nacm_user NACM username of the stream's session,
+     * when NULL (insecure mode) everything is visible.
+     * @return true if the node survives NACM read filtering (or when there is
+     * no NACM user), false on denied access and on filter errors.
+     */
+    bool nacm_visible_(const libyang::DataNode &node, const char *recipient_nacm_user) const;
+
+    /**
      * @brief Register an on-change stream subscription with sysrepo.
      *
      * @param[in] request Subscription request the subscription belongs to.
@@ -184,7 +199,6 @@ class Subscribe
   private:
     sysrepo::Session sr_sess_;        // sysrepo session
     std::shared_ptr<Encode> encodef_; // support for json ietf encoding
-    const Auth &auth_;                // authentication/authorization data
     std::recursive_mutex stream_mutex_;
 };
 

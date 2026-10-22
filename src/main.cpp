@@ -28,6 +28,7 @@
 #include <cstring>
 #include <exception>
 #include <getopt.h>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <sys/wait.h>
@@ -41,6 +42,9 @@
 
 #include <proto/gnmi.grpc.pb.h>
 #include <proto/yang_rpc.grpc.pb.h>
+
+#include <sysrepo.h>
+#include <sysrepo/netconf_acm.h>
 
 #include <sysrepo-cpp/Connection.hpp>
 #include <sysrepo-cpp/Session.hpp>
@@ -60,6 +64,11 @@ static struct
 {
     std::unique_ptr<grpc::Server> server;
     int pipefd[2];
+
+    // NACM subscriptions, alive while the server runs
+    sr_subscription_ctx_t *nacm_sub = nullptr;
+    sr_subscription_ctx_t *nacm_stats_sub = nullptr;
+    std::optional<sysrepo::Session> nacm_stats_sess;
 } g_state;
 
 /**
@@ -308,6 +317,57 @@ static Auth::TlsMaterial load_tls_config(sysrepo::Session &sess)
 }
 
 /**
+ * @brief Check netconf-acm is implemented, initialize NACM and its global
+ * stats provider (before any user session is created) and subscribe the global
+ * NACM stats provider.
+ *
+ * @param[in] sess Sysrepo session to initialize NACM over, must stay alive
+ * until stop_nacm().
+ * @param[in] conn Sysrepo connection for the stats provider session.
+ */
+static void start_nacm(sysrepo::Session &sess, sysrepo::Connection &conn)
+{
+    if (!sess.getContext().getModuleImplemented("ietf-netconf-acm"))
+    {
+        throw std::runtime_error("ietf-netconf-acm module is not implemented in sysrepo, "
+                                 "authorization (NACM) not available");
+    }
+
+    if (sr_nacm_init(sysrepo::getRawSession(sess), 0, &g_state.nacm_sub) != SR_ERR_OK)
+    {
+        throw std::runtime_error("NACM initialization failed (sr_nacm_init)");
+    }
+
+    // optional global NACM stats, succeed with no-op when another consumer
+    // (e.g. netopeer2) already provides them
+    g_state.nacm_stats_sess = conn.sessionStart(sysrepo::Datastore::Running);
+    if (sr_nacm_glob_stats_subscribe(sysrepo::getRawSession(*g_state.nacm_stats_sess), 0,
+            &g_state.nacm_stats_sub) != SR_ERR_OK)
+    {
+        throw std::runtime_error("NACM global stats subscribe failed");
+    }
+
+    SLOG_INFO("NACM initialized (ietf-netconf-acm), per-RPC sessions will be per-user checked");
+}
+
+/**
+ * @brief Undo start_nacm(): unsubscribe and destroy NACM.
+ *
+ */
+static void stop_nacm()
+{
+    if (g_state.nacm_stats_sub)
+    {
+        sr_unsubscribe(g_state.nacm_stats_sub);
+    }
+    if (g_state.nacm_sub)
+    {
+        sr_unsubscribe(g_state.nacm_sub);
+    }
+    sr_nacm_destroy();
+}
+
+/**
  * @brief Start the gRPC server and wait for its termination.
  *
  * @param[in] sr_conn Sysrepo connection.
@@ -318,7 +378,8 @@ void run_server(sysrepo::Connection &sr_conn, const std::vector<std::string> &bi
     std::shared_ptr<Auth> auth)
 {
     std::shared_ptr<grpc::ServerCredentials> cred = auth->credentials();
-    GNMIService gnmi(sr_conn, auth); // gNMI Service
+    GNMIService gnmi(sr_conn, auth);        // gNMI Service
+    YangRpcService yang_rpc(sr_conn, auth); // YANG Rpc Service
 
     grpc::ServerBuilder builder;
     for (const auto &bind_addr : bind_addrs)
@@ -326,10 +387,7 @@ void run_server(sysrepo::Connection &sr_conn, const std::vector<std::string> &bi
         builder.AddListeningPort(bind_addr, cred);
     }
     builder.RegisterService(&gnmi);
-#ifdef GNXI_SERVICE_ENABLED
-    YangRpcService yang_rpc(sr_conn); // gNXI Service is only compiled in when enabled
     builder.RegisterService(&yang_rpc);
-#endif
     g_state.server = builder.BuildAndStart();
 
     if (g_state.server == nullptr)
@@ -409,32 +467,39 @@ int main(int argc, char *argv[])
     try
     {
         sysrepo::Connection sr_conn;
+
+        // the config session also hosts the NACM subscriptions created by
+        // start_nacm(), so it must stay alive for the whole run of the server
+        auto config_sess =
+            std::make_optional<sysrepo::Session>(sr_conn.sessionStart(sysrepo::Datastore::Running));
         std::vector<std::string> bind_addrs;
         Auth::TlsMaterial tls;
 
+        // read server configuration
+        bind_addrs = load_bind_addrs(*config_sess);
+        if (bind_addrs.empty())
         {
-            // read server configuration
-            auto sess = sr_conn.sessionStart(sysrepo::Datastore::Running);
-            bind_addrs = load_bind_addrs(sess);
-            if (bind_addrs.empty())
-            {
-                throw std::runtime_error("no listen endpoint configured "
-                                         "(sysrepo-gnxi-server:server/listen/endpoint)");
-            }
-            if (!insecure)
-            {
-                tls = load_tls_config(sess);
-            }
-            // session terminates
+            throw std::runtime_error("no listen endpoint configured "
+                                     "(sysrepo-gnxi-server:server/listen/endpoint)");
+        }
+        if (!insecure)
+        {
+            tls = load_tls_config(*config_sess);
+
+            // initialize NACM before any user session is created
+            start_nacm(*config_sess, sr_conn);
         }
 
         auto auth = std::make_shared<Auth>(insecure, sr_conn, tls);
 
         run_server(sr_conn, bind_addrs, auth);
+
+        stop_nacm();
     }
     catch (const std::exception &exc)
     {
         SLOG_FATAL("Server aborted: ", exc.what());
+        stop_nacm();
         exit(1);
     }
 

@@ -37,31 +37,58 @@
     "user": [
       {
         "name": "alice",
-        "password": "$6$SaltForAlice$B0mGKNyu8MnxZe9IkjoaJIgqqWFVyNWyD9QIrTyp2j0mMBKEOiFiVq3EXn6eI4RLKMuy6Wr8sLWvJ0IZ266hj/",
-        "acl": [
-          {
-            "module": "sysrepo-gnxi-test",
-            "access": "rw"
-          }
-        ]
+        "password": "$6$SaltForAlice$B0mGKNyu8MnxZe9IkjoaJIgqqWFVyNWyD9QIrTyp2j0mMBKEOiFiVq3EXn6eI4RLKMuy6Wr8sLWvJ0IZ266hj/"
       },
       {
         "name": "bob",
-        "password": "$5$SaltForBob$N8GciXki/e36uKpWqk6NCjQIoOEWOcSNVw15dmbktM9",
-        "acl": [
-          {
-            "module": "sysrepo-gnxi-test",
-            "access": "ro"
-          },
-          {
-            "module": "sysrepo",
-            "access": "rw"
-          }
-        ]
+        "password": "$5$SaltForBob$N8GciXki/e36uKpWqk6NCjQIoOEWOcSNVw15dmbktM9"
       },
       {
         "name": "chuck",
         "password": "$1$SaltForC$hmKZ7F1LZlmIqUt.0lles."
+      }
+    ]
+  },
+  "ietf-netconf-acm:nacm": {
+    "enable-nacm": true,
+    "read-default": "deny",
+    "write-default": "deny",
+    "exec-default": "deny",
+    "groups": {
+      "group": [
+        {
+          "name": "admin",
+          "user-name": ["alice"]
+        },
+        {
+          "name": "readonly",
+          "user-name": ["bob"]
+        }
+      ]
+    },
+    "rule-list": [
+      {
+        "name": "admin-all",
+        "group": ["admin"],
+        "rule": [
+          {
+            "name": "all",
+            "access-operations": "*",
+            "action": "permit"
+          }
+        ]
+      },
+      {
+        "name": "test-ro",
+        "group": ["readonly"],
+        "rule": [
+          {
+            "name": "read",
+            "module-name": "sysrepo-gnxi-test",
+            "access-operations": "read",
+            "action": "permit"
+          }
+        ]
       }
     ]
   },

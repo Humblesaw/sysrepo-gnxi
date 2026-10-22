@@ -28,7 +28,6 @@
 #include <sysrepo-cpp/utils/exception.hpp>
 #include <utils/log.h>
 #include <utils/path.h>
-#include <utils/sysrepo.h>
 #include <utils/utils.h>
 
 namespace impl
@@ -53,18 +52,6 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
         // the yang_rpc path is always standalone, no prefix can be given
         const gnmi::Path no_prefix;
         auto xpath = gnxi::gnmi_to_xpath(sr_sess_.getContext(), no_prefix, request->path());
-
-        // reject any access to private modules
-        auto mods = collect_xpath_mods(sr_sess_.getContext(), xpath.c_str());
-        for (const auto &mod : mods)
-        {
-            if (is_private_module(mod))
-            {
-                SLOG_ERROR("RPC access denied to private module '", mod, "'");
-                return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
-                    "Access to module '" + mod + "' is forbidden.");
-            }
-        }
 
         auto [status, input_node] = encodef_->decode(xpath, request->input(), EncodePurpose::RPC);
         if (!status.ok())
@@ -100,11 +87,10 @@ grpc::Status Rpc::run(const yang_rpc::RpcRequest *request, yang_rpc::RpcResponse
     {
         switch (e.code())
         {
-        // unreachable, sysrepo's access checks are keyed to the process owner and
-        // the server owns all module data (MODULES_OWNER), per-user authorization is
-        // enforced by our own ACL layer above
+        // the user lacks execute access for the RPC/action (or the data
+        // read/write access for its input/output)
         case sysrepo::ErrorCode::Unauthorized:
-            SLOG_ERROR("RPC error: ", e.what());
+            SLOG_WARN("RPC error: ", e.what());
             return grpc::Status(grpc::StatusCode::PERMISSION_DENIED, e.what());
         case sysrepo::ErrorCode::InvalidArgument:
             SLOG_WARN("RPC error: ", e.what());

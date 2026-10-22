@@ -24,6 +24,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <grpc/impl/codegen/grpc_types.h>
 #include <grpcpp/client_context.h>
 #include <grpcpp/support/sync_stream.h>
 #include <memory>
@@ -120,7 +121,13 @@ std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
     opts.pem_root_certs = b.ca_cert;
     opts.pem_private_key = b.client_key;
     opts.pem_cert_chain = b.client_cert;
-    return grpc::CreateChannel(addr, grpc::SslCredentials(opts));
+    // force a dedicated connection for each channel, gRPC otherwise pools
+    // transports of identical credentials and a call's auth-context metadata
+    // (the authenticated username) is bound to the first RPC on the shared
+    // connection which breaks per-user NACM expectations in the tests
+    grpc::ChannelArguments args;
+    args.SetInt(GRPC_ARG_USE_LOCAL_SUBCHANNEL_POOL, 1);
+    return grpc::CreateCustomChannel(addr, grpc::SslCredentials(opts), args);
 }
 
 /**
@@ -174,7 +181,8 @@ grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
  * @return RPC status.
  */
 grpc::Status do_get(const std::shared_ptr<grpc::Channel> &channel, std::string xpath,
-    const std::string &username = "", const std::string &password = "")
+    const std::string &username = "", const std::string &password = "",
+    gnmi::GetResponse *out = nullptr)
 {
     auto stub = gnmi::gNMI::NewStub(channel);
     grpc::ClientContext ctx;
@@ -184,7 +192,36 @@ grpc::Status do_get(const std::shared_ptr<grpc::Channel> &channel, std::string x
     request.set_encoding(gnmi::Encoding::JSON_IETF);
     xpath_to_path(xpath, request.add_path());
     gnmi::GetResponse response;
-    return stub->Get(&ctx, request, &response);
+    auto status = stub->Get(&ctx, request, &response);
+    if (out)
+    {
+        *out = response;
+    }
+    return status;
+}
+
+/**
+ * @brief Call the Rpc RPC on a channel with optional credentials.
+ *
+ * @param[in] channel Channel to use.
+ * @param[in] xpath XPath of the RPC to invoke.
+ * @param[in] input_json JSON-IETF input of the RPC.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return RPC status.
+ */
+grpc::Status do_rpc(const std::shared_ptr<grpc::Channel> &channel, std::string xpath,
+    std::string input_json, const std::string &username = "", const std::string &password = "")
+{
+    auto stub = yang_rpc::YANG_RPC::NewStub(channel);
+    grpc::ClientContext ctx;
+    prepare_context(ctx, username, password);
+    yang_rpc::RpcRequest request;
+    request.set_encoding(gnmi::Encoding::JSON_IETF);
+    xpath_to_path(xpath, request.mutable_path());
+    request.mutable_input()->set_json_ietf_val(input_json);
+    yang_rpc::RpcResponse response;
+    return stub->Rpc(&ctx, request, &response);
 }
 
 /**
@@ -268,18 +305,58 @@ TEST_CASE("mTLS: authorized Get RPC (ro)", "[auth]")
     CHECK(status.ok());
 }
 
-TEST_CASE("mTLS: denied Get RPC", "[auth]")
+TEST_CASE("mTLS: unauthorized Get is silently filtered (NACM)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    auto status = do_get(ch, "/sysrepo-gnxi-test:test/things", "chuck", "chuck$pass");
-    CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
+    // chuck matches no rule-list, unauthorized reads are not an error, the
+    // data are filtered out by NACM
+    gnmi::GetResponse response;
+    auto status = do_get(ch, "/sysrepo-gnxi-test:test/things", "chuck", "chuck$pass", &response);
+    CHECK(status.ok());
+    REQUIRE(response.notification_size() == 1);
+    CHECK(response.notification(0).update_size() == 0);
 }
 
-TEST_CASE("mTLS: internal sysrepo module is private", "[auth]")
+TEST_CASE("mTLS: private modules are readable only with explicit NACM rules", "[auth]")
+{
+    // one channel per identity
+    auto alice_ch = make_mtls_channel(mtls_addr);
+    auto bob_ch = make_mtls_channel(mtls_addr);
+
+    // alice is in the admin group with a permit-all rule
+    gnmi::GetResponse response;
+    auto status = do_get(alice_ch, "/ietf-keystore:keystore", "alice", "alicepass", &response);
+    CHECK(status.ok());
+    REQUIRE(response.notification_size() == 1);
+    CHECK(response.notification(0).update_size() > 0);
+
+    // bob may read sysrepo-gnxi-test only, the keystore is silently filtered out
+    gnmi::GetResponse denied_response;
+    status = do_get(bob_ch, "/ietf-keystore:keystore", "bob", "bobpass", &denied_response);
+    CHECK(status.ok());
+    REQUIRE(denied_response.notification_size() == 1);
+    CHECK(denied_response.notification(0).update_size() == 0);
+}
+
+TEST_CASE("mTLS: authorized Rpc (NACM exec)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
-    // bob has an explicit rw ACL entry for sysrepo, access must still be denied
-    auto status = do_get(ch, "/sysrepo:sysrepo-modules", "bob", "bobpass");
+    auto status = do_rpc(
+        ch, "/sysrepo-gnxi-test:clear-stats", "{\"interface\": \"eth0\"}", "alice", "alicepass");
+    CHECK(status.ok());
+}
+
+TEST_CASE("mTLS: denied Rpc (NACM exec)", "[auth]")
+{
+    auto ch = make_mtls_channel(mtls_addr);
+    // bob is read-only on the module, exec-default denies the rest
+    auto status =
+        do_rpc(ch, "/sysrepo-gnxi-test:clear-stats", "{\"interface\": \"eth0\"}", "bob", "bobpass");
+    CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
+
+    // chuck is not in any NACM group at all
+    status = do_rpc(
+        ch, "/sysrepo-gnxi-test:clear-stats", "{\"interface\": \"eth0\"}", "chuck", "chuck$pass");
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
 
@@ -291,15 +368,16 @@ TEST_CASE("mTLS: authorized Set RPC (rw)", "[auth]")
     CHECK(status.ok());
 }
 
-TEST_CASE("mTLS: denied Set RPC (ro)", "[auth]")
+TEST_CASE("mTLS: denied Set RPC (read-only user)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
+    // bob has a NACM read permit for the module, writes are denied
     auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
         "\"set by bob\"", "bob", "bobpass");
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
 
-TEST_CASE("mTLS: denied Set RPC", "[auth]")
+TEST_CASE("mTLS: denied Set RPC (user without rules)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
     auto status = do_set(ch, "/sysrepo-gnxi-test:test/things[name='auth-set-pos']/description",
@@ -363,21 +441,32 @@ TEST_CASE("mTLS: authorized Subscribe (ro)", "[auth]")
     CHECK(status.ok());
 }
 
-TEST_CASE("mTLS: denied Subscribe", "[auth]")
+TEST_CASE("mTLS: unauthorized Subscribe is silently filtered (NACM)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
     gnmi::SubscribeRequest request;
     grpc::ClientContext ctx;
+    // chuck matches no rule-list, the stream opens and closes normally, but
+    // unreadable data never reach it
     auto rw =
         do_subscribe(ch, ctx, "/sysrepo-gnxi-test:test-state", request, "chuck", "chuck$pass");
-    (void)rw->Write(request);
+    REQUIRE(rw->Write(request));
 
     gnmi::SubscribeResponse response;
-    CHECK(!rw->Read(&response));
+    bool got_update = false;
+    while (rw->Read(&response))
+    {
+        got_update = got_update || (response.has_update() && response.update().update_size() > 0);
+        if (response.sync_response())
+        {
+            break;
+        }
+    }
+    CHECK(!got_update);
 
     rw->WritesDone();
     auto status = rw->Finish();
-    CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
+    CHECK(status.ok());
 }
 
 // negative tests

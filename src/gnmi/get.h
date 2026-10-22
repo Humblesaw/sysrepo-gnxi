@@ -24,7 +24,6 @@
 #pragma once
 
 #include "encode/encode.h"
-#include "security/auth.h"
 #include <proto/gnmi.grpc.pb.h>
 #include <sysrepo-cpp/Connection.hpp>
 
@@ -38,7 +37,7 @@ namespace impl
 class Get
 {
   public:
-    Get(sysrepo::Session sess, const Auth &auth) : sr_sess_(sess), auth_(auth)
+    explicit Get(sysrepo::Session sess) : sr_sess_(sess)
     {
         encodef_ = std::make_shared<Encode>(sr_sess_);
     }
@@ -86,7 +85,6 @@ class Get
   private:
     sysrepo::Session sr_sess_;        // sysrepo session
     std::shared_ptr<Encode> encodef_; // support for json ietf encoding
-    const Auth &auth_;                // authentication/authorization data
 };
 
 } // namespace impl

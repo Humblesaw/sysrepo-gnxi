@@ -10,14 +10,22 @@ module sysrepo-gnxi-users {
   description
     "User database for the sysrepo-gnxi gNMI server.
 
-     Defines users with (optionally) hashed passwords and
-     per-YANG-module access control lists (ACLs).
+     Defines users with (hashed) passwords. Authorization of these
+     users is enforced by the sysrepo NACM implementation
+     (ietf-netconf-acm) which grants access based on the authenticated
+     username. This module deliberately holds no access-control data.
 
      This module is installed into sysrepo and its data is stored in
-     the running datastore.  It is private: it must never be accessible
-     via gNMI RPCs.  Protection is enforced by a code-level blocklist
-     in the server and by filesystem permissions (0600) on the module
-     data file.";
+     the running datastore. It is private: it must never be accessible
+     via gNMI RPCs. Protection is enforced by the NACM configuration
+     (no rule-list should ever grant non-administrative users access to
+     it) and by filesystem permissions (0600) on the module data file.";
+
+  revision 2026-10-22 {
+    description
+      "Remove the per-user ACL list, user authorization is now
+       enforced by sysrepo NACM (ietf-netconf-acm).";
+  }
 
   revision 2026-08-26 {
     description "Install into sysrepo instead of a private libyang context.";
@@ -25,18 +33,6 @@ module sysrepo-gnxi-users {
 
   revision 2026-07-28 {
     description "Initial revision.";
-  }
-
-  typedef access-level {
-    type enumeration {
-      enum ro {
-        description "Read-only access to the module.";
-      }
-      enum rw {
-        description "Read-write access to the module.";
-      }
-    }
-    description "Access level granted for a YANG module.";
   }
 
   container users {
@@ -65,25 +61,6 @@ module sysrepo-gnxi-users {
            '$<id>$<salt>$<hash>' with the hash function identified by
            <id>: 1 (MD5-crypt), 5 (SHA-256-crypt) or 6 (SHA-512-crypt).
            The '$0$' cleartext form is not allowed.";
-      }
-
-      list acl {
-        key "module";
-        description
-          "Access control list entries for this user.
-           Each entry grants access to a YANG module.";
-
-        leaf module {
-          type string;
-          description
-            "YANG module name.";
-        }
-
-        leaf access {
-          type access-level;
-          mandatory true;
-          description "Access level granted to this module.";
-        }
       }
     }
   }
