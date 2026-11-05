@@ -1,0 +1,131 @@
+{
+  "ietf-keystore:keystore": {
+    "asymmetric-keys": {
+      "asymmetric-key": [
+        {
+          "name": "sysrepo-gnxi-server-key",
+          "private-key-format": "ietf-crypto-types:one-asymmetric-key-format",
+          "cleartext-private-key": "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",
+          "certificates": {
+            "certificate": [
+              {
+                "name": "sysrepo-gnxi-server-cert",
+                "cert-data": "MIIFuTCCA6GgAwIBAgIUQBeGGpyW+NnbaWYdBimnBAMbYRQwDQYJKoZIhvcNAQELBQAwaTELMAkGA1UEBhMCQ1oxFzAVBgNVBAgMDkN6ZWNoIFJlcHVibGljMQ0wCwYDVQQHDARCcm5vMRkwFwYDVQQKDBBDRVNORVQsIHoucy5wLm8uMRcwFQYDVQQDDA53d3cuY2VzbmV0Mi5jejAeFw0yNjExMDQxNjI4MjlaFw0zNjExMDExNjI4MjlaMGQxCzAJBgNVBAYTAkNaMRcwFQYDVQQIDA5DemVjaCBSZXB1YmxpYzENMAsGA1UEBwwEQnJubzEZMBcGA1UECgwQQ0VTTkVULCB6LnMucC5vLjESMBAGA1UEAwwJbG9jYWxob3N0MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAwa+u1lYB2U4Xi/KxNdfSF6Hv0t6XYYZCzqV2fex1n1zUKeFh1uceC+ueLr2Yu/XteKLu4adNT2vQXkEPP3OvpioDUDeStVozdDida/433HsnJAssHCJjGp4MBhrHBD4iH/t9c7h6zx48vhVvAa66eBEPicaGSPpRctVGxXxI7Ulb/pu1V5ex/wLg20Ow16UvnWWMv9U5s6oLEyZR9/VKI9UwGgPVTCpcdF3u9M3rAo5Ai98lew+RnDkHCBfpO+xAYyWbJpsEYddWAEewFy0UHAF2iN6UEEM+qdZ0BobUAA7OqSt8AlzF1EWQkVJqilSlptTe4d06nB/wexkzCtz7sFK8w+LIMXGLUdU47ZlQQIXe2EN4BeUBSfKsYALAf5vzHcdkxuyz+A+OevowsVmsjatgzzVjKXEsA40plp5dgMM7XyYnOCbKhPcDSMkbWgjVZ7bESm1b/DAD7RKvNRVu9KXUFMiyWMOFTtepm1qyS/4q25xo3uv/RhrG8CCP4BB6tXlOUe09s4mpetE6Z1iaaO/Artl8XATHugEfqAg0GJ8tnCVOIBULVL5RnlXwvWV9qzs4lislMN9qzvkDe89OBdhpMRMDjriYGi+6oJesNU+ZcBCBNLIA2+ry1UMIhwybVhHiAtoirImRlv2c6xYWkbeAlCjicMQqp3VJQMO2hmsCAwEAAaNeMFwwGgYDVR0RBBMwEYIJbG9jYWxob3N0hwR/AAABMB0GA1UdDgQWBBTdd4xCIeY6qppf3WJ0AP/vWFjKBDAfBgNVHSMEGDAWgBT9EmXMEiSoLssuszn0HbTRS4NrwTANBgkqhkiG9w0BAQsFAAOCAgEAFczFxVPVvGlLrcTzhTd7mi4hJEhzTySRBGcjZG37OeLqTiY4nQLE3y+krvBg/G+ZrdTSUAbE0WFwNiF1dSpK1DRzngXDtnFCcaQBIhBqlmaA8pWjSayQKrjhnlQ6eSVhEPbxHOnOJwKuBxWNR5C2C42EIR1JYEGPgNVoLOf8c+7yriZ97DNT7AF+11Iqjvn5dzk5OeITLvd0w5cyRFRyLac+YLzZun+6HPdGgrn9yi+fWMYCmxY0BDM7Jue9+CH0iOc4sKVpgS39c9cRDrs73YAG6YhMAywQquwg6uQKLdp0dadysquA/y4RzkmLCsm6sfWIF9FvQUj/Xjd7qeugIHOrYr4hOFc8Ztn4doCDXB64c0KbslFvYQRDM4usV3x+P5BdPqNjQ0Bz0pwNAsnaRW1SDSHKypoj/RIfBA8fShBk8u5ezpAey2ACpZVug1h9H/ny+r4X63KULqtIjpYeHwhcND9mWwvwO33R0XdymY5lp/u3g6EINQS2NzHhQdi7xjao+QUJDWLfi9A+q+NMYhbjwEjBUM75bH4ZOglCBV6KSPU3hVxMuOJ9Gx0XKohvPCYqLMLfQftW5I7nUpVTyuBU8qYY2y0++f1+5oRF8zlmnQuFQO1H7QZj2f3IojwfzoE6lBvyFFkDGO+jdpamkLsD3HscNmb3jUI1tuqk1Ds="
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "ietf-truststore:truststore": {
+    "certificate-bags": {
+      "certificate-bag": [
+        {
+          "name": "sysrepo-gnxi-client-ca-bundle",
+          "certificate": [
+            {
+              "name": "ca",
+              "cert-data": "MIIFojCCA4qgAwIBAgIUAPSZTGqdf9b5QjFSFwhqF2QpSfwwDQYJKoZIhvcNAQELBQAwaTELMAkGA1UEBhMCQ1oxFzAVBgNVBAgMDkN6ZWNoIFJlcHVibGljMQ0wCwYDVQQHDARCcm5vMRkwFwYDVQQKDBBDRVNORVQsIHoucy5wLm8uMRcwFQYDVQQDDA53d3cuY2VzbmV0Mi5jejAeFw0yNjExMDQxNjE3NDNaFw0zNjExMDExNjE3NDNaMGkxCzAJBgNVBAYTAkNaMRcwFQYDVQQIDA5DemVjaCBSZXB1YmxpYzENMAsGA1UEBwwEQnJubzEZMBcGA1UECgwQQ0VTTkVULCB6LnMucC5vLjEXMBUGA1UEAwwOd3d3LmNlc25ldDIuY3owggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQC/tHL6Sr6Xpy4UzUsOC9KXWuHpYq9UP5u+0qEqtS+HyRPUtuKassoFLIaa/5UQ50HLyFoxdwWcxjEXUXWUVU/5q4hno5JHtcjwWAu6aj+VNMxWo/24I/HqnUePKbnhe6273btzUMVVN79l70zceCuNYs4w+fcEfgfyPtzM0MzY6Blj7NKXpF06PUAGwvjdUCNoSftpoKS+6ibCEkByb+Fp0HSLnAyVAXeWUvyN26t+TZ7lcFQn1j/9YLRvSauIqulxXsQoIzbHUEQJEXHq3fXZmvFBT2nqjDa1rQd5NZj4ysPPvcJCOX+BlYjwKnNWaT2O9ZLJb1eChnQ+GU38tVPfzqYCn48+lEZPyW1buL7k6fgFjkq7INVqxKdJOSG/+epGIf7/U5qLAzFhfH78Vp2YJ7I6/j+bog+/e0r2sEGwr20AvFqLVzMWA3sIu9RIlQLJiAsSha22d3gGtOco/Gy1oKnHi/KzuMLVeitu8C5FjWAD5jPWMZ6opgmYvjYT4N3ffyGEktJMuZ3fAnrGlp1J6jTGTgcjJwz8Hh35m7hN+Ibs4ZL2h2whzFY6ERp6V1kg2QQ//rRLLbd3PDCZpOnkpBToWk3DOse9lOGUb9DjrDfBSqnr/NgmvPw52/vQK5pJNhG6+TXyK4ehpWSS97yrnCWIENcdKSWK6hyhDX2M1wIDAQABo0IwQDAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjAdBgNVHQ4EFgQU/RJlzBIkqC7LLrM59B200UuDa8EwDQYJKoZIhvcNAQELBQADggIBAKqalncAKiIrzzWcb0AKsp9V8dgu8PCHqF0t7PAJe5hacTkp8bpBGUXKB+PHyMnh2suyqFrf3v9+WCAu+s7UqO8xZWsHXGenKGf76RTCU5tfMT8puFe7iBSFUe3ZwjQgpPRdLF1sWnnPSF4upxl+GGOHVRAB44S2VFf1LXXWVG64vtJ80KxKbqSCr4zcNFPwhHtYXhgw/4Ml/nRpcLLmRaQJFSHXE8wlWEXCO7FazZtp0Mmutz+0q3zyx+0jh4eEzaeau0Yz5nOoMK87kfmXhiC6hBkEnUS0bQviKZnCvaFVnW0A0yZRSEmXaNEbvCY4iBsiNQ/XFc73flbSz3in1a8lIFtBAuHLiNmMRP6O09uc43tJ1z07iwBLIFPKEn+mNq6vn5aWMS8p1HhLbUxsaG42pQX7Ju5o/cUWaDr3mEvcdD6I0xezeYREa+zDovPZ2BPuI5S1blzCgawyof6i7FHfDAr8TBetdBNTkLmog5NXdPjUZ2JoXeo5kb9LBv4vC4va+w140leZRkzo9slrgSv+fqPSEBzCpTh+Gh8r6SiPfIbyqPd8MjdjBYjNc8FrgWXSKT6Isa9zZ3CjWjrlgO6wLgriMlWapaasr7gVnn/gtGgjnyE+YlLaN/tYDaFzqb2cJ5vm9Ch4XSOnc6fH0o5J6ZcYs7HSal5fOdGZyw2O"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "sysrepo-gnxi-users:users": {
+    "user": [
+      {
+        "name": "alice",
+        "password": "$6$SaltForAlice$B0mGKNyu8MnxZe9IkjoaJIgqqWFVyNWyD9QIrTyp2j0mMBKEOiFiVq3EXn6eI4RLKMuy6Wr8sLWvJ0IZ266hj/"
+      },
+      {
+        "name": "bob",
+        "password": "$5$SaltForBob$N8GciXki/e36uKpWqk6NCjQIoOEWOcSNVw15dmbktM9"
+      },
+      {
+        "name": "chuck",
+        "password": "$1$SaltForC$hmKZ7F1LZlmIqUt.0lles."
+      }
+    ]
+  },
+  "ietf-netconf-acm:nacm": {
+    "enable-nacm": true,
+    "read-default": "deny",
+    "write-default": "deny",
+    "exec-default": "deny",
+    "groups": {
+      "group": [
+        {
+          "name": "admin",
+          "user-name": [
+            "alice"
+          ]
+        },
+        {
+          "name": "readonly",
+          "user-name": [
+            "bob"
+          ]
+        }
+      ]
+    },
+    "rule-list": [
+      {
+        "name": "admin-all",
+        "group": [
+          "admin"
+        ],
+        "rule": [
+          {
+            "name": "all",
+            "access-operations": "*",
+            "action": "permit"
+          }
+        ]
+      },
+      {
+        "name": "test-ro",
+        "group": [
+          "readonly"
+        ],
+        "rule": [
+          {
+            "name": "read",
+            "module-name": "sysrepo-gnxi-test",
+            "access-operations": "read",
+            "action": "permit"
+          }
+        ]
+      }
+    ]
+  },
+  "sysrepo-gnxi-server:server": {
+    "listen": {
+      "endpoint": [
+        {
+          "name": "main",
+          "ip": {
+            "address": "127.0.0.1",
+            "port": 50052
+          }
+        }
+      ]
+    },
+    "tls": {
+      "server-identity": {
+        "certificate": {
+          "central-keystore-reference": {
+            "asymmetric-key": "sysrepo-gnxi-server-key",
+            "certificate": "sysrepo-gnxi-server-cert"
+          }
+        }
+      },
+      "client-authentication": {
+        "ca-certs": {
+          "central-truststore-reference": "sysrepo-gnxi-client-ca-bundle"
+        }
+      }
+    }
+  }
+}

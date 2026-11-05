@@ -30,35 +30,27 @@
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
 
-TEST_CASE("Top-level Set request (replace) empty", "[set]")
+TEST_CASE("Top-level Set request (replace) empty is rejected", "[set]")
 {
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/sysrepo-gnxi-test:test4/params[.=\"abc\"]", "");
-    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled", "false");
-    sr_sess->applyChanges();
 
     auto replace = request.add_replace();
 
     xpath_to_path("/*", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val("{}");
     auto status = gnmi_client->Set(&ctx, request, &response);
-    CHECK(status.ok());
 
-    CHECK(response.extension_size() == 0);
-    CHECK(response.timestamp() > 0);
-    CHECK(!response.has_prefix());
-    REQUIRE(response.response_size() == 1);
-    CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_REPLACE);
-    auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/*"));
+    // wiping the listen endpoints is not a valid configuration
+    REQUIRE(!status.ok());
+    CHECK_THAT(status.error_message(), Contains("no listen endpoint configured"));
 
-    auto parent = sr_sess->getData("/*");
-    auto json = parent->printStr(DataFormat::JSON, PrintFlags::Siblings | PrintFlags::Shrink);
-    REQUIRE_THAT(json.value(), Equals("{}"));
+    // the configuration was not changed
+    auto data = sr_sess->getData("/sysrepo-gnxi-server:server/listen/endpoint");
+    REQUIRE(data.has_value());
 }
 
 TEST_CASE("Empty leaf Set request (update)", "[set]")
@@ -411,7 +403,7 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->applyChanges();
 
-    xpath_to_path("/", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test", request.add_delete_());
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -421,7 +413,7 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
@@ -897,7 +889,7 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
         grpc::ClientContext ctx;
         gnmi::SetRequest request;
         gnmi::SetResponse response;
-        xpath_to_path("/", request.add_delete_());
+        xpath_to_path("/sysrepo-gnxi-test:test", request.add_delete_());
 
         for (int j = 0; j < 100; j++)
         {
@@ -916,9 +908,8 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things");
     sr_sess->applyChanges();
 
-    auto parent = sr_sess->getData("/*");
-    auto json = parent->printStr(DataFormat::JSON, PrintFlags::Siblings | PrintFlags::Shrink);
-    CHECK_THAT(json.value(), Equals("{}"));
+    auto parent = sr_sess->getData("/sysrepo-gnxi-test:test/things");
+    CHECK(!parent.has_value());
 }
 
 // negative tests

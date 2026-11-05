@@ -85,6 +85,9 @@ set(GNXI_SRC src/encode/encode.cpp
              src/security/auth.cpp
              src/security/crypto.cpp
              src/security/hash.cpp
+             src/security/credentials.cpp
+             src/security/tls.cpp
+             src/server_manager.cpp
              src/utils/log.cpp
              src/utils/path.cpp
              src/utils/sysrepo.cpp
@@ -101,6 +104,9 @@ set(GNXI_HEADERS src/encode/encode.h
                  src/security/auth.h
                  src/security/crypto.h
                  src/security/hash.h
+                 src/security/credentials.h
+                 src/security/tls.h
+                 src/server_manager.h
                  src/utils/log.h
                  src/utils/path.h
                  src/utils/sysrepo.h
@@ -110,6 +116,9 @@ set(GNXI_HEADERS src/encode/encode.h
 # server
 add_executable(${PROJECT_NAME} ${GNXI_SRC} src/main.cpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src)
+if(GNXI_GRPC_SERVER_CREDENTIALS_CTOR)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE GNXI_GRPC_SERVER_CREDENTIALS_CTOR)
+endif()
 
 # header file location required to build target
 target_include_directories(${PROJECT_NAME}
@@ -137,8 +146,10 @@ target_link_libraries(${USERS_CLI} gnxi_deps)
 set(GNXI_TESTS tests/test_auth.cpp
                tests/test_capabilities.cpp
                tests/test_commit.cpp
+               tests/test_endpoints.cpp
                tests/test_get.cpp
                tests/test_rpc.cpp
+               tests/test_rotate.cpp
                tests/test_set.cpp
                tests/test_subscribe.cpp
                tests/test_users.cpp
@@ -162,7 +173,7 @@ if (ENABLE_TESTS)
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
         )
         target_include_directories(${GNXI_TEST_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/tests)
-        if("${GNXI_TEST_NAME}" STREQUAL "test_auth")
+        if("${GNXI_TEST_NAME}" STREQUAL "test_auth" OR "${GNXI_TEST_NAME}" STREQUAL "test_rotate")
             target_compile_definitions(${GNXI_TEST_NAME} PRIVATE AUTH_MTLS_ENABLED)
         endif()
 

@@ -33,30 +33,17 @@
 #include "auth.h"
 #include "hash.h"
 
-Auth::Auth(bool insecure, sysrepo::Connection conn, const TlsMaterial &tls) : insecure_(insecure)
+Auth::Auth(
+    bool insecure, sysrepo::Connection conn, std::shared_ptr<grpc::ServerCredentials> credentials)
+    : insecure_(insecure), credentials_(std::move(credentials))
 {
     if (insecure_)
     {
         SLOG_INFO("Insecure authentication");
-        credentials_ = grpc::InsecureServerCredentials();
         return;
     }
 
-    if (tls.private_key_pem.empty() || tls.certificate_pem.empty() ||
-        tls.ca_certificate_pem.empty())
-    {
-        SLOG_FATAL("Incomplete TLS configuration: private key, certificate, or CA bundle "
-                   "is empty. Ensure the server configuration, keystore, and truststore are "
-                   "properly configured in sysrepo.");
-        throw std::runtime_error("incomplete TLS configuration");
-    }
-
     SLOG_INFO("Mutual TLS authentication");
-    grpc::SslServerCredentialsOptions ssl_opts(
-        GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-    ssl_opts.pem_key_cert_pairs.push_back({tls.private_key_pem, tls.certificate_pem});
-    ssl_opts.pem_root_certs = tls.ca_certificate_pem;
-    credentials_ = grpc::SslServerCredentials(ssl_opts);
     // the metadata processor authenticates before an RPC sysrepo session exists
     credentials_->SetAuthMetadataProcessor(
         std::make_shared<UserPassAuthenticator>(*this, std::move(conn)));

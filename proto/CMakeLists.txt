@@ -24,6 +24,18 @@ if(NOT TARGET gRPC::grpc++)
     )
 endif()
 
+# grpc::ServerCredentials is constructible from C credentials (which it
+# then owns) since gRPC 1.63, older versions need the compat wrapper in
+# src/security/credentials.cpp
+set(GRPC_CXX_VERSION "${gRPC_VERSION}")
+if(NOT GRPC_CXX_VERSION)
+    # the pkg-config fallback reports the version of the grpc++ module
+    set(GRPC_CXX_VERSION "${GRPC_VERSION}")
+endif()
+if(GRPC_CXX_VERSION VERSION_GREATER_EQUAL "1.63")
+    set(GNXI_GRPC_SERVER_CREDENTIALS_CTOR ON PARENT_SCOPE)
+endif()
+
 # GENERATED SOURCE FILES
 ########################
 

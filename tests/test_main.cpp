@@ -150,6 +150,151 @@ std::string path_to_xpath(const gnmi::Path &path)
 }
 
 /**
+ * @brief Read a file into a string (PEM material for the gRPC channels).
+ *
+ * @param[in] path Path to file.
+ * @return File content.
+ */
+static std::string read_file(const std::filesystem::path &path)
+{
+    std::ifstream ifs(path);
+    if (!ifs)
+    {
+        throw std::runtime_error("Cannot open file: " + path.string());
+    }
+    return {std::istreambuf_iterator<char>(ifs), {}};
+}
+
+/**
+ * @brief Create a channel using a local subchannel pool.
+ *
+ * gRPC otherwise pools the transports (with their reconnect backoff
+ * state) of channels with an identical connection setup, which for
+ * insecure channels is every channel to the address, and a call's
+ * auth-context metadata (the authenticated username) is bound to the
+ * first RPC on the shared connection, which breaks per-user NACM
+ * expectations in the tests.
+ *
+ * @param[in] addr Address to connect to.
+ * @param[in] creds Channel credentials to use.
+ * @return New gRPC channel.
+ */
+static std::shared_ptr<grpc::Channel> make_channel(
+    const std::string &addr, const std::shared_ptr<grpc::ChannelCredentials> &creds)
+{
+    grpc::ChannelArguments args;
+    args.SetInt(GRPC_ARG_USE_LOCAL_SUBCHANNEL_POOL, 1);
+    return grpc::CreateCustomChannel(addr, creds, args);
+}
+
+std::shared_ptr<grpc::Channel> make_insecure_channel(const std::string &addr)
+{
+    return make_channel(addr, grpc::InsecureChannelCredentials());
+}
+
+std::shared_ptr<grpc::Channel> make_tls_channel(const std::string &addr)
+{
+    grpc::SslCredentialsOptions opts;
+    static std::string ca_pem = read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "ca.crt");
+    opts.pem_root_certs = ca_pem;
+    return make_channel(addr, grpc::SslCredentials(opts));
+}
+
+std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
+{
+    grpc::SslCredentialsOptions opts;
+    static std::string ca_pem = read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "ca.crt");
+    static std::string key_pem = read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "client.key");
+    static std::string cert_pem = read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "client.crt");
+    opts.pem_root_certs = ca_pem;
+    opts.pem_private_key = key_pem;
+    opts.pem_cert_chain = cert_pem;
+    return make_channel(addr, grpc::SslCredentials(opts));
+}
+
+std::shared_ptr<grpc::Channel> make_mtls_channel2(const std::string &addr)
+{
+    grpc::SslCredentialsOptions opts;
+    static std::string ca_pem = read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "ca2.crt");
+    static std::string key_pem = read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "client2.key");
+    static std::string cert_pem =
+        read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "client2.crt");
+    opts.pem_root_certs = ca_pem;
+    opts.pem_private_key = key_pem;
+    opts.pem_cert_chain = cert_pem;
+    return make_channel(addr, grpc::SslCredentials(opts));
+}
+
+void prepare_context(
+    grpc::ClientContext &ctx, const std::string &username, const std::string &password)
+{
+    if (!username.empty())
+    {
+        ctx.AddMetadata("username", username);
+    }
+    if (!password.empty())
+    {
+        ctx.AddMetadata("password", password);
+    }
+}
+
+grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
+    const std::string &username, const std::string &password)
+{
+    auto stub = gnmi::gNMI::NewStub(channel);
+    grpc::ClientContext ctx;
+    prepare_context(ctx, username, password);
+    gnmi::CapabilityRequest request;
+    gnmi::CapabilityResponse response;
+    return stub->Capabilities(&ctx, request, &response);
+}
+
+bool eventually_reachable(std::shared_ptr<grpc::Channel> (*make_channel)(const std::string &),
+    const std::string &addr, const std::string &username, const std::string &password)
+{
+    auto channel = make_channel(addr);
+    if (!channel->WaitForConnected(
+            std::chrono::system_clock::now() + std::chrono::milliseconds(100)))
+    {
+        return false;
+    }
+    return do_capabilities(channel, username, password).ok();
+}
+
+void apply_config(
+    sysrepo::Session &sess, const std::filesystem::path &file, const std::string &sock_path)
+{
+    std::ifstream in(file);
+    if (!in)
+    {
+        throw std::runtime_error("cannot open " + file.string());
+    }
+    auto data = std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+
+    // replace path to the unix socket in configuration
+    if (!sock_path.empty())
+    {
+        auto pos = data.find("@SOCKET_PATH@");
+        if (pos != std::string::npos)
+        {
+            data.replace(pos, std::string("@SOCKET_PATH@").size(), sock_path);
+        }
+    }
+
+    // apply configuration
+    auto tree = sess.getContext().parseData(data, libyang::DataFormat::JSON,
+        libyang::ParseOptions::ParseOnly | libyang::ParseOptions::NoState |
+            libyang::ParseOptions::Strict);
+    if (!tree.has_value())
+    {
+        throw std::runtime_error("no data parsed from " + file.string());
+    }
+    sess.switchDatastore(sysrepo::Datastore::Running);
+    sess.editBatch(tree.value(), sysrepo::DefaultOperation::Replace);
+    sess.applyChanges();
+}
+
+/**
  * @brief Sysrepo module-change callback for the test module, fails on the custom-error leaf.
  *
  * @param[in] session Sysrepo session.
@@ -245,46 +390,6 @@ static sysrepo::ErrorCode action_test_cb(sysrepo::Session session, uint32_t sub_
 }
 
 /**
- * @brief Apply a complete JSON configuration to the running datastore.
- *
- * @param[in] sess Sysrepo session.
- * @param[in] file JSON configuration file to apply.
- * @param[in] sock_path Socket path to substitute for the placeholder.
- */
-static void apply_config(
-    sysrepo::Session &sess, const std::filesystem::path &file, const std::string &sock_path)
-{
-    std::ifstream in(file);
-    if (!in)
-    {
-        throw std::runtime_error("cannot open " + file.string());
-    }
-    auto data = std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-
-    // replace path to the unix socket in configuration
-    if (!sock_path.empty())
-    {
-        auto pos = data.find("@SOCKET_PATH@");
-        if (pos != std::string::npos)
-        {
-            data.replace(pos, std::string("@SOCKET_PATH@").size(), sock_path);
-        }
-    }
-
-    // apply configuration
-    auto tree = sess.getContext().parseData(data, libyang::DataFormat::JSON,
-        libyang::ParseOptions::ParseOnly | libyang::ParseOptions::NoState |
-            libyang::ParseOptions::Strict);
-    if (!tree.has_value())
-    {
-        throw std::runtime_error("no data parsed from " + file.string());
-    }
-    sess.switchDatastore(sysrepo::Datastore::Running);
-    sess.editBatch(tree.value(), sysrepo::DefaultOperation::Replace);
-    sess.applyChanges();
-}
-
-/**
  * @brief Create fresh repository and SHM directories for a sysrepo instance.
  *
  * @param[in] repo_path Path to the repository directory.
@@ -358,7 +463,9 @@ static void install_test_modules(sysrepo::Connection &sr_conn)
         make_inst(modules_dir, "sysrepo-gnxi-server.yang", {}, 0600),
         make_inst(modules_dir, "sysrepo-gnxi-users.yang", {}, 0600),
     };
-    sr_conn.installModules(modules, {files_dir, modules_dir});
+    // the endpoint list is mandatory in the schema, dummy config now, true config later
+    sr_conn.installModules(
+        modules, {files_dir, modules_dir}, files_dir / "dummy.json", libyang::DataFormat::JSON);
 }
 
 // the single server subprocess manager of this test binary
@@ -447,7 +554,7 @@ void SetupServer::restart()
     wait_for_unix_(sock_.string());
 
     // fresh client channel to the restarted server
-    auto channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
+    auto channel = make_insecure_channel(insecure_addr);
     channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::milliseconds(100));
     gnmi_client = gnmi::gNMI::NewStub(channel);
     gnxi_client = yang_rpc::YANG_RPC::NewStub(channel);
@@ -726,7 +833,7 @@ int main(int argc, char *argv[])
         server.launch(test_name, debug, false);
         server.wait_ready();
 
-        auto main_channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
+        auto main_channel = make_insecure_channel(insecure_addr);
         main_channel->WaitForConnected(
             std::chrono::system_clock::now() + std::chrono::milliseconds(100));
         gnmi_client = gnmi::gNMI::NewStub(main_channel);

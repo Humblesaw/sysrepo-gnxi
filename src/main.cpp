@@ -22,7 +22,6 @@
  */
 
 #include <charconv>
-#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -31,17 +30,9 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <sys/wait.h>
 #include <unistd.h>
-#include <vector>
 
-#include <grpcpp/server.h>
-#include <grpcpp/server_builder.h>
-
-#include <libyang-cpp/DataNode.hpp>
-
-#include <proto/gnmi.grpc.pb.h>
-#include <proto/yang_rpc.grpc.pb.h>
+#include <grpcpp/security/server_credentials.h>
 
 #include <sysrepo.h>
 #include <sysrepo/netconf_acm.h>
@@ -50,11 +41,10 @@
 #include <sysrepo-cpp/Session.hpp>
 #include <sysrepo-cpp/utils/exception.hpp>
 
-#include <gnmi/gnmi.h>
 #include <security/auth.h>
-#include <security/crypto.h>
+#include <security/credentials.h>
+#include <server_manager.h>
 #include <utils/log.h>
-#include <yang_rpc/yang_rpc.h>
 
 /**
  * @brief Global state shared between the server and the signal handler.
@@ -62,7 +52,6 @@
  */
 static struct
 {
-    std::unique_ptr<grpc::Server> server;
     int pipefd[2];
 
     // NACM subscriptions, alive while the server runs
@@ -112,10 +101,11 @@ void setup_signal_handler(void)
 }
 
 /**
- * @brief Wait for a termination signal and shutdown the server.
+ * @brief Wait for a termination signal and shut the servers down.
  *
+ * @param[in] manager Server manager to shut down.
  */
-static void wait_for_terminate(void)
+static void wait_for_terminate(ServerManager &manager)
 {
     int signal = 0;
 
@@ -130,190 +120,7 @@ static void wait_for_terminate(void)
     }
 
     SLOG_DEBUG("Shutting down due to ", strsignal(signal), " signal");
-    GNMIService::try_cancel_all();
-    // deadline set to 100 ms so that we do not have to wait during shutdown
-    g_state.server->Shutdown(std::chrono::system_clock::now() + std::chrono::milliseconds(100));
-}
-
-/**
- * @brief Read a single configuration node by its absolute path. Throws on error.
- *
- * @param[in] sess Sysrepo session.
- * @param[in] path Absolute path to the leaf.
- * @param[in] what Description of the leaf.
- * @return Leaf value.
- */
-static std::string config_value(
-    sysrepo::Session &sess, const std::string &path, const std::string &what)
-{
-    auto data = sess.getData(path);
-    if (!data.has_value())
-    {
-        throw std::runtime_error(what + " not found");
-    }
-
-    auto node = data->findPath(path);
-    if (!node.has_value())
-    {
-        throw std::runtime_error(what + " not found");
-    }
-    return node->asTerm().valueStr();
-}
-
-/**
- * @brief Read all configuration nodes matching an XPath.
- *
- * @param[in] sess Sysrepo session.
- * @param[in] xpath XPath to find.
- * @return Matching nodes.
- */
-static std::vector<libyang::DataNode> config_values(
-    sysrepo::Session &sess, const std::string &xpath)
-{
-    auto data = sess.getData(xpath);
-    if (!data.has_value())
-    {
-        return {};
-    }
-
-    auto nodes = data->findXPath(xpath);
-    std::vector<libyang::DataNode> values;
-    for (auto node : nodes)
-    {
-        values.push_back(node);
-    }
-    return values;
-}
-
-/**
- * @brief Read the configured listen endpoints and build gRPC listen URIs.
- *
- * @param[in] sess Sysrepo session.
- * @return gRPC listen URIs, e.g. 127.0.0.1:50051 or unix:/path.
- */
-static std::vector<std::string> load_bind_addrs(sysrepo::Session &sess)
-{
-    std::vector<std::string> addrs;
-
-    auto data = sess.getData("/sysrepo-gnxi-server:server/listen/endpoint");
-    if (!data.has_value())
-    {
-        return addrs;
-    }
-
-    for (auto endpoint : data->findXPath("/sysrepo-gnxi-server:server/listen/endpoint"))
-    {
-        auto name = endpoint.findPath("name")->asTerm().valueStr();
-
-        // each endpoint selects exactly one transport (mandatory choice)
-        if (auto path = endpoint.findPath("unix/path"))
-        {
-            addrs.push_back("unix:" + path->asTerm().valueStr());
-            continue;
-        }
-
-        if (auto address = endpoint.findPath("dns/address"))
-        {
-            auto port = endpoint.findPath("dns/port");
-            addrs.push_back("dns:///" + address->asTerm().valueStr() + ":" +
-                            (port ? port->asTerm().valueStr() : std::string("50051")));
-            continue;
-        }
-
-        if (auto address = endpoint.findPath("ip/address"))
-        {
-            auto port = endpoint.findPath("ip/port");
-            auto addr = address->asTerm().valueStr();
-            auto port_str = port ? port->asTerm().valueStr() : std::string("50051");
-            if (addr.find(':') != std::string::npos)
-            {
-                // IPv6 addresses must be enclosed in brackets
-                addrs.push_back("[" + addr + "]:" + port_str);
-            }
-            else
-            {
-                addrs.push_back(addr + ":" + port_str);
-            }
-            continue;
-        }
-
-        throw std::runtime_error("listen endpoint '" + name + "' has no transport configured");
-    }
-
-    return addrs;
-}
-
-/**
- * @brief Load the TLS server material from sysrepo.
- *
- * Reads the server identity (private key and certificate chain from
- * ietf-keystore) and the client verification CA bundle (ietf-truststore)
- * referenced by the server configuration. The stored base64 bodies are
- * wrapped into PEM for gRPC.
- *
- * @param[in] sess Sysrepo session.
- * @return TLS material wrapped into PEM.
- */
-static Auth::TlsMaterial load_tls_config(sysrepo::Session &sess)
-{
-    Auth::TlsMaterial tls;
-
-    // the referenced key/certificate/bag names fluctuate, read them first
-    std::string key_name = config_value(sess,
-        "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
-        "central-keystore-reference/asymmetric-key",
-        "TLS server identity asymmetric-key reference");
-    std::string cert_name = config_value(sess,
-        "/sysrepo-gnxi-server:server/tls/server-identity/certificate/"
-        "central-keystore-reference/certificate",
-        "TLS server identity certificate reference");
-    std::string bag_name = config_value(sess,
-        "/sysrepo-gnxi-server:server/tls/client-authentication/ca-certs/"
-        "central-truststore-reference",
-        "TLS client authentication CA-certs truststore reference");
-
-    // private key of the server identity
-    std::string key_path =
-        "/ietf-keystore:keystore/asymmetric-keys/asymmetric-key[name='" + key_name + "']";
-    tls.private_key_pem =
-        pem_wrap_private_key(config_value(sess, key_path + "/cleartext-private-key",
-                                 "cleartext-private-key of asymmetric-key '" + key_name + "'"),
-            config_value(sess, key_path + "/private-key-format",
-                "private-key-format of asymmetric-key '" + key_name + "'"));
-
-    // server certificate chain - the referenced certificate first, then the
-    // remaining certificates of the same asymmetric key (intermediates)
-    tls.certificate_pem = pem_wrap_certificate(config_value(sess,
-        key_path + "/certificates/certificate[name='" + cert_name + "']/cert-data",
-        "certificate '" + cert_name + "' of asymmetric-key '" + key_name + "'"));
-    for (auto node : config_values(
-             sess, key_path + "/certificates/certificate[not(name='" + cert_name + "')]/cert-data"))
-    {
-        tls.certificate_pem += "\n" + pem_wrap_certificate(node.asTerm().valueStr());
-    }
-
-    // CA certificates for client verification
-    for (auto node :
-        config_values(sess, "/ietf-truststore:truststore/certificate-bags/certificate-bag[name='" +
-                                bag_name + "']/certificate/cert-data"))
-    {
-        if (!tls.ca_certificate_pem.empty())
-        {
-            tls.ca_certificate_pem += "\n";
-        }
-        tls.ca_certificate_pem += pem_wrap_certificate(node.asTerm().valueStr());
-    }
-    if (tls.ca_certificate_pem.empty())
-    {
-        throw std::runtime_error(
-            "certificate-bag '" + bag_name + "' not found or contains no certificates");
-    }
-
-    SLOG_INFO("TLS configuration loaded from sysrepo "
-              "(key: ",
-        key_name, ", cert: ", cert_name, ", CA bag: ", bag_name, ")");
-
-    return tls;
+    manager.shutdown();
 }
 
 /**
@@ -365,45 +172,6 @@ static void stop_nacm()
         sr_unsubscribe(g_state.nacm_sub);
     }
     sr_nacm_destroy();
-}
-
-/**
- * @brief Start the gRPC server and wait for its termination.
- *
- * @param[in] sr_conn Sysrepo connection.
- * @param[in] bind_addrs gRPC listen URIs to bind.
- * @param[in] auth Authentication providing the server credentials.
- */
-void run_server(sysrepo::Connection &sr_conn, const std::vector<std::string> &bind_addrs,
-    std::shared_ptr<Auth> auth)
-{
-    std::shared_ptr<grpc::ServerCredentials> cred = auth->credentials();
-    GNMIService gnmi(sr_conn, auth);        // gNMI Service
-    YangRpcService yang_rpc(sr_conn, auth); // YANG Rpc Service
-
-    grpc::ServerBuilder builder;
-    for (const auto &bind_addr : bind_addrs)
-    {
-        builder.AddListeningPort(bind_addr, cred);
-    }
-    builder.RegisterService(&gnmi);
-    builder.RegisterService(&yang_rpc);
-    g_state.server = builder.BuildAndStart();
-
-    if (g_state.server == nullptr)
-    {
-        SLOG_FATAL("Failed to build gRPC server");
-        exit(1);
-    }
-
-    for (const auto &bind_addr : bind_addrs)
-    {
-        SLOG_INFO("Server listening on ", bind_addr);
-    }
-
-    wait_for_terminate();
-
-    SLOG_INFO("Server exited");
 }
 
 constexpr const char *USAGE = R"(Usage:
@@ -472,28 +240,35 @@ int main(int argc, char *argv[])
         // start_nacm(), so it must stay alive for the whole run of the server
         auto config_sess =
             std::make_optional<sysrepo::Session>(sr_conn.sessionStart(sysrepo::Datastore::Running));
-        std::vector<std::string> bind_addrs;
-        Auth::TlsMaterial tls;
 
-        // read server configuration
-        bind_addrs = load_bind_addrs(*config_sess);
-        if (bind_addrs.empty())
+        std::shared_ptr<grpc::ServerCredentials> creds;
+        std::optional<ReloadableCredentials> reloadable;
+        if (insecure)
         {
-            throw std::runtime_error("no listen endpoint configured "
-                                     "(sysrepo-gnxi-server:server/listen/endpoint)");
+            creds = grpc::InsecureServerCredentials();
         }
-        if (!insecure)
+        else
         {
-            tls = load_tls_config(*config_sess);
+            // loads and validates the TLS material, throws when incomplete
+            reloadable.emplace(sr_conn);
+            creds = reloadable->credentials();
 
             // initialize NACM before any user session is created
             start_nacm(*config_sess, sr_conn);
         }
 
-        auto auth = std::make_shared<Auth>(insecure, sr_conn, tls);
+        auto auth = std::make_shared<Auth>(insecure, sr_conn, creds);
 
-        run_server(sr_conn, bind_addrs, auth);
+        // declared after reloadable so that the credentials outlive the
+        // servers using them
+        ServerManager manager(sr_conn, auth, creds);
+        creds.reset();
 
+        manager.start();
+
+        wait_for_terminate(manager);
+
+        SLOG_INFO("Server exited");
         stop_nacm();
     }
     catch (const std::exception &exc)
