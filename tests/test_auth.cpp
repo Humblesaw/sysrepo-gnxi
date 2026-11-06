@@ -131,7 +131,7 @@ std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
 }
 
 /**
- * @brief Prepare a client context with a deadline and optional credentials metadata.
+ * @brief Prepare a client context with optional credentials metadata.
  *
  * @param[in] ctx Client context to prepare.
  * @param[in] username Username metadata to add (empty for none).
@@ -140,8 +140,6 @@ std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
 void prepare_context(
     grpc::ClientContext &ctx, const std::string &username = "", const std::string &password = "")
 {
-    ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
-
     if (!username.empty())
     {
         ctx.AddMetadata("username", username);

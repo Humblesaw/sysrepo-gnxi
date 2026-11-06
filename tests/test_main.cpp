@@ -448,7 +448,7 @@ void SetupServer::restart()
 
     // fresh client channel to the restarted server
     auto channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
-    channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
+    channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::milliseconds(100));
     gnmi_client = gnmi::gNMI::NewStub(channel);
     gnxi_client = yang_rpc::YANG_RPC::NewStub(channel);
 }
@@ -727,7 +727,8 @@ int main(int argc, char *argv[])
         server.wait_ready();
 
         auto main_channel = grpc::CreateChannel(insecure_addr, grpc::InsecureChannelCredentials());
-        main_channel->WaitForConnected(std::chrono::system_clock::now() + std::chrono::seconds(10));
+        main_channel->WaitForConnected(
+            std::chrono::system_clock::now() + std::chrono::milliseconds(100));
         gnmi_client = gnmi::gNMI::NewStub(main_channel);
         gnxi_client = yang_rpc::YANG_RPC::NewStub(main_channel);
 #endif
