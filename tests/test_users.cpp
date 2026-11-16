@@ -52,7 +52,7 @@ class UsersFixture
   public:
     static std::filesystem::path log;
 
-    UsersFixture() = default;
+    UsersFixture() { cleanup(); }
 
     ~UsersFixture() { cleanup(); }
 
@@ -64,17 +64,11 @@ class UsersFixture
     {
         std::filesystem::remove_all(log);
         // clean up any existing user data in sysrepo
-        try
-        {
-            auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
-            sess.deleteItem("/sysrepo-gnxi-users:users");
-            sess.deleteItem("/ietf-netconf-acm:nacm/groups");
-            sess.deleteItem("/ietf-netconf-acm:nacm/rule-list");
-            sess.applyChanges();
-        }
-        catch (...)
-        {
-        }
+        auto sess = sysrepo::Connection().sessionStart(sysrepo::Datastore::Running);
+        sess.deleteItem("/sysrepo-gnxi-users:users");
+        sess.deleteItem("/ietf-netconf-acm:nacm/groups");
+        sess.deleteItem("/ietf-netconf-acm:nacm/rule-list");
+        sess.applyChanges();
     }
 
     /**

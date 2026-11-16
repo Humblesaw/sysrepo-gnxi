@@ -22,6 +22,7 @@
 
 #include "catch2/catch.hpp"
 #include <memory>
+#include <stdexcept>
 
 #include <grpcpp/grpcpp.h>
 
@@ -30,35 +31,71 @@
 using Catch::Matchers::Contains;
 using Catch::Matchers::Equals;
 
-TEST_CASE("Top-level Set request (replace) empty", "[set]")
+/**
+ * @brief Build a full configuration JSON for a top-level request by adding
+ * test data to the running configuration obtained from sysrepo.
+ *
+ * @param[in] sess Sysrepo session to read the running configuration from.
+ * @param[in] additional_json JSON configuration data to merge into it.
+ * @param[in] removed_roots Subtrees intentionally omitted from the payload.
+ * @return JSON-IETF configuration including all top-level siblings.
+ */
+static std::string root_config_with_data(sysrepo::Session &sess, const std::string &additional_json,
+    const std::vector<std::string> &removed_roots)
+{
+    auto config = sess.getData("/*");
+    if (!config)
+    {
+        throw std::runtime_error("running configuration is empty");
+    }
+
+    // preserve the rest of the running configuration, but do not include
+    // nodes that this root replacement is meant to remove
+    for (const auto &root : removed_roots)
+    {
+        if (auto node = config->findPath(root))
+        {
+            node->unlink();
+        }
+    }
+
+    auto additional = sess.getContext().parseData(additional_json, libyang::DataFormat::JSON,
+        libyang::ParseOptions::ParseOnly | libyang::ParseOptions::Strict);
+    if (additional)
+    {
+        config->mergeWithSiblings(*additional);
+    }
+
+    auto json = config->printStr(
+        libyang::DataFormat::JSON, libyang::PrintFlags::Siblings | libyang::PrintFlags::Shrink);
+    if (!json)
+    {
+        throw std::runtime_error("failed to print running configuration");
+    }
+    return *json;
+}
+
+TEST_CASE("Top-level Set request (replace) empty is rejected", "[set]")
 {
     grpc::ClientContext ctx;
     gnmi::SetRequest request;
     gnmi::SetResponse response;
     using namespace libyang;
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem("/sysrepo-gnxi-test:test4/params[.=\"abc\"]", "");
-    sr_sess->setItem("/sysrepo-gnxi-test:test/things[name=\"B\"]/enabled", "false");
-    sr_sess->applyChanges();
 
     auto replace = request.add_replace();
 
     xpath_to_path("/*", replace->mutable_path());
     replace->mutable_val()->set_json_ietf_val("{}");
     auto status = gnmi_client->Set(&ctx, request, &response);
-    CHECK(status.ok());
 
-    CHECK(response.extension_size() == 0);
-    CHECK(response.timestamp() > 0);
-    CHECK(!response.has_prefix());
-    REQUIRE(response.response_size() == 1);
-    CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_REPLACE);
-    auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/*"));
+    // wiping the listen endpoints is not a valid configuration
+    REQUIRE(!status.ok());
+    CHECK_THAT(status.error_message(), Contains("Too few \"endpoint\" instances"));
 
-    auto parent = sr_sess->getData("/*");
-    auto json = parent->printStr(DataFormat::JSON, PrintFlags::Siblings | PrintFlags::Shrink);
-    REQUIRE_THAT(json.value(), Equals("{}"));
+    // the configuration was not changed
+    auto data = sr_sess->getData("/sysrepo-gnxi-server:server/listen/endpoint");
+    REQUIRE(data.has_value());
 }
 
 TEST_CASE("Empty leaf Set request (update)", "[set]")
@@ -261,13 +298,18 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
     auto replace = request.add_replace();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    // build the replacement before seeding, preserving the live listen
+    // configuration while omitting the nodes the test replaces away
+    auto replace_json = root_config_with_data(*sr_sess,
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}",
+        {"/sysrepo-gnxi-test:test", "/sysrepo-gnxi-test:test2"});
+
     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->setItem("/sysrepo-gnxi-test:test2/enabled", "true");
     sr_sess->applyChanges();
 
     xpath_to_path("/", replace->mutable_path());
-    replace->mutable_val()->set_json_ietf_val(
-        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]}}");
+    replace->mutable_val()->set_json_ietf_val(replace_json);
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -283,12 +325,9 @@ TEST_CASE("Top-level Set request (replace)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // item B should have been removed since the whole config was replaced and the new config only
-    // contained item A
+    // item B and test2 were not provided by the replacement and are removed
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
         Contains("SR_ERR_NOT_FOUND"));
-    // test2 should have been removed since the whole config was replaced and the new config
-    // includes only the test container
     CHECK_THROWS_WITH(
         sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"), Contains("SR_ERR_NOT_FOUND"));
 
@@ -305,14 +344,17 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
     auto replace = request.add_replace();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    auto replace_json = root_config_with_data(*sr_sess,
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\""
+        "sysrepo-gnxi-test:test2\":{}}",
+        {"/sysrepo-gnxi-test:test", "/sysrepo-gnxi-test:test2"});
+
     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->setItem("/sysrepo-gnxi-test:test2/enabled", "true");
     sr_sess->applyChanges();
 
     xpath_to_path("/", replace->mutable_path());
-    replace->mutable_val()->set_json_ietf_val(
-        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\""
-        "sysrepo-gnxi-test:test2\":{}}");
+    replace->mutable_val()->set_json_ietf_val(replace_json);
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -328,12 +370,9 @@ TEST_CASE("Top-level Set request (multi replace)", "[set]")
 
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("true"));
 
-    // item B should have been removed since the whole config was replaced and the new config only
-    // contained item A
+    // item B and the contents of the empty test2 container are removed
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
         Contains("SR_ERR_NOT_FOUND"));
-    // test2 should have been removed since the whole config was replaced and the test2 container
-    // was empty in the new config
     CHECK_THROWS_WITH(
         sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"), Contains("SR_ERR_NOT_FOUND"));
 
@@ -351,18 +390,23 @@ TEST_CASE("Top-level Set request (multi replace + update)", "[set]")
     auto update = request.add_update();
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
+    auto replace_json = root_config_with_data(*sr_sess,
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\""
+        "sysrepo-gnxi-test:test2\":{\"enabled2\":true}}",
+        {"/sysrepo-gnxi-test:test", "/sysrepo-gnxi-test:test2"});
+    auto update_json = root_config_with_data(*sr_sess,
+        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":false}]},\""
+        "sysrepo-gnxi-test:test2\":{\"enabled2\":false}}",
+        {"/sysrepo-gnxi-test:test", "/sysrepo-gnxi-test:test2"});
+
     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->setItem("/sysrepo-gnxi-test:test2/enabled", "true");
     sr_sess->applyChanges();
 
     xpath_to_path("/", replace->mutable_path());
-    replace->mutable_val()->set_json_ietf_val(
-        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":true}]},\""
-        "sysrepo-gnxi-test:test2\":{\"enabled2\":true}}");
+    replace->mutable_val()->set_json_ietf_val(replace_json);
     xpath_to_path("/", update->mutable_path());
-    update->mutable_val()->set_json_ietf_val(
-        "{\"sysrepo-gnxi-test:test\":{\"things\":[{\"name\":\"A\",\"enabled\":false}]},\""
-        "sysrepo-gnxi-test:test2\":{\"enabled2\":false}}");
+    update->mutable_val()->set_json_ietf_val(update_json);
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -379,25 +423,21 @@ TEST_CASE("Top-level Set request (multi replace + update)", "[set]")
 
     auto val = sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='A']/enabled");
 
-    // the update should be applied after the replace
+    // the update is applied after the replace
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
-    // item B should have been removed since the whole config was replaced and the new config only
-    // contained item A
+    // item B and enabled were not provided by the replacement and are removed
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
         Contains("SR_ERR_NOT_FOUND"));
-    // the replace should have caused this node to be removed
     CHECK_THROWS_WITH(
         sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled"), Contains("SR_ERR_NOT_FOUND"));
-    // the update should be applied after the replace
+    // the update is applied after the replace
     val = sr_sess->getOneNode("/sysrepo-gnxi-test:test2/enabled2");
-
-    // the update should be applied after the replace
     CHECK_THAT(std::string(val.asTerm().valueStr()), Equals("false"));
 
     // clean up
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
-    sr_sess->deleteItem("/sysrepo-gnxi-test:test2/enabled");
+    sr_sess->deleteItem("/sysrepo-gnxi-test:test2/enabled2");
     sr_sess->applyChanges();
 }
 
@@ -411,7 +451,7 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     sr_sess->setItem("/sysrepo-gnxi-test:test/things[name='B']/enabled", "true");
     sr_sess->applyChanges();
 
-    xpath_to_path("/", request.add_delete_());
+    xpath_to_path("/sysrepo-gnxi-test:test", request.add_delete_());
     auto status = gnmi_client->Set(&ctx, request, &response);
     CHECK(status.ok());
 
@@ -421,7 +461,7 @@ TEST_CASE("Top-level Set request (delete)", "[set]")
     REQUIRE(response.response_size() == 1);
     CHECK(response.response().Get(0).op() == gnmi::UpdateResult_Operation_DELETE);
     auto path = path_to_xpath(response.response().Get(0).path());
-    CHECK_THAT(path, Equals("/"));
+    CHECK_THAT(path, Equals("/sysrepo-gnxi-test:test"));
 
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
     CHECK_THROWS_WITH(sr_sess->getOneNode("/sysrepo-gnxi-test:test/things[name='B']/enabled"),
@@ -897,7 +937,7 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
         grpc::ClientContext ctx;
         gnmi::SetRequest request;
         gnmi::SetResponse response;
-        xpath_to_path("/", request.add_delete_());
+        xpath_to_path("/sysrepo-gnxi-test:test", request.add_delete_());
 
         for (int j = 0; j < 100; j++)
         {
@@ -916,9 +956,8 @@ TEST_CASE("Scaled Set request (update)", "[set-scale]")
     sr_sess->deleteItem("/sysrepo-gnxi-test:test/things");
     sr_sess->applyChanges();
 
-    auto parent = sr_sess->getData("/*");
-    auto json = parent->printStr(DataFormat::JSON, PrintFlags::Siblings | PrintFlags::Shrink);
-    CHECK_THAT(json.value(), Equals("{}"));
+    auto parent = sr_sess->getData("/sysrepo-gnxi-test:test/things");
+    CHECK(!parent.has_value());
 }
 
 // negative tests
@@ -1602,45 +1641,6 @@ TEST_CASE("Set request with origin in both prefix and path", "[set-origin]")
     CHECK(response.extension_size() == 0);
     CHECK(response.timestamp() == 0);
     CHECK(response.response_size() == 0);
-}
-
-TEST_CASE("Set request root delete is constrained to origin", "[set-origin]")
-{
-    gnmi::SetRequest request;
-    gnmi::SetResponse response;
-    auto update = request.add_update();
-    auto update2 = request.add_update();
-
-    // seed an annotated (rfc7951) module and an unannotated one
-    xpath_to_path("/wines/wine[name='X'][vintage='1985']/score", update->mutable_path(), "rfc7951");
-    update->mutable_val()->set_json_ietf_val("89");
-    xpath_to_path("/sysrepo-gnxi-test:test2/enabled", update2->mutable_path(), "");
-    update2->mutable_val()->set_json_ietf_val("true");
-    grpc::ClientContext seed_ctx;
-    auto status = gnmi_client->Set(&seed_ctx, request, &response);
-    CHECK(status.ok());
-
-    // deleting the whole root under the default origin leaves annotated data
-    gnmi::SetRequest delete_request;
-    gnmi::SetResponse delete_response;
-    xpath_to_path("/", delete_request.add_delete_(), "");
-    grpc::ClientContext delete_ctx;
-    auto delete_status = gnmi_client->Set(&delete_ctx, delete_request, &delete_response);
-    CHECK(delete_status.ok());
-
-    sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    const auto xpath = "/sysrepo-gnxi-test-wine:wines/wine[name='X'][vintage='1985']/score";
-    CHECK(sr_sess->getData(xpath).has_value());
-    CHECK(!sr_sess->getData("/sysrepo-gnxi-test:test2/enabled").has_value());
-
-    // deleting the whole root under rfc7951 deletes everything
-    gnmi::SetRequest delete_request2;
-    gnmi::SetResponse delete_response2;
-    xpath_to_path("/", delete_request2.add_delete_());
-    grpc::ClientContext delete_ctx2;
-    delete_status = gnmi_client->Set(&delete_ctx2, delete_request2, &delete_response2);
-    CHECK(delete_status.ok());
-    CHECK(!sr_sess->getData(xpath).has_value());
 }
 
 TEST_CASE("Set request root update with data of another origin", "[set-origin]")

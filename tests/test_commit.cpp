@@ -284,15 +284,9 @@ class CommitFixture
     static void clean_sysrepo_()
     {
         sr_sess->switchDatastore(sysrepo::Datastore::Running);
-        try
-        {
-            sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
-            sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
-            sr_sess->applyChanges();
-        }
-        catch (...)
-        {
-        }
+        sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='A']");
+        sr_sess->deleteItem("/sysrepo-gnxi-test:test/things[name='B']");
+        sr_sess->applyChanges();
     }
 };
 

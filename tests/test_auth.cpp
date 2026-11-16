@@ -21,153 +21,20 @@
 
 #include "catch2/catch.hpp"
 
-#include <chrono>
-#include <filesystem>
-#include <fstream>
-#include <grpc/impl/codegen/grpc_types.h>
 #include <grpcpp/client_context.h>
 #include <grpcpp/support/sync_stream.h>
 #include <memory>
-#include <stdexcept>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <grpcpp/grpcpp.h>
 #include <proto/gnmi_ext.pb.h>
 
-#include "config.h"
 #include "proto/gnmi.pb.h"
 #include "test_main.h"
 
 // helpers
-
-/**
- * @brief Client certificate bundle.
- *
- */
-struct PemBundle
-{
-    std::string ca_cert;
-    std::string client_key;
-    std::string client_cert;
-};
-
-/**
- * @brief Read a file into a string (PEM material for the gRPC channels).
- *
- */
-static std::string read_file(const std::filesystem::path &path)
-{
-    std::ifstream ifs(path);
-    if (!ifs)
-    {
-        throw std::runtime_error("Cannot open file: " + path.string());
-    }
-    return {std::istreambuf_iterator<char>(ifs), {}};
-}
-
-/**
- * @brief Get the test client certificate bundle, loaded once from the test schema directory.
- *
- * @return Test client certificate bundle.
- */
-const PemBundle &pem_bundle()
-{
-    static PemBundle b = []()
-    {
-        std::filesystem::path dir = TESTS_SCHEMA_DIR;
-        return PemBundle{
-            .ca_cert = read_file(dir / "ca.crt"),
-            .client_key = read_file(dir / "client.key"),
-            .client_cert = read_file(dir / "client.crt"),
-        };
-    }();
-    return b;
-}
-
-/**
- * @brief Create an insecure gRPC channel to the given address.
- *
- * @param[in] addr Address to connect to.
- * @return New gRPC channel.
- */
-std::shared_ptr<grpc::Channel> make_insecure_channel(const std::string &addr)
-{
-    return grpc::CreateChannel(addr, grpc::InsecureChannelCredentials());
-}
-
-/**
- * @brief Create a TLS gRPC channel without a client certificate to the given address.
- *
- * @param[in] addr Address to connect to.
- * @return New gRPC channel.
- */
-std::shared_ptr<grpc::Channel> make_tls_channel(const std::string &addr)
-{
-    grpc::SslCredentialsOptions opts;
-    opts.pem_root_certs = pem_bundle().ca_cert;
-    return grpc::CreateChannel(addr, grpc::SslCredentials(opts));
-}
-
-/**
- * @brief Create an mTLS gRPC channel with the test client certificate to the given address.
- *
- * @param[in] addr Address to connect to.
- * @return New gRPC channel.
- */
-std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
-{
-    const auto &b = pem_bundle();
-    grpc::SslCredentialsOptions opts;
-    opts.pem_root_certs = b.ca_cert;
-    opts.pem_private_key = b.client_key;
-    opts.pem_cert_chain = b.client_cert;
-    // force a dedicated connection for each channel, gRPC otherwise pools
-    // transports of identical credentials and a call's auth-context metadata
-    // (the authenticated username) is bound to the first RPC on the shared
-    // connection which breaks per-user NACM expectations in the tests
-    grpc::ChannelArguments args;
-    args.SetInt(GRPC_ARG_USE_LOCAL_SUBCHANNEL_POOL, 1);
-    return grpc::CreateCustomChannel(addr, grpc::SslCredentials(opts), args);
-}
-
-/**
- * @brief Prepare a client context with optional credentials metadata.
- *
- * @param[in] ctx Client context to prepare.
- * @param[in] username Username metadata to add (empty for none).
- * @param[in] password Password metadata to add (empty for none).
- */
-void prepare_context(
-    grpc::ClientContext &ctx, const std::string &username = "", const std::string &password = "")
-{
-    if (!username.empty())
-    {
-        ctx.AddMetadata("username", username);
-    }
-    if (!password.empty())
-    {
-        ctx.AddMetadata("password", password);
-    }
-}
-
-/**
- * @brief Call the Capabilities RPC on a channel with optional credentials.
- *
- * @param[in] channel Channel to use.
- * @param[in] username Username metadata to add (empty for none).
- * @param[in] password Password metadata to add (empty for none).
- * @return RPC status.
- */
-grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
-    const std::string &username = "", const std::string &password = "")
-{
-    auto stub = gnmi::gNMI::NewStub(channel);
-    grpc::ClientContext ctx;
-    prepare_context(ctx, username, password);
-    gnmi::CapabilityRequest request;
-    gnmi::CapabilityResponse response;
-    return stub->Capabilities(&ctx, request, &response);
-}
 
 /**
  * @brief Call the Get RPC for a config path on a channel with optional credentials.
@@ -280,6 +147,27 @@ TEST_CASE("mTLS: valid cert + valid credentials (sha512-hashed password)", "[aut
     auto ch = make_mtls_channel(mtls_addr);
     auto status = do_capabilities(ch, "alice", "alicepass");
     CHECK(status.ok());
+}
+
+TEST_CASE("mTLS: concurrent blocking authentication", "[auth]")
+{
+    constexpr size_t CLIENT_COUNT = 8;
+    std::vector<grpc::Status> statuses(CLIENT_COUNT);
+    std::vector<std::thread> clients;
+    clients.reserve(CLIENT_COUNT);
+    for (size_t i = 0; i < CLIENT_COUNT; i++)
+    {
+        clients.emplace_back([&statuses, i]
+            { statuses[i] = do_capabilities(make_mtls_channel(mtls_addr), "alice", "alicepass"); });
+    }
+    for (auto &client : clients)
+    {
+        client.join();
+    }
+    for (const auto &status : statuses)
+    {
+        CHECK(status.ok());
+    }
 }
 
 TEST_CASE("mTLS: valid cert + valid credentials (md5-hashed password)", "[auth]")
