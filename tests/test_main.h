@@ -63,6 +63,82 @@ extern void xpath_to_path(std::string xpath, gnmi::Path *path, std::string origi
 extern std::string path_to_xpath(const gnmi::Path &path);
 
 /**
+ * @brief Create an insecure gRPC channel to the given address.
+ *
+ * @param[in] addr Address to connect to.
+ * @return New gRPC channel.
+ */
+extern std::shared_ptr<grpc::Channel> make_insecure_channel(const std::string &addr);
+
+/**
+ * @brief Create a TLS gRPC channel without a client certificate to the given address.
+ *
+ * @param[in] addr Address to connect to.
+ * @return New gRPC channel.
+ */
+extern std::shared_ptr<grpc::Channel> make_tls_channel(const std::string &addr);
+
+/**
+ * @brief Create an mTLS gRPC channel with the test client certificate to the given address.
+ *
+ * @param[in] addr Address to connect to.
+ * @return New gRPC channel.
+ */
+extern std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr);
+
+/**
+ * @brief Create an mTLS gRPC channel with the second test client certificate to the given address.
+ *
+ * @param[in] addr Address to connect to.
+ * @return New gRPC channel.
+ */
+extern std::shared_ptr<grpc::Channel> make_mtls_channel2(const std::string &addr);
+
+/**
+ * @brief Prepare a client context with optional credentials metadata.
+ *
+ * @param[in] ctx Client context to prepare.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ */
+extern void prepare_context(
+    grpc::ClientContext &ctx, const std::string &username = "", const std::string &password = "");
+
+/**
+ * @brief Call the Capabilities RPC on a channel with optional credentials.
+ *
+ * @param[in] channel Channel to use.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return RPC status.
+ */
+extern grpc::Status do_capabilities(const std::shared_ptr<grpc::Channel> &channel,
+    const std::string &username = "", const std::string &password = "");
+
+/**
+ * @brief Check that a Capabilities RPC succeeds over a fresh channel.
+ *
+ * @param[in] make_channel Channel factory.
+ * @param[in] addr Address to connect to.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return True when the RPC succeeded within the timeout.
+ */
+extern bool eventually_reachable(
+    std::shared_ptr<grpc::Channel> (*make_channel)(const std::string &), const std::string &addr,
+    const std::string &username = "", const std::string &password = "");
+
+/**
+ * @brief Apply a complete JSON configuration to the running datastore.
+ *
+ * @param[in] sess Sysrepo session.
+ * @param[in] file JSON configuration file to apply.
+ * @param[in] sock_path Socket path to substitute for the placeholder.
+ */
+extern void apply_config(
+    sysrepo::Session &sess, const std::filesystem::path &file, const std::string &sock_path);
+
+/**
  * @brief Manages the server subprocess of a test binary. Exactly one
  * instance is expected (the global "server").
  *

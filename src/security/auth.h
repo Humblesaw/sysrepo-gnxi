@@ -44,28 +44,15 @@ class Auth
 {
   public:
     /**
-     * @brief Server TLS material (the base64 bodies stored in sysrepo wrapped
-     * in PEM markers for gRPC)
-     *
-     */
-    struct TlsMaterial
-    {
-        std::string private_key_pem;
-        std::string certificate_pem;
-        std::string ca_certificate_pem;
-    };
-
-    /**
-     * @brief Create the gRPC server credentials.
-     *
-     * Insecure mode uses no TLS and disables authentication/authorization,
-     * whereas secure mode requires complete TLS material.
+     * @brief Use the given gRPC server credentials and install the
+     * username/password metadata processor on them.
      *
      * @param[in] insecure Whether to use insecure mode.
      * @param[in] conn Sysrepo connection, ignored in insecure mode.
-     * @param[in] tls TLS material, ignored in insecure mode.
+     * @param[in] credentials gRPC server credentials to use.
      */
-    Auth(bool insecure, sysrepo::Connection conn, const TlsMaterial &tls = {});
+    Auth(bool insecure, sysrepo::Connection conn,
+        std::shared_ptr<grpc::ServerCredentials> credentials);
 
     Auth(const Auth &) = delete;
     Auth &operator=(const Auth &) = delete;

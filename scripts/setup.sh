@@ -12,12 +12,11 @@
 #   GNXI_MODULE_DIR         directory with the YANG module files
 #   SYSREPOCTL_EXECUTABLE   path to the sysrepoctl binary
 #
-# The following environment variables are optional and enable the minimal
-# configuration import (so that the server is runnable right after the
-# installation):
+# The following environment variable must be defined in case
+# sysrepo-gnxi-server module is not yet installed (so that the server is
+# runnable right after the installation):
 #
 #   GNXI_CONFIG_FILE        path to the minimal configuration JSON file
-#   SYSREPOCFG_EXECUTABLE   path to the sysrepocfg binary
 #
 # The following environment variables are optional and define the owner and
 # group of the module data files (empty means the current user). They matter
@@ -53,6 +52,10 @@ if [ -n "${GNXI_MODULE_GROUP:-}" ]; then
     OWNARGS="${OWNARGS} -g ${GNXI_MODULE_GROUP}"
 fi
 
+# initial configuration supplied when installing sysrepo-gnxi-server, because
+# its endpoint list is mandatory in the schema
+CFGFILE="${DESTDIR:-}${GNXI_CONFIG_FILE}"
+
 # install a module into sysrepo, features to enable are passed as extra arguments
 install_module() {
     local file=$1
@@ -85,7 +88,7 @@ install_module "ietf-tls-server@2024-10-10.yang" \
     -e server-ident-x509-cert \
     -e client-auth-supported \
     -e client-auth-x509-cert
-install_module "sysrepo-gnxi-server.yang"
+install_module "sysrepo-gnxi-server.yang" -I "$CFGFILE"
 install_module "sysrepo-gnxi-users.yang"
 
 echo "Setting permissions on private modules..."
@@ -97,26 +100,5 @@ for mod in sysrepo-gnxi-server sysrepo-gnxi-users; do
         "$SYSREPOCTL" -c "$mod" $OWNARGS >/dev/null 2>&1 || true
     fi
 done
-
-# import the minimal configuration so that the server is runnable right
-# after the installation, but only when it has not been configured yet
-# (an upgrade must not overwrite the operator's configuration)
-if [ -n "${GNXI_CONFIG_FILE:-}" ] && [ -n "${SYSREPOCFG_EXECUTABLE:-}" ]; then
-    CFGFILE="${DESTDIR:-}${GNXI_CONFIG_FILE}"
-
-    if [ ! -f "$CFGFILE" ]; then
-        echo "$0: minimal configuration not found: $CFGFILE" >&2
-        exit 1
-    fi
-
-    # the server must have at least one listen endpoint to be runnable
-    if "$SYSREPOCFG_EXECUTABLE" -G /sysrepo-gnxi-server:server/listen/endpoint/name \
-        >/dev/null 2>&1; then
-        echo "Server already configured, skipping the minimal configuration."
-    else
-        echo "Importing the minimal configuration..."
-        "$SYSREPOCFG_EXECUTABLE" --edit="$CFGFILE" --format json --datastore running
-    fi
-fi
 
 echo "YANG module setup complete."
