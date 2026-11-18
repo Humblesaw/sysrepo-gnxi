@@ -177,13 +177,20 @@ static std::string read_file(const std::filesystem::path &path)
  *
  * @param[in] addr Address to connect to.
  * @param[in] creds Channel credentials to use.
+ * @param[in] verify_localhost Verify the server against the test certificates'
+ * localhost SAN instead of the numeric listen address.
  * @return New gRPC channel.
  */
-static std::shared_ptr<grpc::Channel> make_channel(
-    const std::string &addr, const std::shared_ptr<grpc::ChannelCredentials> &creds)
+static std::shared_ptr<grpc::Channel> make_channel(const std::string &addr,
+    const std::shared_ptr<grpc::ChannelCredentials> &creds, bool verify_localhost = false)
 {
     grpc::ChannelArguments args;
     args.SetInt(GRPC_ARG_USE_LOCAL_SUBCHANNEL_POOL, 1);
+    if (verify_localhost)
+    {
+        // the test certificates cover localhost, not 127.0.0.2
+        args.SetString(GRPC_SSL_TARGET_NAME_OVERRIDE_ARG, "localhost");
+    }
     return grpc::CreateCustomChannel(addr, creds, args);
 }
 
@@ -197,7 +204,7 @@ std::shared_ptr<grpc::Channel> make_tls_channel(const std::string &addr)
     grpc::SslCredentialsOptions opts;
     static std::string ca_pem = read_file(std::filesystem::path(TESTS_SCHEMA_DIR) / "ca.crt");
     opts.pem_root_certs = ca_pem;
-    return make_channel(addr, grpc::SslCredentials(opts));
+    return make_channel(addr, grpc::SslCredentials(opts), true);
 }
 
 std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
@@ -209,7 +216,7 @@ std::shared_ptr<grpc::Channel> make_mtls_channel(const std::string &addr)
     opts.pem_root_certs = ca_pem;
     opts.pem_private_key = key_pem;
     opts.pem_cert_chain = cert_pem;
-    return make_channel(addr, grpc::SslCredentials(opts));
+    return make_channel(addr, grpc::SslCredentials(opts), true);
 }
 
 std::shared_ptr<grpc::Channel> make_mtls_channel2(const std::string &addr)
@@ -222,7 +229,7 @@ std::shared_ptr<grpc::Channel> make_mtls_channel2(const std::string &addr)
     opts.pem_root_certs = ca_pem;
     opts.pem_private_key = key_pem;
     opts.pem_cert_chain = cert_pem;
-    return make_channel(addr, grpc::SslCredentials(opts));
+    return make_channel(addr, grpc::SslCredentials(opts), true);
 }
 
 void prepare_context(
@@ -261,8 +268,8 @@ bool eventually_reachable(std::shared_ptr<grpc::Channel> (*make_channel)(const s
     return do_capabilities(channel, username, password).ok();
 }
 
-void apply_config(
-    sysrepo::Session &sess, const std::filesystem::path &file, const std::string &sock_path)
+void apply_config(sysrepo::Session &sess, const std::filesystem::path &file,
+    const std::string &sock_path, uint16_t port)
 {
     std::ifstream in(file);
     if (!in)
@@ -278,6 +285,16 @@ void apply_config(
         if (pos != std::string::npos)
         {
             data.replace(pos, std::string("@SOCKET_PATH@").size(), sock_path);
+        }
+    }
+
+    // replace the port of a TCP listen endpoint
+    if (port != 0)
+    {
+        auto pos = data.find("@PORT@");
+        if (pos != std::string::npos)
+        {
+            data.replace(pos, std::string("@PORT@").size(), std::to_string(port));
         }
     }
 
@@ -491,9 +508,11 @@ void SetupServer::launch(const std::string &test_name, bool debug, bool secure)
         server_log_ =
             (std::filesystem::path(TESTS_WORKING_DIR) / (test_name + "-mtls.log")).string();
         std::filesystem::remove(server_log_);
-        mtls_addr = std::string(HOST) + ":" + std::to_string(PORT);
+        // distinct fixed endpoints allow test_auth and test_rotate to run in parallel
+        port_ = test_name == "test_rotate" ? ROTATE_PORT : AUTH_PORT;
+        mtls_addr = std::string(HOST) + ":" + std::to_string(port_);
 
-        apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "secure.json", "");
+        apply_config(*sr_sess, std::filesystem::path(TESTS_SCHEMA_DIR) / "secure.json", "", port_);
         server_args_ = {"-l", "4"};
         server_label_ = "mTLS";
         server_pid_ = run_server_(server_args_, server_log_);
@@ -521,7 +540,7 @@ void SetupServer::wait_ready()
 {
     if (secure_)
     {
-        wait_for_tcp_(HOST, PORT);
+        wait_for_tcp_(HOST, port_);
     }
     else
     {

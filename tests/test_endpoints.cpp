@@ -22,6 +22,7 @@
 #include "catch2/catch.hpp"
 
 #include <chrono>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <thread>
@@ -80,33 +81,48 @@ class EndpointFixture
     }
 };
 
+/**
+ * @brief Address of an auxiliary endpoint's per-test unix socket.
+ *
+ * @param[in] name Endpoint-specific socket name.
+ * @return gRPC listen address.
+ */
+static std::string endpoint_addr(const std::string &name)
+{
+    return "unix:" +
+           (std::filesystem::path(TESTS_WORKING_DIR) / ("test_endpoints-" + name + ".sock"))
+               .string();
+}
+
 TEST_CASE_METHOD(EndpointFixture, "Listen endpoint added at runtime", "[endpoints]")
 {
+    const auto added_addr = endpoint_addr("added");
+
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem(
-        "/sysrepo-gnxi-server:server/listen/endpoint[name='added']/ip/address", "127.0.0.1");
-    sr_sess->setItem("/sysrepo-gnxi-server:server/listen/endpoint[name='added']/ip/port", "50053");
+    sr_sess->setItem("/sysrepo-gnxi-server:server/listen/endpoint[name='added']/unix/path",
+        added_addr.substr(sizeof("unix:") - 1));
     sr_sess->applyChanges();
 
     // the new endpoint is served by a new server without a restart
-    REQUIRE(eventually_reachable(make_insecure_channel, "127.0.0.1:50053"));
+    REQUIRE(eventually_reachable(make_insecure_channel, added_addr));
 
     sr_sess->deleteItem("/sysrepo-gnxi-server:server/listen/endpoint[name='added']");
     sr_sess->applyChanges();
 
-    REQUIRE(eventually_unreachable("127.0.0.1:50053"));
+    REQUIRE(eventually_unreachable(added_addr));
 }
 
 TEST_CASE_METHOD(EndpointFixture, "Removed listen endpoint keeps streaming", "[endpoints]")
 {
+    const auto backup_addr = endpoint_addr("backup");
+
     // the original endpoint is removed while the backup endpoint remains
     // available for new connections
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem(
-        "/sysrepo-gnxi-server:server/listen/endpoint[name='backup']/ip/address", "127.0.0.1");
-    sr_sess->setItem("/sysrepo-gnxi-server:server/listen/endpoint[name='backup']/ip/port", "50053");
+    sr_sess->setItem("/sysrepo-gnxi-server:server/listen/endpoint[name='backup']/unix/path",
+        backup_addr.substr(sizeof("unix:") - 1));
     sr_sess->applyChanges();
-    REQUIRE(eventually_reachable(make_insecure_channel, "127.0.0.1:50053"));
+    REQUIRE(eventually_reachable(make_insecure_channel, backup_addr));
 
     // an established gNMI subscription on the endpoint about to be removed
     grpc::ClientContext ctx;
@@ -159,14 +175,15 @@ TEST_CASE_METHOD(EndpointFixture, "Removed listen endpoint keeps streaming", "[e
 
 TEST_CASE_METHOD(EndpointFixture, "Empty listen endpoint set is rejected", "[endpoints]")
 {
+    const auto backup_addr = endpoint_addr("backup");
+
     // both endpoints exist before the attempted wipe, irrespective of which
     // cases ran before this one
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
-    sr_sess->setItem(
-        "/sysrepo-gnxi-server:server/listen/endpoint[name='backup']/ip/address", "127.0.0.1");
-    sr_sess->setItem("/sysrepo-gnxi-server:server/listen/endpoint[name='backup']/ip/port", "50053");
+    sr_sess->setItem("/sysrepo-gnxi-server:server/listen/endpoint[name='backup']/unix/path",
+        backup_addr.substr(sizeof("unix:") - 1));
     sr_sess->applyChanges();
-    REQUIRE(eventually_reachable(make_insecure_channel, "127.0.0.1:50053"));
+    REQUIRE(eventually_reachable(make_insecure_channel, backup_addr));
 
     sr_sess->deleteItem("/sysrepo-gnxi-server:server/listen/endpoint[name='insecure']");
     sr_sess->deleteItem("/sysrepo-gnxi-server:server/listen/endpoint[name='backup']");
@@ -183,7 +200,7 @@ TEST_CASE_METHOD(EndpointFixture, "Empty listen endpoint set is rejected", "[end
 
     // nothing was changed, both endpoints are still served
     CHECK(eventually_reachable(make_insecure_channel, insecure_addr));
-    CHECK(eventually_reachable(make_insecure_channel, "127.0.0.1:50053"));
+    CHECK(eventually_reachable(make_insecure_channel, backup_addr));
 }
 
 TEST_CASE_METHOD(EndpointFixture, "Unbindable listen endpoint is rejected", "[endpoints]")
@@ -214,6 +231,8 @@ TEST_CASE_METHOD(EndpointFixture, "Unbindable listen endpoint is rejected", "[en
 TEST_CASE_METHOD(
     EndpointFixture, "Listen change denied by another subscriber is reverted", "[endpoints]")
 {
+    const auto aborted_addr = endpoint_addr("aborted");
+
     sr_sess->switchDatastore(sysrepo::Datastore::Running);
 
     // the subscription is registered after the server's listen
@@ -233,10 +252,8 @@ TEST_CASE_METHOD(
         },
         "/sysrepo-gnxi-test:test4/params");
 
-    sr_sess->setItem(
-        "/sysrepo-gnxi-server:server/listen/endpoint[name='aborted']/ip/address", "127.0.0.1");
-    sr_sess->setItem(
-        "/sysrepo-gnxi-server:server/listen/endpoint[name='aborted']/ip/port", "50054");
+    sr_sess->setItem("/sysrepo-gnxi-server:server/listen/endpoint[name='aborted']/unix/path",
+        aborted_addr.substr(sizeof("unix:") - 1));
     sr_sess->setItem("/sysrepo-gnxi-test:test4/params", "to-be-denied");
 
     try
@@ -250,7 +267,7 @@ TEST_CASE_METHOD(
     }
 
     // the endpoint created before the denial was reverted again
-    CHECK(eventually_unreachable("127.0.0.1:50054"));
+    CHECK(eventually_unreachable(aborted_addr));
     // the rejecting subscription is destroyed at the end of this case
 }
 

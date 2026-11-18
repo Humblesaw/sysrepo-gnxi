@@ -36,7 +36,7 @@
 
 // insecure server: unix socket under the build dir
 extern std::string insecure_addr;
-// mTLS server: 127.0.0.1:50052 (test_auth only, no parallel conflict)
+// mTLS server on 127.0.0.2 (ports 50052/50053 for auth/rotation tests)
 extern std::string mtls_addr;
 // gNMI service handle
 extern std::unique_ptr<gnmi::gNMI::Stub> gnmi_client;
@@ -134,9 +134,10 @@ extern bool eventually_reachable(
  * @param[in] sess Sysrepo session.
  * @param[in] file JSON configuration file to apply.
  * @param[in] sock_path Socket path to substitute for the placeholder.
+ * @param[in] port Port number to substitute for the placeholder, zero for none.
  */
-extern void apply_config(
-    sysrepo::Session &sess, const std::filesystem::path &file, const std::string &sock_path);
+extern void apply_config(sysrepo::Session &sess, const std::filesystem::path &file,
+    const std::string &sock_path = "", uint16_t port = 0);
 
 /**
  * @brief Manages the server subprocess of a test binary. Exactly one
@@ -210,9 +211,11 @@ class SetupServer
      */
     static void wait_for_tcp_(const std::string &host, uint16_t port);
 
-    static constexpr const char *HOST = "127.0.0.1";
-    static constexpr uint16_t PORT = 50052;
+    static constexpr const char *HOST = "127.0.0.2";
+    static constexpr uint16_t AUTH_PORT = 50052;
+    static constexpr uint16_t ROTATE_PORT = 50053;
 
+    uint16_t port_ = AUTH_PORT;
     pid_t server_pid_ = -1;
     std::vector<std::string> server_args_;
     std::string server_log_;
