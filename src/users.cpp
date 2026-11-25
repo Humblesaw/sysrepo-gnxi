@@ -53,6 +53,8 @@ Options:
 The user database is stored in sysrepo under
 /sysrepo-gnxi-users:users and is protected by filesystem permissions.
 Authorization of the users is configured in /ietf-netconf-acm (NACM).
+Warning: NACM recovery user ('root' by default) provides unrestricted
+access to all modules and actions.
 )";
 
 /**
