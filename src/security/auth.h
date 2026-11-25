@@ -67,7 +67,10 @@ class Auth
     std::shared_ptr<grpc::ServerCredentials> credentials() const;
 
     /**
-     * @brief Get the authenticated username from the gRPC auth context.
+     * @brief Get the authenticated username from this RPC's client metadata.
+     *
+     * The metadata processor validates the credentials before the RPC handler
+     * runs. The verified username remains in the per-RPC metadata.
      *
      * @param[in] ctx Server context to read the username from.
      * @return Authenticated username, or an empty string when unavailable/insecure.
@@ -118,12 +121,12 @@ class UserPassAuthenticator final : public grpc::AuthMetadataProcessor
     /**
      * @brief Authenticate the username/password credentials in the call metadata.
      *
-     * On success the username is stored in the auth context for per-RPC
-     * authorization and the credentials are consumed so that they do not
-     * reach the RPC handlers.
+     * On success the verified username remains in the per-RPC metadata for
+     * authorization. Only the password is consumed so that it does not reach
+     * the RPC handlers. The connection-scoped auth context is not modified.
      *
      * @param[in] auth_metadata Call credentials metadata.
-     * @param[in] context Authentication context to store the username in.
+     * @param[in] context Connection authentication context, unused.
      * @param[out] consumed_auth_metadata Metadata consumed by the processor.
      * @param[out] response_metadata Unused response metadata.
      * @return OK when authenticated, UNAUTHENTICATED otherwise.

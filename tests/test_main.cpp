@@ -170,10 +170,8 @@ static std::string read_file(const std::filesystem::path &path)
  *
  * gRPC otherwise pools the transports (with their reconnect backoff
  * state) of channels with an identical connection setup, which for
- * insecure channels is every channel to the address, and a call's
- * auth-context metadata (the authenticated username) is bound to the
- * first RPC on the shared connection, which breaks per-user NACM
- * expectations in the tests.
+ * insecure channels is every channel to the address. Local pools keep
+ * the transports of independent test channels separate.
  *
  * @param[in] addr Address to connect to.
  * @param[in] creds Channel credentials to use.

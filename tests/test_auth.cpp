@@ -114,6 +114,29 @@ grpc::Status do_set(const std::shared_ptr<grpc::Channel> &channel, std::string x
 }
 
 /**
+ * @brief Confirm a pending commit on a channel with optional credentials.
+ *
+ * @param[in] channel Channel to use.
+ * @param[in] commit_id Identifier of the confirmed commit.
+ * @param[in] username Username metadata to add (empty for none).
+ * @param[in] password Password metadata to add (empty for none).
+ * @return RPC status.
+ */
+grpc::Status do_confirm(const std::shared_ptr<grpc::Channel> &channel, const std::string &commit_id,
+    const std::string &username = "", const std::string &password = "")
+{
+    auto stub = gnmi::gNMI::NewStub(channel);
+    grpc::ClientContext ctx;
+    prepare_context(ctx, username, password);
+    gnmi::SetRequest request;
+    auto commit = request.add_extension()->mutable_commit();
+    commit->set_id(commit_id);
+    commit->mutable_confirm();
+    gnmi::SetResponse response;
+    return stub->Set(&ctx, request, &response);
+}
+
+/**
  * @brief Prepare a ONCE Subscribe request and open the Subscribe stream on a channel with
  * optional credentials.
  *
@@ -271,6 +294,35 @@ TEST_CASE("mTLS: denied Set RPC (user without rules)", "[auth]")
     CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
 }
 
+TEST_CASE("mTLS: shared-channel RPCs use their own authenticated identities", "[auth]")
+{
+    SECTION("administrator first")
+    {
+        auto ch = make_mtls_channel(mtls_addr);
+        auto alice =
+            do_set(ch, "/sysrepo-gnxi-test:test/things[name='identity-sequential']/description",
+                "\"set by alice\"", "alice", "alicepass");
+        CHECK(alice.ok());
+        auto bob =
+            do_set(ch, "/sysrepo-gnxi-test:test/things[name='identity-sequential']/description",
+                "\"set by bob\"", "bob", "bobpass");
+        CHECK(bob.error_code() == grpc::StatusCode::PERMISSION_DENIED);
+    }
+
+    SECTION("read-only user first")
+    {
+        auto ch = make_mtls_channel(mtls_addr);
+        auto bob =
+            do_set(ch, "/sysrepo-gnxi-test:test/things[name='identity-sequential']/description",
+                "\"set by bob\"", "bob", "bobpass");
+        CHECK(bob.error_code() == grpc::StatusCode::PERMISSION_DENIED);
+        auto alice =
+            do_set(ch, "/sysrepo-gnxi-test:test/things[name='identity-sequential']/description",
+                "\"set by alice\"", "alice", "alicepass");
+        CHECK(alice.ok());
+    }
+}
+
 TEST_CASE("mTLS: authorized Subscribe (rw)", "[auth]")
 {
     auto ch = make_mtls_channel(mtls_addr);
@@ -395,38 +447,51 @@ TEST_CASE("Insecure client to mTLS port", "[auth-neg]")
 TEST_CASE("mTLS: commit confirm is bound to the initiating user", "[auth-commit]")
 {
     auto alice = gnmi::gNMI::NewStub(make_mtls_channel(mtls_addr));
-    auto bob = gnmi::gNMI::NewStub(make_mtls_channel(mtls_addr));
     const std::string commit_id = "bind-test";
 
     // alice
-    {
-        grpc::ClientContext ctx;
-        prepare_context(ctx, "alice", "alicepass");
-        gnmi::SetRequest request;
-        auto commit = request.add_extension()->mutable_commit();
-        commit->set_id(commit_id);
-        commit->mutable_commit();
-        auto upd = request.add_update();
-        xpath_to_path(
-            "/sysrepo-gnxi-test:test/things[name='bind-test']/description", upd->mutable_path());
-        upd->mutable_val()->set_json_ietf_val("\"confirm binding\"");
-        gnmi::SetResponse response;
-        auto status = alice->Set(&ctx, request, &response);
-        CHECK(status.ok());
-    }
+    grpc::ClientContext ctx;
+    prepare_context(ctx, "alice", "alicepass");
+    gnmi::SetRequest request;
+    auto commit = request.add_extension()->mutable_commit();
+    commit->set_id(commit_id);
+    commit->mutable_commit();
+    auto upd = request.add_update();
+    xpath_to_path(
+        "/sysrepo-gnxi-test:test/things[name='bind-test']/description", upd->mutable_path());
+    upd->mutable_val()->set_json_ietf_val("\"confirm binding\"");
+    gnmi::SetResponse response;
+    CHECK(alice->Set(&ctx, request, &response).ok());
 
     // bob (confirm must be rejected)
-    {
-        grpc::ClientContext ctx;
-        prepare_context(ctx, "bob", "bobpass");
-        gnmi::SetRequest request;
-        auto commit = request.add_extension()->mutable_commit();
-        commit->set_id(commit_id);
-        commit->mutable_confirm();
-        gnmi::SetResponse response;
-        auto status = bob->Set(&ctx, request, &response);
-        CHECK(status.error_code() == grpc::StatusCode::PERMISSION_DENIED);
-    }
+    CHECK(do_confirm(make_mtls_channel(mtls_addr), commit_id, "bob", "bobpass").error_code() ==
+          grpc::StatusCode::PERMISSION_DENIED);
+    CHECK(do_confirm(make_mtls_channel(mtls_addr), commit_id, "alice", "alicepass").ok());
+}
+
+TEST_CASE(
+    "mTLS: shared-channel commit confirm cannot assume the initiating identity", "[auth-commit]")
+{
+    auto ch = make_mtls_channel(mtls_addr);
+    auto alice = gnmi::gNMI::NewStub(ch);
+    const std::string commit_id = "shared-channel-bind-test";
+
+    grpc::ClientContext ctx;
+    prepare_context(ctx, "alice", "alicepass");
+    gnmi::SetRequest request;
+    auto commit = request.add_extension()->mutable_commit();
+    commit->set_id(commit_id);
+    commit->mutable_commit();
+    auto upd = request.add_update();
+    xpath_to_path("/sysrepo-gnxi-test:test/things[name='shared-channel-bind-test']/description",
+        upd->mutable_path());
+    upd->mutable_val()->set_json_ietf_val("\"confirm binding\"");
+    gnmi::SetResponse response;
+    CHECK(alice->Set(&ctx, request, &response).ok());
+
+    CHECK(do_confirm(ch, commit_id, "bob", "bobpass").error_code() ==
+          grpc::StatusCode::PERMISSION_DENIED);
+    CHECK(do_confirm(ch, commit_id, "alice", "alicepass").ok());
 }
 
 TEST_CASE("mTLS: unknown user and wrong password are indistinguishable", "[auth-neg]")

@@ -347,7 +347,7 @@ static void processor_fail(grpc_process_auth_metadata_done_cb cb, void *user_dat
  * consumes the output arrays before returning.
  *
  * @param[in] processor C++ authentication metadata processor.
- * @param[in] context Auth context to store the username in.
+ * @param[in] context Connection authentication context forwarded to the processor.
  * @param[in] md Call credentials metadata.
  * @param[in] num_md Number of the metadata entries.
  * @param[in] cb Done callback.
@@ -410,7 +410,7 @@ static void processor_invoke(const std::shared_ptr<grpc::AuthMetadataProcessor> 
  * executor while non-blocking processors are invoked directly.
  *
  * @param[in] state Processor state.
- * @param[in] context Auth context to store the username in.
+ * @param[in] context Connection authentication context forwarded to the processor.
  * @param[in] md Call credentials metadata.
  * @param[in] num_md Number of the metadata entries.
  * @param[in] cb Done callback.

@@ -57,17 +57,18 @@ std::shared_ptr<grpc::ServerCredentials> Auth::credentials() const
 std::string Auth::username(grpc::ServerContext *ctx) const
 {
     assert(ctx);
-    auto auth_ctx = ctx->auth_context();
-    if (!auth_ctx)
+    if (insecure_)
     {
         return "";
     }
-    auto vals = auth_ctx->FindPropertyValues("username");
-    if (vals.empty())
+
+    const auto &metadata = ctx->client_metadata();
+    auto username = metadata.find("username");
+    if (username == metadata.end())
     {
         return "";
     }
-    return std::string(vals[0].data(), vals[0].length());
+    return std::string(username->second.data(), username->second.length());
 }
 
 void Auth::authenticate(
@@ -142,6 +143,7 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
     grpc::AuthContext *context, OutputMetadata *consumed_auth_metadata,
     OutputMetadata *response_metadata)
 {
+    (void)context;
     (void)response_metadata;
 
     if (!auth_metadata.contains("username"))
@@ -180,11 +182,8 @@ grpc::Status UserPassAuthenticator::Process(const InputMetadata &auth_metadata,
 
     SLOG_INFO("Authentication succeeded for user '", username, "'");
 
-    // store username for per-RPC authorization
-    context->AddProperty("username", username);
-
-    // consume credentials so they don't reach the RPC handler metadata
-    consumed_auth_metadata->insert(std::make_pair("username", username));
+    // keep the verified username in this call's metadata for authorization,
+    // but do not expose the password to the RPC handler
     consumed_auth_metadata->insert(std::make_pair("password", password));
 
     // wipe the local copies of the credentials
