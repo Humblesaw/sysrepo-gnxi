@@ -86,10 +86,10 @@ static EndpointTransport transport_of(const libyang::DataNode &endpoint)
 }
 
 /**
- * @brief Percent-encode a literal Unix socket path for a gRPC URI.
+ * @brief Convert a literal Unix socket path for the server's gRPC URI parser.
  *
  * @param[in] path Literal socket path.
- * @return Percent-encoded path.
+ * @return Percent-encoded path, or the literal path with gRPC before 1.43.
  * @throws std::invalid_argument on an embedded NUL byte.
  */
 static std::string encode_unix_path(const std::string &path)
@@ -99,6 +99,9 @@ static std::string encode_unix_path(const std::string &path)
         throw std::invalid_argument("unix listen path contains an embedded NUL byte");
     }
 
+#ifdef GNXI_GRPC_LEGACY_UNIX_SERVER_URI
+    return path;
+#else
     static constexpr char HEX_DIGITS[] = "0123456789ABCDEF";
     std::string encoded;
     encoded.reserve(path.size());
@@ -118,6 +121,7 @@ static std::string encode_unix_path(const std::string &path)
         }
     }
     return encoded;
+#endif
 }
 
 /**

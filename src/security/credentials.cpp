@@ -483,8 +483,8 @@ struct TlsState
  * protected constructor, older gRPC provides no way to hand them to the
  * base class, so the private virtual AddPortToServer, called by the
  * server builder when the server is built, passes them to
- * grpc_server_add_http2_port directly and they are released in the
- * destructor.
+ * grpc_server_add_secure_http2_port before 1.45 or grpc_server_add_http2_port
+ * in newer versions directly and they are released in the destructor.
  *
  * The authentication metadata processor is always installed through the C
  * API, the base class implementation of newer gRPC aborts, gRPC
@@ -529,7 +529,11 @@ class FetcherCredentials final : public grpc::ServerCredentials
   private:
     int AddPortToServer(const std::string &addr, grpc_server *server) override
     {
+#ifdef GNXI_GRPC_LEGACY_SECURE_HTTP2_PORT
+        return grpc_server_add_secure_http2_port(server, addr.c_str(), c_creds_);
+#else
         return grpc_server_add_http2_port(server, addr.c_str(), c_creds_);
+#endif
     }
 
     grpc_server_credentials *c_creds_;

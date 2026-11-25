@@ -24,16 +24,28 @@ if(NOT TARGET gRPC::grpc++)
     )
 endif()
 
-# grpc::ServerCredentials is constructible from C credentials (which it
-# then owns) since gRPC 1.63, older versions need the compat wrapper in
-# src/security/credentials.cpp
 set(GRPC_CXX_VERSION "${gRPC_VERSION}")
 if(NOT GRPC_CXX_VERSION)
     # the pkg-config fallback reports the version of the grpc++ module
     set(GRPC_CXX_VERSION "${GRPC_VERSION}")
 endif()
+# grpc::ServerCredentials is constructible from C credentials (which it
+# then owns) since gRPC 1.63, older versions need the compat wrapper in
+# src/security/credentials.cpp
 if(GRPC_CXX_VERSION VERSION_GREATER_EQUAL "1.63")
     set(GNXI_GRPC_SERVER_CREDENTIALS_CTOR ON PARENT_SCOPE)
+endif()
+# the unified add-port API did not exist before gRPC 1.45
+if(GRPC_CXX_VERSION VERSION_LESS "1.45")
+    set(GNXI_GRPC_LEGACY_SECURE_HTTP2_PORT ON PARENT_SCOPE)
+endif()
+# servers did not URI-decode unix socket paths before gRPC 1.43
+if(GRPC_CXX_VERSION VERSION_LESS "1.43")
+    set(GNXI_GRPC_LEGACY_UNIX_SERVER_URI ON PARENT_SCOPE)
+endif()
+# clients repeatedly URI-decoded unix socket paths before gRPC 1.42
+if(GRPC_CXX_VERSION VERSION_LESS "1.42")
+    set(GNXI_GRPC_LEGACY_UNIX_CLIENT_URI ON PARENT_SCOPE)
 endif()
 # gRPC uses its default EventEngine for blocking auth processors since 1.63,
 # but that default engine is available through the public API only since 1.71

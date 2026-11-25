@@ -547,7 +547,13 @@ TEST_CASE_METHOD(EndpointFixture, "Unix paths preserve literal percent escapes",
 
     // percent escape text is part of the filename, not a URI instruction
     REQUIRE(std::filesystem::exists(socket_path));
-    REQUIRE(eventually_reachable(make_insecure_channel, encoded_addr));
+#ifdef GNXI_GRPC_LEGACY_UNIX_CLIENT_URI
+    // gRPC before 1.42 decodes a unix client target three times
+    const auto client_addr = endpoint_addr("percent-%2525252f-%25252500-%25252525");
+#else
+    const auto client_addr = encoded_addr;
+#endif
+    REQUIRE(eventually_reachable(make_insecure_channel, client_addr));
 }
 
 TEST_CASE_METHOD(EndpointFixture, "Listen endpoint defaults its port", "[endpoints]")

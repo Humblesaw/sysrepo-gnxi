@@ -31,6 +31,8 @@
 #include <sysrepo-cpp/Session.hpp>
 #include <vector>
 
+#include <grpcpp/channel.h>
+
 #include "proto/gnmi.grpc.pb.h"
 #include "proto/yang_rpc.grpc.pb.h"
 

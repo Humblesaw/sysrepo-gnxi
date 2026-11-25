@@ -116,6 +116,12 @@ set(GNXI_HEADERS src/encode/encode.h
 # server
 add_executable(${PROJECT_NAME} ${GNXI_SRC} src/main.cpp)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/src)
+if(GNXI_GRPC_LEGACY_SECURE_HTTP2_PORT)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE GNXI_GRPC_LEGACY_SECURE_HTTP2_PORT)
+endif()
+if(GNXI_GRPC_LEGACY_UNIX_SERVER_URI)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE GNXI_GRPC_LEGACY_UNIX_SERVER_URI)
+endif()
 if(GNXI_GRPC_SERVER_CREDENTIALS_CTOR)
     target_compile_definitions(${PROJECT_NAME} PRIVATE GNXI_GRPC_SERVER_CREDENTIALS_CTOR)
 endif()
@@ -178,6 +184,9 @@ if (ENABLE_TESTS)
         target_include_directories(${GNXI_TEST_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/tests)
         if("${GNXI_TEST_NAME}" STREQUAL "test_auth" OR "${GNXI_TEST_NAME}" STREQUAL "test_rotate")
             target_compile_definitions(${GNXI_TEST_NAME} PRIVATE AUTH_MTLS_ENABLED)
+        endif()
+        if("${GNXI_TEST_NAME}" STREQUAL "test_endpoints" AND GNXI_GRPC_LEGACY_UNIX_CLIENT_URI)
+            target_compile_definitions(${GNXI_TEST_NAME} PRIVATE GNXI_GRPC_LEGACY_UNIX_CLIENT_URI)
         endif()
 
         # tests launch the server and CLI binaries as subprocesses
