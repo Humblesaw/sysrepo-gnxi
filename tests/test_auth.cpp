@@ -226,6 +226,16 @@ TEST_CASE("mTLS: unauthorized Get is silently filtered (NACM)", "[auth]")
     CHECK(response.notification(0).update_size() == 0);
 }
 
+TEST_CASE("mTLS: host OS groups are disabled for remote users", "[auth]")
+{
+    const std::string path = "/ietf-netconf-acm:nacm/enable-external-groups";
+    auto data = sr_sess->getData(path);
+    REQUIRE(data.has_value());
+    auto external_groups = data->findPath(path);
+    REQUIRE(external_groups.has_value());
+    CHECK(external_groups->asTerm().valueStr() == "false");
+}
+
 TEST_CASE("mTLS: private modules are readable only with explicit NACM rules", "[auth]")
 {
     // one channel per identity
